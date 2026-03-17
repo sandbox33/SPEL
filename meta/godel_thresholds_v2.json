@@ -1,0 +1,100 @@
+{
+  "_meta": {
+    "generado": "2026-03-11T16:55:15.404989",
+    "cutoff_anti_leakage": "2023-12-31",
+    "descripcion": "Percentiles de entropy_shannon y vitality_tesla calculados con datos <= 2023-12-31. Usar entropy_p90 como umbral en godel_bound.py.",
+    "condicion_godel": "entropy_shannon[t-1] >= entropy_p90  OR  vitality_tesla[t-1] == 9",
+    "regla_R8": "Siempre OR — nunca AND",
+    "objetivo_activaciones": "5-15% del tiempo total"
+  },
+  "umbrales": {
+    "NVDA": {
+      "entropy_p50": 1.127529,
+      "entropy_p75": 1.154998,
+      "entropy_p90": 1.185095,
+      "entropy_p95": 1.206472,
+      "entropy_p99": 1.241456,
+      "entropy_mean": 1.128994,
+      "entropy_std": 0.044894,
+      "vitality_dist": {
+        "3": 1089,
+        "6": 1082,
+        "9": 1114
+      },
+      "pct_vitality_9": 33.91,
+      "p90_anterior": 1.1898,
+      "godel_activations_anterior_pct": 35.98,
+      "godel_activations_nuevo_pct": 36.74,
+      "umbral_recomendado": 1.185095,
+      "nota": "P90 real calculado (vitality==9 ya cubre 33.9% — entropía es filtro secundario)",
+      "filas_usadas": 3285,
+      "cutoff": "2023-12-31"
+    },
+    "BTC": {
+      "entropy_p50": 1.114942,
+      "entropy_p75": 1.144053,
+      "entropy_p90": 1.170901,
+      "entropy_p95": 1.188757,
+      "entropy_p99": 1.215393,
+      "entropy_mean": 1.116126,
+      "entropy_std": 0.043158,
+      "vitality_dist": {
+        "3": 1089,
+        "6": 1082,
+        "9": 1114
+      },
+      "pct_vitality_9": 33.91,
+      "p90_anterior": 1.35,
+      "godel_activations_anterior_pct": 33.91,
+      "godel_activations_nuevo_pct": 35.95,
+      "umbral_recomendado": 1.170901,
+      "nota": "P90 real calculado (vitality==9 ya cubre 33.9% — entropía es filtro secundario)",
+      "filas_usadas": 3285,
+      "cutoff": "2023-12-31"
+    },
+    "XAU": {
+      "entropy_p50": 1.284937,
+      "entropy_p75": 1.31101,
+      "entropy_p90": 1.344776,
+      "entropy_p95": 1.362825,
+      "entropy_p99": 1.388513,
+      "entropy_mean": 1.285166,
+      "entropy_std": 0.045098,
+      "vitality_dist": {
+        "3": 1089,
+        "6": 1082,
+        "9": 1114
+      },
+      "pct_vitality_9": 33.91,
+      "p90_anterior": 0.95,
+      "godel_activations_anterior_pct": 100.0,
+      "godel_activations_nuevo_pct": 37.5,
+      "umbral_recomendado": 1.344776,
+      "nota": "P90 real calculado (vitality==9 ya cubre 33.9% — entropía es filtro secundario)",
+      "filas_usadas": 3285,
+      "cutoff": "2023-12-31"
+    },
+    "NIFTY50": {
+      "entropy_p50": 1.125239,
+      "entropy_p75": 1.152219,
+      "entropy_p90": 1.181812,
+      "entropy_p95": 1.204225,
+      "entropy_p99": 1.236396,
+      "entropy_mean": 1.127774,
+      "entropy_std": 0.042747,
+      "vitality_dist": {
+        "3": 1089,
+        "6": 1082,
+        "9": 1114
+      },
+      "pct_vitality_9": 33.91,
+      "p90_anterior": 1.18,
+      "godel_activations_anterior_pct": 37.32,
+      "godel_activations_nuevo_pct": 37.17,
+      "umbral_recomendado": 1.181812,
+      "nota": "P90 real calculado (vitality==9 ya cubre 33.9% — entropía es filtro secundario)",
+      "filas_usadas": 3285,
+      "cutoff": "2023-12-31"
+    }
+  }
+}

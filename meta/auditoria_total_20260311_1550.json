@@ -1,0 +1,578 @@
+{
+  "timestamp": "2026-03-11T15:50:13.836054+00:00",
+  "summary": {
+    "critical": 1,
+    "high": 3,
+    "ok": 20,
+    "total": 35
+  },
+  "findings": [
+    {
+      "severity": "OK",
+      "module": "SHA",
+      "asset": "NVDA",
+      "code": "SHA_MATCH",
+      "desc": "SHA confirmado: 0da019621926",
+      "fix": ""
+    },
+    {
+      "severity": "OK",
+      "module": "SHA",
+      "asset": "BTC",
+      "code": "SHA_MATCH",
+      "desc": "SHA confirmado: 5e6e6d9021a3",
+      "fix": ""
+    },
+    {
+      "severity": "OK",
+      "module": "SHA",
+      "asset": "XAU",
+      "code": "SHA_MATCH",
+      "desc": "SHA confirmado: b766619c85ad",
+      "fix": ""
+    },
+    {
+      "severity": "OK",
+      "module": "SHA",
+      "asset": "NIFTY50",
+      "code": "SHA_MATCH",
+      "desc": "SHA confirmado: 51197a4f9517",
+      "fix": ""
+    },
+    {
+      "severity": "MEDIO",
+      "module": "DNA",
+      "asset": "NIFTY50",
+      "code": "FUTURE_BLEED_WEAK:vix_norm",
+      "desc": "'vix_norm' correlaci\u00f3n d\u00e9bil-moderada con futuro: 0.120. Monitorear.",
+      "fix": ""
+    },
+    {
+      "severity": "MEDIO",
+      "module": "DNA",
+      "asset": "NIFTY50",
+      "code": "FUTURE_BLEED_WEAK:entropy_psych_vix",
+      "desc": "'entropy_psych_vix' correlaci\u00f3n d\u00e9bil-moderada con futuro: 0.130. Monitorear.",
+      "fix": ""
+    },
+    {
+      "severity": "OK",
+      "module": "DATE",
+      "asset": "NVDA",
+      "code": "ALL_DATES_OK",
+      "desc": "Todos los parquets de NVDA tienen datetime[ms,UTC] \u2705",
+      "fix": ""
+    },
+    {
+      "severity": "OK",
+      "module": "DATE",
+      "asset": "BTC",
+      "code": "ALL_DATES_OK",
+      "desc": "Todos los parquets de BTC tienen datetime[ms,UTC] \u2705",
+      "fix": ""
+    },
+    {
+      "severity": "OK",
+      "module": "DATE",
+      "asset": "XAU",
+      "code": "ALL_DATES_OK",
+      "desc": "Todos los parquets de XAU tienen datetime[ms,UTC] \u2705",
+      "fix": ""
+    },
+    {
+      "severity": "OK",
+      "module": "DATE",
+      "asset": "NIFTY50",
+      "code": "ALL_DATES_OK",
+      "desc": "Todos los parquets de NIFTY50 tienen datetime[ms,UTC] \u2705",
+      "fix": ""
+    },
+    {
+      "severity": "OK",
+      "module": "NAN",
+      "asset": "NVDA",
+      "code": "NAN_CLEAN",
+      "desc": "Sin NaN en ninguna columna \u2705",
+      "fix": ""
+    },
+    {
+      "severity": "CR\u00cdTICO",
+      "module": "NAN",
+      "asset": "BTC",
+      "code": "NAN_STRUCTURAL:entropy_shannon",
+      "desc": "'entropy_shannon' tiene 1710 NaN (30.0%) fuera del warm-up (max_pos=5707, lookback=21). Contaminaci\u00f3n estructural.",
+      "fix": "Investigar fuente de datos y regenerar columna"
+    },
+    {
+      "severity": "OK",
+      "module": "NAN",
+      "asset": "XAU",
+      "code": "NAN_CLEAN",
+      "desc": "Sin NaN en ninguna columna \u2705",
+      "fix": ""
+    },
+    {
+      "severity": "MEDIO",
+      "module": "NAN",
+      "asset": "NIFTY50",
+      "code": "NAN_ELEVATED:entropy_shannon",
+      "desc": "'entropy_shannon' tiene 34 NaN (1.3%). Fuera del warm-up \u2014 revisar.",
+      "fix": ""
+    },
+    {
+      "severity": "MEDIO",
+      "module": "GDELT",
+      "asset": "NVDA",
+      "code": "GDELT_GAP_2026",
+      "desc": "GDELT cubre hasta 2025-12-31 00:00:00+00:00. Gap 2026 confirmado.",
+      "fix": "Migrar CSVs GDELT 2026 \u2192 gdelt_foundation.py"
+    },
+    {
+      "severity": "ALTO",
+      "module": "GDELT",
+      "asset": "NVDA",
+      "code": "GDELT_LOW_COVERAGE",
+      "desc": "Cobertura GDELT baja: ~58.6% del historial OHLCV",
+      "fix": "Verificar rango de fechas y re-fetch GDELT hist\u00f3rico"
+    },
+    {
+      "severity": "MEDIO",
+      "module": "GDELT",
+      "asset": "BTC",
+      "code": "GDELT_GAP_2026",
+      "desc": "GDELT cubre hasta 2025-12-31 00:00:00+00:00. Gap 2026 confirmado.",
+      "fix": "Migrar CSVs GDELT 2026 \u2192 gdelt_foundation.py"
+    },
+    {
+      "severity": "MEDIO",
+      "module": "GDELT",
+      "asset": "XAU",
+      "code": "GDELT_GAP_2026",
+      "desc": "GDELT cubre hasta 2025-12-31 00:00:00+00:00. Gap 2026 confirmado.",
+      "fix": "Migrar CSVs GDELT 2026 \u2192 gdelt_foundation.py"
+    },
+    {
+      "severity": "MEDIO",
+      "module": "GDELT",
+      "asset": "NIFTY50",
+      "code": "GDELT_GAP_2026",
+      "desc": "GDELT cubre hasta 2025-12-31 00:00:00+00:00. Gap 2026 confirmado.",
+      "fix": "Migrar CSVs GDELT 2026 \u2192 gdelt_foundation.py"
+    },
+    {
+      "severity": "MEDIO",
+      "module": "2026",
+      "asset": "NVDA",
+      "code": "2026_MISSING",
+      "desc": "NVDA_2026_entropy.parquet no encontrado",
+      "fix": "Normal si a\u00fan no se ha generado el 2026 completo"
+    },
+    {
+      "severity": "MEDIO",
+      "module": "2026",
+      "asset": "BTC",
+      "code": "2026_MISSING",
+      "desc": "BTC_2026_entropy.parquet no encontrado",
+      "fix": "Normal si a\u00fan no se ha generado el 2026 completo"
+    },
+    {
+      "severity": "MEDIO",
+      "module": "2026",
+      "asset": "XAU",
+      "code": "2026_MISSING",
+      "desc": "XAU_2026_entropy.parquet no encontrado",
+      "fix": "Normal si a\u00fan no se ha generado el 2026 completo"
+    },
+    {
+      "severity": "MEDIO",
+      "module": "2026",
+      "asset": "NIFTY50",
+      "code": "2026_MISSING",
+      "desc": "NIFTY50_2026_entropy.parquet no encontrado",
+      "fix": "Normal si a\u00fan no se ha generado el 2026 completo"
+    },
+    {
+      "severity": "OK",
+      "module": "GODEL",
+      "asset": "NVDA",
+      "code": "GODEL_OK",
+      "desc": "Activaci\u00f3n en rango sano: 10.0% \u2705",
+      "fix": ""
+    },
+    {
+      "severity": "ALTO",
+      "module": "GODEL",
+      "asset": "BTC",
+      "code": "GODEL_OUT_OF_RANGE",
+      "desc": "Activaci\u00f3n correcta 24.0% fuera del rango sano 8%-13%",
+      "fix": "Recalibrar P90 con spel_p90_recalibrate.py"
+    },
+    {
+      "severity": "OK",
+      "module": "GODEL",
+      "asset": "XAU",
+      "code": "GODEL_OK",
+      "desc": "Activaci\u00f3n en rango sano: 10.0% \u2705",
+      "fix": ""
+    },
+    {
+      "severity": "ALTO",
+      "module": "GODEL",
+      "asset": "NIFTY50",
+      "code": "GODEL_OUT_OF_RANGE",
+      "desc": "Activaci\u00f3n correcta 42.5% fuera del rango sano 8%-13%",
+      "fix": "Recalibrar P90 con spel_p90_recalibrate.py"
+    },
+    {
+      "severity": "OK",
+      "module": "SEQ",
+      "asset": "NVDA",
+      "code": "LOG_RETURN_OK",
+      "desc": "log_return calculado correctamente (corr=1.0000) \u2705",
+      "fix": ""
+    },
+    {
+      "severity": "OK",
+      "module": "SEQ",
+      "asset": "NVDA",
+      "code": "VITALITY_OK",
+      "desc": "vitality_tesla OK \u00b7 v=9 rate: 0.0% \u2705",
+      "fix": ""
+    },
+    {
+      "severity": "OK",
+      "module": "SEQ",
+      "asset": "BTC",
+      "code": "LOG_RETURN_OK",
+      "desc": "log_return calculado correctamente (corr=1.0000) \u2705",
+      "fix": ""
+    },
+    {
+      "severity": "OK",
+      "module": "SEQ",
+      "asset": "BTC",
+      "code": "VITALITY_OK",
+      "desc": "vitality_tesla OK \u00b7 v=9 rate: 23.8% \u2705",
+      "fix": ""
+    },
+    {
+      "severity": "OK",
+      "module": "SEQ",
+      "asset": "XAU",
+      "code": "LOG_RETURN_OK",
+      "desc": "log_return calculado correctamente (corr=1.0000) \u2705",
+      "fix": ""
+    },
+    {
+      "severity": "OK",
+      "module": "SEQ",
+      "asset": "XAU",
+      "code": "VITALITY_OK",
+      "desc": "vitality_tesla OK \u00b7 v=9 rate: 0.0% \u2705",
+      "fix": ""
+    },
+    {
+      "severity": "OK",
+      "module": "SEQ",
+      "asset": "NIFTY50",
+      "code": "LOG_RETURN_OK",
+      "desc": "log_return calculado correctamente (corr=0.9970) \u2705",
+      "fix": ""
+    },
+    {
+      "severity": "OK",
+      "module": "SEQ",
+      "asset": "NIFTY50",
+      "code": "VITALITY_OK",
+      "desc": "vitality_tesla OK \u00b7 v=9 rate: 38.9% \u2705",
+      "fix": ""
+    }
+  ],
+  "module_results": {
+    "sha": {
+      "NVDA": {
+        "path": "/content/drive/MyDrive/SPEL-v2.0/data_lake/NVDA/ohlcv/aggregated/NVDA_ohlcv_v4.parquet",
+        "sha": "0da019621926",
+        "expected": "0da019621926"
+      },
+      "BTC": {
+        "path": "/content/drive/MyDrive/SPEL-v2.0/data_lake/BTC/ohlcv/aggregated/BTC_ohlcv_v4.parquet",
+        "sha": "5e6e6d9021a3",
+        "expected": "5e6e6d9021a3"
+      },
+      "XAU": {
+        "path": "/content/drive/MyDrive/SPEL-v2.0/data_lake/XAU/ohlcv/aggregated/XAU_ohlcv_v4.parquet",
+        "sha": "b766619c85ad",
+        "expected": "b766619c85ad"
+      },
+      "NIFTY50": {
+        "path": "/content/drive/MyDrive/SPEL-v2.0/data_lake/NIFTY50/ohlcv/aggregated/NIFTY50_ohlcv_v4.parquet",
+        "sha": "51197a4f9517",
+        "expected": "51197a4f9517"
+      }
+    },
+    "dna": {
+      "NVDA": {
+        "leakage": {
+          "vix_norm": {
+            "leakage": false,
+            "mean": 0.671456993080588,
+            "std": 0.7417438956728734,
+            "iqr_ratio": 0.927
+          },
+          "entropy_psych_vix": {
+            "leakage": false,
+            "mean": 0.671456993080588,
+            "std": 0.7417438956728734,
+            "iqr_ratio": 0.927
+          },
+          "entropy_decay_lambda": {
+            "leakage": false,
+            "mean": 0.4470052839620612,
+            "std": 0.5408242210553031,
+            "iqr_ratio": 2.052
+          },
+          "mass_panic_index": {
+            "leakage": false,
+            "mean": 0.0,
+            "std": 0.0,
+            "iqr_ratio": 0
+          },
+          "fear_momentum": {
+            "leakage": false,
+            "mean": 0.03792313143473041,
+            "std": 0.40865099580708625,
+            "iqr_ratio": 0.0
+          },
+          "nash_frozen_7d": {
+            "leakage": false,
+            "mean": 0.006306834848929305,
+            "std": 0.079170562781091,
+            "iqr_ratio": 0.0
+          }
+        },
+        "future_bleed": {
+          "vix_norm": 0.021,
+          "entropy_psych_vix": 0.021,
+          "mass_panic_index": 0.0,
+          "fear_momentum": 0.0066,
+          "entropy_shannon": 0.0203
+        },
+        "missing_cols": []
+      },
+      "BTC": {
+        "leakage": {
+          "vix_norm": {
+            "leakage": false,
+            "mean": 0.5866436514788403,
+            "std": 0.8114661398363605,
+            "iqr_ratio": 0.748
+          },
+          "entropy_psych_vix": {
+            "leakage": false,
+            "mean": 0.5866436514788403,
+            "std": 0.8114661398363605,
+            "iqr_ratio": 0.748
+          },
+          "entropy_decay_lambda": {
+            "leakage": false,
+            "mean": 0.7688870902661374,
+            "std": 0.4983534909813405,
+            "iqr_ratio": 2.237
+          },
+          "mass_panic_index": {
+            "leakage": false,
+            "mean": 0.0,
+            "std": 0.0,
+            "iqr_ratio": 0
+          },
+          "fear_momentum": {
+            "leakage": false,
+            "mean": 0.0,
+            "std": 0.0,
+            "iqr_ratio": 0
+          },
+          "nash_frozen_7d": {
+            "leakage": false,
+            "mean": 0.0772590043693249,
+            "std": 0.06704311118256072,
+            "iqr_ratio": 1.827
+          }
+        },
+        "future_bleed": {
+          "vix_norm": 0.0677,
+          "entropy_psych_vix": 0.0677,
+          "mass_panic_index": 0.0,
+          "fear_momentum": 0.0,
+          "entropy_shannon": 0.04
+        },
+        "missing_cols": []
+      },
+      "XAU": {
+        "leakage": {
+          "vix_norm": {
+            "leakage": false,
+            "mean": 0.07878255047953661,
+            "std": 4.40563804897461,
+            "iqr_ratio": 0.257
+          },
+          "entropy_psych_vix": {
+            "leakage": false,
+            "mean": 0.3115918126031271,
+            "std": 5.0352688037960585,
+            "iqr_ratio": 0.0
+          },
+          "entropy_decay_lambda": {
+            "leakage": false,
+            "mean": 0.6365199481583639,
+            "std": 0.6288775959855384,
+            "iqr_ratio": 2.04
+          },
+          "mass_panic_index": {
+            "leakage": false,
+            "mean": 4.329182458040065e-05,
+            "std": 0.001854192992358046,
+            "iqr_ratio": 0.0
+          },
+          "fear_momentum": {
+            "leakage": false,
+            "mean": 0.032087499629644495,
+            "std": 0.3171188687572636,
+            "iqr_ratio": 0.0
+          },
+          "nash_frozen_7d": {
+            "leakage": false,
+            "mean": 0.010828370330265295,
+            "std": 0.10350386534244724,
+            "iqr_ratio": 0.0
+          }
+        },
+        "future_bleed": {
+          "vix_norm": 0.0128,
+          "entropy_psych_vix": 0.0112,
+          "mass_panic_index": 0.0045,
+          "fear_momentum": 0.0141,
+          "entropy_shannon": 0.0118
+        },
+        "missing_cols": []
+      },
+      "NIFTY50": {
+        "leakage": {
+          "vix_norm": {
+            "leakage": false,
+            "mean": -0.041709080235270944,
+            "std": 1.3726632639660825,
+            "iqr_ratio": 0.99
+          },
+          "entropy_psych_vix": {
+            "leakage": false,
+            "mean": 0.49459332894736563,
+            "std": 1.2028374501308425,
+            "iqr_ratio": 0.402
+          },
+          "entropy_decay_lambda": {
+            "leakage": false,
+            "mean": 1.1063106037225732,
+            "std": 0.11020875347738998,
+            "iqr_ratio": 0.388
+          },
+          "mass_panic_index": {
+            "leakage": false,
+            "mean": 0.0,
+            "std": 0.0,
+            "iqr_ratio": 0
+          },
+          "fear_momentum": {
+            "leakage": false,
+            "mean": 0.0,
+            "std": 0.0,
+            "iqr_ratio": 0
+          },
+          "nash_frozen_7d": {
+            "leakage": false,
+            "mean": 0.1034951047886214,
+            "std": 0.05082303290504867,
+            "iqr_ratio": 1.354
+          }
+        },
+        "future_bleed": {
+          "vix_norm": 0.1196,
+          "entropy_psych_vix": 0.1301,
+          "mass_panic_index": 0.0,
+          "fear_momentum": 0.0,
+          "entropy_shannon": 0.0122
+        },
+        "missing_cols": []
+      }
+    },
+    "nans": {
+      "NVDA": {},
+      "BTC": {
+        "entropy_shannon": {
+          "count": 1710,
+          "rate": 0.2996,
+          "max_pos": 5707,
+          "warmup_ok": false
+        }
+      },
+      "XAU": {},
+      "NIFTY50": {
+        "entropy_shannon": {
+          "count": 34,
+          "rate": 0.0129,
+          "max_pos": 2631,
+          "warmup_ok": false
+        }
+      }
+    },
+    "gdelt": {
+      "NVDA": {
+        "rows": 3998,
+        "cols": 9
+      },
+      "BTC": {
+        "rows": 3998,
+        "cols": 9
+      },
+      "XAU": {
+        "rows": 3998,
+        "cols": 9
+      },
+      "NIFTY50": {
+        "rows": 3998,
+        "cols": 9
+      }
+    },
+    "entropy_2026": {},
+    "godel": {
+      "NVDA": {
+        "p90_configured": 1.1898,
+        "p90_data_actual": 1.1571,
+        "activation_rate_current": 0.0359,
+        "activation_rate_if_recalibrated": 0.1001,
+        "n_train_rows": 6276
+      },
+      "BTC": {
+        "p90_configured": 1.35,
+        "p90_data_actual": 1.1709,
+        "activation_rate_current": 0.2266,
+        "activation_rate_if_recalibrated": 0.2402,
+        "n_train_rows": 4916
+      },
+      "XAU": {
+        "p90_configured": 0.95,
+        "p90_data_actual": 1.3229,
+        "activation_rate_current": 0.4619,
+        "activation_rate_if_recalibrated": 0.1002,
+        "n_train_rows": 5021
+      },
+      "NIFTY50": {
+        "p90_configured": 1.18,
+        "p90_data_actual": 1.1868,
+        "activation_rate_current": 0.4336,
+        "activation_rate_if_recalibrated": 0.425,
+        "n_train_rows": 2221
+      }
+    }
+  }
+}

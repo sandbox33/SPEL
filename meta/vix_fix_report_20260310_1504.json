@@ -1,0 +1,22 @@
+[
+  {
+    "status": "FIXED",
+    "asset": "XAU",
+    "sha_before": "d8e82f93f3bc",
+    "sha_after": "90a5fde03655",
+    "rows": 5541,
+    "vix_nan_before": 0,
+    "vix_nan_after": 0,
+    "timestamp": "2026-03-10T15:04:20.100990+00:00"
+  },
+  {
+    "status": "FIXED",
+    "asset": "NIFTY50",
+    "sha_before": "c26b7e23dc60",
+    "sha_after": "30eb0927c7ab",
+    "rows": 2632,
+    "vix_nan_before": 0,
+    "vix_nan_after": 0,
+    "timestamp": "2026-03-10T15:04:23.082060+00:00"
+  }
+]
