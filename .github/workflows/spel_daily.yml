@@ -1,0 +1,23 @@
+name: SPEL Daily Signal
+
+on:
+  schedule:
+    - cron: "50 12 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  signal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -q requests yfinance polars numpy scikit-learn
+      - name: Signal
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/spel_forex_iq_runner.py

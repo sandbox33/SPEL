@@ -37,3 +37,6 @@ meta/sha_registry_v2.json
 
 Auditoría Nivel 1/
 codigo/core/*_bak_*.py
+
+Auditor*/
+"Auditor*/"
