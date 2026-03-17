@@ -18,3 +18,19 @@ master.json
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+
+# Artefactos de sesiones anteriores
+scripts/spel_fix_*.py
+scripts/spel_diagnostico_*.py
+scripts/spel_patch_*.py
+scripts/*_bak_*.py
+meta/auditoria_total_*.json
+meta/limpieza_*.json
+meta/*audit*.py
+meta/*recovery*.py
+meta/*retrain*.py
+meta/FULL_DRIVE_AUDIT.json
+meta/recovery_report.json
+meta/dna_audit_report.json
+meta/master_audit_report.json
+meta/sha_registry_v2.json
