@@ -1,0 +1,20 @@
+
+# Datos grandes — nunca a GitHub
+data_lake/
+checkpoints/
+logs/
+state/
+*.parquet
+*.pt
+*.pth
+*.pkl
+
+# Configs con tokens
+master.json
+*token*
+*secret*
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/

@@ -1,0 +1,50 @@
+{
+  "NVDA": {
+    "sha_v5": "73667850184b",
+    "schema": "canonical_v5.1",
+    "n_cols": 30,
+    "p90_entropy": 1.18982,
+    "volume_type": "NATIVE_FUTURES",
+    "n_rows": 2694,
+    "session": "S24_fix",
+    "updated": "2026-03-16T18:14:07.880315+00:00",
+    "sha_post_ingest_s24": "73667850184b",
+    "ingest_s24_date": "2026-03-16T18:17:42.338356+00:00"
+  },
+  "BTC": {
+    "sha_v5": "acf0e05a774f",
+    "schema": "canonical_v5.1",
+    "n_cols": 30,
+    "p90_entropy": 1.170901,
+    "volume_type": "SPOT_CRYPTO",
+    "n_rows": 3998,
+    "session": "S24_fix",
+    "updated": "2026-03-16T18:13:12.711552+00:00",
+    "sha_post_ingest_s24": "2f9fc2276d68",
+    "ingest_s24_date": "2026-03-16T18:17:42.338331+00:00"
+  },
+  "XAU": {
+    "sha_v5": "d21af7f1b6f4",
+    "schema": "canonical_v5.1",
+    "n_cols": 30,
+    "p90_entropy": 1.350316,
+    "volume_type": "NATIVE_FUTURES",
+    "n_rows": 2694,
+    "session": "S24_fix",
+    "updated": "2026-03-16T18:13:31.252424+00:00",
+    "sha_post_ingest_s24": "23c6b3d1ea0e",
+    "ingest_s24_date": "2026-03-16T18:17:42.338348+00:00"
+  },
+  "NIFTY50": {
+    "sha_v5": "9945fc117921",
+    "schema": "canonical_v5.1",
+    "n_cols": 30,
+    "p90_entropy": 1.186823,
+    "volume_type": "SYNTHETIC_INDEX",
+    "n_rows": 2694,
+    "session": "S24_fix",
+    "updated": "2026-03-16T18:13:49.531892+00:00",
+    "sha_post_ingest_s24": "9945fc117921",
+    "ingest_s24_date": "2026-03-16T18:17:42.338353+00:00"
+  }
+}
