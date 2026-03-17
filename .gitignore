@@ -34,3 +34,6 @@ meta/recovery_report.json
 meta/dna_audit_report.json
 meta/master_audit_report.json
 meta/sha_registry_v2.json
+
+Auditoría Nivel 1/
+codigo/core/*_bak_*.py
