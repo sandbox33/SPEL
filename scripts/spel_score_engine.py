@@ -249,6 +249,8 @@ def score(asset: str, capital: float = 10.0,
     volume_type = reg[asset].get('volume_type', 'NATIVE_FUTURES')
 
     df = pl.read_parquet(str(pq_path)).sort('date')
+    # R26: filtrar fila en curso (close=NaN) antes de backbone
+    df = df.filter(pl.col('close').is_not_null() & ~pl.col('close').is_nan())
 
     # Construir alerts_df desde el parquet
     alerts_df = _build_alerts_df_from_parquet(df, asset)
