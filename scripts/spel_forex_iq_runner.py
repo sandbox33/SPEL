@@ -2,7 +2,7 @@ import os,sys,json,requests
 from datetime import datetime,timezone,timedelta
 
 TOKEN = os.environ["TELEGRAM_TOKEN"]
-CHAT  = os.environ["TELEGRAM_CHAT_ID"]
+CHAT  = os.environ.get("TELEGRAM_SENALES", os.environ.get("TELEGRAM_CHAT_ID",""))
 now   = (datetime.now(timezone.utc)-timedelta(hours=5)).strftime("%H:%M ECT")
 
 sys.path.insert(0,"scripts")
