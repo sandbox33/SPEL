@@ -6,6 +6,13 @@ import json, requests, numpy as np
 from datetime import datetime, timezone
 from pathlib import Path
 
+# R28: P90 por proxy — BUG-SNAPSHOT-GODEL fix (S29)
+PROXY_P90_MAP = {
+    'NVDA': 1.189820,  # EURUSD, AUDUSD
+    'XAU':  1.350316,  # GBPUSD, USDJPY, USDCHF
+}
+
+
 P90 = {"NVDA":1.18982,"XAU":1.350316,"BTC":1.170901,"NIFTY50":1.186823}
 PROXY_MAP = {
     "EURUSD":"NVDA","GBPUSD":"XAU",
@@ -61,7 +68,7 @@ for pair, proxy in PROXY_MAP.items():
     fear_mom    = round(entropy - p90, 4)
     nash_frozen = 0.85 if abs(fear_mom)<0.05 else 0.60
     snapshot[pair] = {
-        "entropy": entropy, "p90": p90,
+        "entropy": entropy, "p90": PROXY_P90_MAP.get(proxy, p90),
         "vitality": vitality, "nash_frozen": nash_frozen,
         "fear_momentum": fear_mom, "godel_active": godel,
         "proxy": proxy, "as_of": now.isoformat(),
