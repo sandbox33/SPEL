@@ -125,6 +125,7 @@ def _build_alerts_df_from_parquet(df: pl.DataFrame,
     Cuando MathEngine.run() no puede ejecutarse (sin LazyFrames GDELT separados),
     derivamos las columnas requeridas directamente del parquet.
     """
+    df = df.filter(pl.col('close').is_not_null() & ~pl.col('close').is_nan() & pl.col('high').is_not_null() & pl.col('low').is_not_null())
     last = df.tail(1).to_dicts()[0]
 
     # Hurst: usar entropy_decay_lambda como proxy (H>0.5 = tendencia)
@@ -271,6 +272,7 @@ def score(asset: str, capital: float = 10.0,
                          else str(bb_signal.direction)
     except Exception as e:
         # Fallback si Backbone falla: usar datos del parquet directamente
+        df = df.filter(pl.col('close').is_not_null() & ~pl.col('close').is_nan() & pl.col('high').is_not_null() & pl.col('low').is_not_null())
         last          = df.tail(1).to_dicts()[0]
         entropy_val   = float(last.get('entropy_shannon', 1.0))
         vitality      = int(last.get('vitality_tesla', 3))
@@ -292,6 +294,7 @@ def score(asset: str, capital: float = 10.0,
                     ('LONG' if natural_score > 0.5 else 'SHORT')
 
     # Score de Oro
+    df = df.filter(pl.col('close').is_not_null() & ~pl.col('close').is_nan() & pl.col('high').is_not_null() & pl.col('low').is_not_null())
     last_row     = df.tail(1).to_dicts()[0]
     entropy_val  = float(last_row.get('entropy_shannon', 1.0))
     score_oro    = _compute_score_oro(
