@@ -1,0 +1,207 @@
+{
+  "generated_at": "2026-03-19T06:24:34.670016+00:00",
+  "version": "v38",
+  "session": "S32",
+  "architecture": {
+    "input_size": 20,
+    "hidden_size": 64,
+    "num_layers": 1,
+    "output": "Linear(64,1)+sigmoid",
+    "tensor_cols": [
+      "high",
+      "low",
+      "log_return",
+      "entropy_shannon",
+      "entropy_decay_lambda",
+      "entropy_psych_vix",
+      "fibonacci_lag_1",
+      "fibonacci_lag_2",
+      "fibonacci_lag_3",
+      "fibonacci_lag_5",
+      "fibonacci_lag_8",
+      "fibonacci_lag_13",
+      "fibonacci_lag_21",
+      "goldstein_geo",
+      "n_events_ohlcv",
+      "vitality_tesla",
+      "mass_panic_index",
+      "fear_momentum",
+      "vix_norm",
+      "nash_frozen_7d"
+    ],
+    "path_b": "scaler embedded in checkpoint (SPEL_META.json)"
+  },
+  "proxy_p90_map": {
+    "NVDA": 1.18982,
+    "XAU": 1.350316
+  },
+  "core": {
+    "BTC": {
+      "class": "SPOT_CRYPTO",
+      "ticker_yfinance": "BTC-USD",
+      "ticker_alpaca": "BTC/USD",
+      "lookback": 21,
+      "sha_v5": "4f14ab4b0f64",
+      "p90_entropy": 1.170901,
+      "checkpoint": "BTC_LSTM_v3c_F1_0.4994.pt",
+      "val_metric": {
+        "f1_macro": 0.4994
+      },
+      "gdelt_keywords": [
+        "Bitcoin",
+        "crypto regulation",
+        "Federal Reserve"
+      ],
+      "gdelt_proxy": "NVDA",
+      "session_ecT": "24/7 best 08:00-12:00"
+    },
+    "XAU": {
+      "class": "NATIVE_FUTURES",
+      "ticker_yfinance": "GC=F",
+      "ticker_alpaca": null,
+      "lookback": 63,
+      "sha_v5": "9062a58b6c0b",
+      "p90_entropy": 1.350316,
+      "checkpoint": "XAU_LSTM_v3_godel_valloss0.4386.pt",
+      "val_metric": {
+        "val_dir": 0.5614
+      },
+      "gdelt_keywords": [
+        "gold",
+        "Federal Reserve",
+        "inflation",
+        "safe haven"
+      ],
+      "gdelt_proxy": "XAU",
+      "session_ect": "08:20-13:30",
+      "note": "val_dir=0.5614 marginal \u2014 candidato retraining post GDELT real"
+    },
+    "NIFTY50": {
+      "class": "SYNTHETIC_INDEX",
+      "ticker_yfinance": "^NSEI",
+      "ticker_alpaca": null,
+      "lookback": 42,
+      "sha_v5": "30f9037249b4",
+      "p90_entropy": 1.186823,
+      "checkpoint": "NIFTY50_LSTM_v3_godel_valloss0.3784.pt",
+      "val_metric": {
+        "val_dir": 0.6216
+      },
+      "score_weights": {
+        "godel": 0.55,
+        "te": 0.45,
+        "vol": 0.0
+      },
+      "gdelt_keywords": [
+        "India economy",
+        "RBI",
+        "Nifty"
+      ],
+      "gdelt_proxy": "NVDA",
+      "session_ect": "22:45-05:00 NO intraday"
+    },
+    "NVDA": {
+      "class": "NATIVE_FUTURES",
+      "ticker_yfinance": "NVDA",
+      "ticker_alpaca": "NVDA",
+      "lookback": 63,
+      "sha_v5": "64de244c36f0",
+      "p90_entropy": 1.18982,
+      "checkpoint": "NVDA_LSTM_v3_godel_valloss0.3857.pt",
+      "val_metric": {
+        "val_dir": 0.6143
+      },
+      "gdelt_keywords": [
+        "NVIDIA",
+        "semiconductor",
+        "AI chips",
+        "export controls"
+      ],
+      "gdelt_proxy": "NVDA",
+      "session_ect": "08:30-15:00"
+    }
+  },
+  "forex": {
+    "EURUSD": {
+      "class": "FOREX",
+      "ticker_yfinance": "EURUSD=X",
+      "lookback": 21,
+      "p90_entropy": 1.170901,
+      "gdelt_proxy": "NVDA",
+      "gdelt_keywords": [
+        "Federal Reserve",
+        "ECB",
+        "European Central Bank",
+        "dollar",
+        "euro"
+      ],
+      "session_ect": "08:00-12:00 \u2b50 best",
+      "lstm_status": "PENDING S34"
+    },
+    "GBPUSD": {
+      "class": "FOREX",
+      "ticker_yfinance": "GBPUSD=X",
+      "lookback": 21,
+      "p90_entropy": 1.279675,
+      "gdelt_proxy": "XAU",
+      "gdelt_keywords": [
+        "Bank of England",
+        "BOE",
+        "pound",
+        "sterling"
+      ],
+      "session_ect": "03:00-08:00",
+      "lstm_status": "PENDING S34"
+    },
+    "USDJPY": {
+      "class": "FOREX",
+      "ticker_yfinance": "USDJPY=X",
+      "lookback": 21,
+      "p90_entropy": 1.258247,
+      "gdelt_proxy": "XAU",
+      "gdelt_keywords": [
+        "Bank of Japan",
+        "BOJ",
+        "yen",
+        "yield curve control"
+      ],
+      "session_ect": "19:00-04:00",
+      "lstm_status": "PENDING S34"
+    },
+    "USDCHF": {
+      "class": "FOREX",
+      "ticker_yfinance": "USDCHF=X",
+      "lookback": 21,
+      "p90_entropy": 1.178046,
+      "gdelt_proxy": "XAU",
+      "gdelt_keywords": [
+        "Swiss National Bank",
+        "SNB",
+        "Swiss franc",
+        "CHF"
+      ],
+      "session_ect": "08:00-12:00 \u2b50",
+      "lstm_status": "PENDING S34"
+    },
+    "AUDUSD": {
+      "class": "FOREX",
+      "ticker_yfinance": "AUDUSD=X",
+      "lookback": 21,
+      "p90_entropy": 1.350316,
+      "gdelt_proxy": "NVDA",
+      "gdelt_keywords": [
+        "Reserve Bank Australia",
+        "RBA",
+        "Australian dollar",
+        "China trade"
+      ],
+      "session_ect": "19:00-01:00",
+      "lstm_status": "PENDING S34"
+    }
+  },
+  "telegram": {
+    "SENALES": "-1003733702589",
+    "SISTEMA": "-1003712424420",
+    "BACKUP": "-1003761735254"
+  }
+}
