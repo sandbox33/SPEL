@@ -14,7 +14,11 @@
     "last_write_fn": "write_parquet_atomic",
     "sha": "43d274f57619",
     "last_updated": "2026-03-19T17:07:16Z",
-    "rows": 2746
+    "rows": 2746,
+    "scaler_sha": "0306665fa373",
+    "scaler_version": "v2",
+    "scaler_updated": "2026-03-19T21:50:24Z",
+    "drift_resolved": true
   },
   "BTC": {
     "sha_v5": "00a3f1a0fb11",
