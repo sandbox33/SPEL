@@ -12,7 +12,7 @@
     "ingest_s24_date": "2026-03-16T18:17:42.338356+00:00"
   },
   "BTC": {
-    "sha_v5": "4f14ab4b0f64",
+    "sha_v5": "00a3f1a0fb11",
     "schema": "canonical_v5.1",
     "n_cols": 30,
     "p90_entropy": 1.170901,
@@ -21,10 +21,12 @@
     "session": "S24_fix",
     "updated": "2026-03-18T06:02:11.890839+00:00",
     "sha_post_ingest_s24": "2f9fc2276d68",
-    "ingest_s24_date": "2026-03-16T18:17:42.338331+00:00"
+    "ingest_s24_date": "2026-03-16T18:17:42.338331+00:00",
+    "updated_utc": "2026-03-19T15:28:20.665172+00:00",
+    "sha_sync_from": "4f14ab4b0f64"
   },
   "XAU": {
-    "sha_v5": "9062a58b6c0b",
+    "sha_v5": "1bdde2200fc2",
     "schema": "canonical_v5.1",
     "n_cols": 30,
     "p90_entropy": 1.350316,
@@ -33,7 +35,9 @@
     "session": "S24_fix",
     "updated": "2026-03-18T06:02:14.714796+00:00",
     "sha_post_ingest_s24": "23c6b3d1ea0e",
-    "ingest_s24_date": "2026-03-16T18:17:42.338348+00:00"
+    "ingest_s24_date": "2026-03-16T18:17:42.338348+00:00",
+    "updated_utc": "2026-03-19T15:28:20.665210+00:00",
+    "sha_sync_from": "9062a58b6c0b"
   },
   "NIFTY50": {
     "sha_v5": "30f9037249b4",
