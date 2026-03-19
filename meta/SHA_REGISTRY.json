@@ -1,6 +1,6 @@
 {
   "NVDA": {
-    "sha_v5": "64de244c36f0",
+    "sha_v5": "43d274f57619",
     "schema": "canonical_v5.1",
     "n_cols": 30,
     "p90_entropy": 1.18982,
@@ -9,7 +9,9 @@
     "session": "S24_fix",
     "updated": "2026-03-19T02:19:11.488131+00:00",
     "sha_post_ingest_s24": "73667850184b",
-    "ingest_s24_date": "2026-03-16T18:17:42.338356+00:00"
+    "ingest_s24_date": "2026-03-16T18:17:42.338356+00:00",
+    "updated_utc": "2026-03-19T15:28:27.542384+00:00",
+    "last_write_fn": "write_parquet_atomic"
   },
   "BTC": {
     "sha_v5": "00a3f1a0fb11",
