@@ -1,55 +1,55 @@
 {
-  "updated": "2026-03-18T14:40:24.893724+00:00",
+  "updated": "2026-03-21T21:32:42.393301+00:00",
   "pairs": {
     "EURUSD": {
       "entropy": 1.7463,
       "p90": 1.18982,
-      "vitality": 6,
-      "nash_frozen": 0.6,
-      "fear_momentum": 0.5565,
+      "vitality": 5,
       "godel_active": true,
+      "fear_momentum": 0.55648,
+      "nash_frozen": 0.5323,
       "proxy": "NVDA",
-      "as_of": "2026-03-18T14:08:16.786063+00:00"
+      "as_of": "2026-03-21T21:32:42.393301+00:00"
     },
     "GBPUSD": {
       "entropy": 1.7463,
       "p90": 1.350316,
-      "vitality": 6,
-      "nash_frozen": 0.6,
-      "fear_momentum": 0.396,
+      "vitality": 5,
       "godel_active": true,
+      "fear_momentum": 0.395984,
+      "nash_frozen": 0.7067,
       "proxy": "XAU",
-      "as_of": "2026-03-18T14:08:16.786063+00:00"
+      "as_of": "2026-03-21T21:32:42.393301+00:00"
     },
     "USDJPY": {
       "entropy": 1.7463,
       "p90": 1.350316,
-      "vitality": 6,
-      "nash_frozen": 0.6,
-      "fear_momentum": 0.396,
+      "vitality": 5,
       "godel_active": true,
+      "fear_momentum": 0.395984,
+      "nash_frozen": 0.7067,
       "proxy": "XAU",
-      "as_of": "2026-03-18T14:08:16.786063+00:00"
+      "as_of": "2026-03-21T21:32:42.393301+00:00"
     },
     "USDCHF": {
       "entropy": 1.7463,
       "p90": 1.350316,
-      "vitality": 6,
-      "nash_frozen": 0.6,
-      "fear_momentum": 0.396,
+      "vitality": 5,
       "godel_active": true,
+      "fear_momentum": 0.395984,
+      "nash_frozen": 0.7067,
       "proxy": "XAU",
-      "as_of": "2026-03-18T14:08:16.786063+00:00"
+      "as_of": "2026-03-21T21:32:42.393301+00:00"
     },
     "AUDUSD": {
       "entropy": 1.7463,
       "p90": 1.18982,
-      "vitality": 6,
-      "nash_frozen": 0.6,
-      "fear_momentum": 0.5565,
+      "vitality": 5,
       "godel_active": true,
+      "fear_momentum": 0.55648,
+      "nash_frozen": 0.5323,
       "proxy": "NVDA",
-      "as_of": "2026-03-18T14:08:16.786063+00:00"
+      "as_of": "2026-03-21T21:32:42.393301+00:00"
     }
   }
 }
