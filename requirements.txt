@@ -1,0 +1,8 @@
+# SPEL v40 — GitHub Actions dependencies
+# Minimum lockfile required if cache:pip is re-enabled in spel_master.yml
+polars>=0.20
+numpy>=1.26
+requests>=2.31
+yfinance>=0.2
+scikit-learn>=1.4
+alpaca-py>=0.21
