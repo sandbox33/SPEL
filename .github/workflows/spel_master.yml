@@ -250,8 +250,8 @@ jobs:
               print(f"  ⚠️  Paper adapter failed (non-blocking): {e}")
           EOF
         env:
-          ALPACA_KEY:        ${{ secrets.ALPACA_KEY }}
-          ALPACA_SECRET:     ${{ secrets.ALPACA_SECRET }}
+          ALPACA_KEY:        ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET:     ${{ secrets.ALPACA_SECRET_KEY }}
           TELEGRAM_TOKEN:    ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_SENALES:  ${{ secrets.TELEGRAM_SENALES }}
           TELEGRAM_SISTEMA:  ${{ secrets.TELEGRAM_SISTEMA }}
