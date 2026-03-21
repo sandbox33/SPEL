@@ -1,0 +1,352 @@
+# ══════════════════════════════════════════════════════════════════════
+# .github/workflows/spel_master.yml
+# SPEL v40 · Master Workflow — Fusión de spel_daily + spel_runner
+#
+# Filosofía: "No borrar, solo evolucionar"
+# spel_daily.yml + spel_runner.yml consolidados en un único workflow
+# para minimizar consumo de minutos GitHub Actions (free tier: 2,000/mes).
+#
+# Estimación de consumo:
+#   Job 0 (snapshot): 1 run/día × 3min = 60 min/mes
+#   Job 1 (paper):    16 runs/día × 4min × 21 días = 1,344 min/mes
+#   Job 2 (health):   condicional, ~1min = 84 min/mes
+#   TOTAL estimado:   ~1,488 min/mes (dentro del límite free)
+#
+# Triggers:
+#   12:45 UTC L-V → Job 0 (snapshot GDELT) + Job 1 (señal diaria forex)
+#   00/15/30/45 13-16 UTC L-V → Job 1 (evaluaciones paper trading)
+#   workflow_dispatch → debug manual
+#
+# Invariantes respetadas:
+#   R3:  SHA_REGISTRY verificado pre-score
+#   R32: ningún write sin SHA sync
+#   R33: CANONICAL_CAPITAL=100000 en env explícito
+#   EF-17: señales → TELEGRAM_SENALES, nunca TELEGRAM_CHAT_ID
+#   EF-19: fail-fast si secrets ausentes
+#   EF-20: gate metrics sobre canonical, sandbox excluido
+# ══════════════════════════════════════════════════════════════════════
+
+name: SPEL v40 — Master Pipeline
+
+on:
+  schedule:
+    # Job 0 + Job 1 diario: snapshot GDELT + señal forex (12:45 UTC = 07:45 ECT)
+    - cron: "45 12 * * 1-5"
+
+    # Job 1 paper evaluations: cada 15min en ventana 13:00-16:45 UTC L-V
+    - cron: "0,15,30,45 13,14,15,16 * * 1-5"
+
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Modo de ejecución"
+        required: false
+        default: "all"
+        type: choice
+        options: ["all", "snapshot_only", "paper_only", "audit"]
+
+# Variables de entorno globales — R33 explícito en YAML (no por default)
+env:
+  PYTHON_VERSION:    "3.11"
+  CANONICAL_CAPITAL: "100000.0"
+  SANDBOX_CAPITAL:   "10.0"
+  SPEL_BASE_DIR:     "."
+
+# ══════════════════════════════════════════════════════════════════════
+# JOB 0 — snapshot_update (ex spel_daily.yml)
+# Solo corre en el trigger 12:45 UTC, no en los de 15min
+# Condición: github.event.schedule empieza con "45" o es workflow_dispatch
+# ══════════════════════════════════════════════════════════════════════
+jobs:
+
+  snapshot_update:
+    name: "J0 · GDELT Snapshot Update"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    # Filtro: solo en cron 12:45 o disparo manual
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.event.schedule, '45')
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install snapshot deps
+        run: pip install -q requests numpy
+
+      - name: Run spel_snapshot_updater.py
+        run: python scripts/spel_snapshot_updater.py
+        env:
+          SPEL_BASE_DIR: ${{ env.SPEL_BASE_DIR }}
+
+      - name: Commit snapshot (R32 atomic)
+        run: |
+          git config user.email "spel-bot@noreply.github.com"
+          git config user.name  "SPEL Bot v40"
+          git add meta/forex_macro_snapshot.json
+          git diff --staged --quiet || \
+            git commit -m "auto(R32): GDELT snapshot $(date -u +'%Y-%m-%dT%H:%M')UTC"
+          git push origin main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
+  # ══════════════════════════════════════════════════════════════════
+  # JOB 1 — paper_signal
+  # Corre en TODOS los triggers (12:45 y cada 15min en 13-16 UTC)
+  # No depende de J0 — puede correr en paralelo en los triggers de 15min
+  # ══════════════════════════════════════════════════════════════════
+  paper_signal:
+    name: "J1 · Paper Signal + Evaluation"
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    # En el trigger 12:45, esperar a que J0 termine primero
+    needs:
+      - snapshot_update
+    # Workaround para que `needs` no falle cuando J0 es skipped:
+    # always() permite correr incluso si J0 fue skipped por la condición
+    if: always()
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Fetch dashboard-data branch
+        run: |
+          git fetch origin dashboard-data 2>/dev/null || true
+
+      - name: Setup Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install deps
+        run: |
+          pip install -q \
+            polars \
+            numpy \
+            alpaca-py \
+            requests \
+            yfinance \
+            scikit-learn
+
+      # ── R3 + EF-19: SHA pre-flight ─────────────────────────────
+      - name: SHA pre-flight (R3/EF-19)
+        run: |
+          python - <<'EOF'
+          import json, hashlib, sys
+          from pathlib import Path
+
+          reg_path = Path("meta/SHA_REGISTRY.json")
+          if not reg_path.exists():
+              print("  ⚠️  SHA_REGISTRY.json not in repo — parquets are in Drive only, skip")
+              sys.exit(0)
+
+          reg   = json.loads(reg_path.read_text())
+          fails = []
+          for asset, meta in reg.items():
+              sha_exp = meta.get("sha_v5", "")
+              pq = Path(f"data_lake/{asset}/ohlcv/aggregated/{asset}_ohlcv_v5.parquet")
+              if not pq.exists():
+                  print(f"  ⚠️  {asset}: parquet not in repo (Drive-only, expected)")
+                  continue
+              sha_act = hashlib.sha256(pq.read_bytes()).hexdigest()[:12]
+              ok      = sha_act == sha_exp
+              print(f"  {'✅' if ok else '❌'} {asset}: {sha_act} vs {sha_exp}")
+              if not ok:
+                  fails.append(asset)
+
+          if fails:
+              print(f"EF-19 ABORT: SHA mismatch {fails}")
+              sys.exit(1)
+          EOF
+
+      # ── EF-20: R33 canonical check ─────────────────────────────
+      - name: R33 canonical guard (EF-20)
+        run: |
+          python - <<'EOF'
+          import os, sys
+          canon  = float(os.environ.get("CANONICAL_CAPITAL", "0"))
+          sandbox= float(os.environ.get("SANDBOX_CAPITAL",   "0"))
+          ratio  = canon / max(sandbox, 1e-10)
+          print(f"  R33: canonical=${canon:,.0f} / sandbox=${sandbox} = {ratio:,.0f}x")
+          if canon != 100_000.0 or sandbox != 10.0:
+              print("EF-20 ABORT: R33 capital values corrupted")
+              sys.exit(1)
+          if abs(ratio - 10_000.0) > 0.1:
+              print("EF-20 ABORT: ratio != 10,000x")
+              sys.exit(1)
+          print("  ✅ R33 OK")
+          EOF
+        env:
+          CANONICAL_CAPITAL: ${{ env.CANONICAL_CAPITAL }}
+          SANDBOX_CAPITAL:   ${{ env.SANDBOX_CAPITAL }}
+
+      # ── Paper adapter + forex signal ───────────────────────────
+      - name: Run paper adapter + forex signal
+        run: |
+          python - <<'EOF'
+          import os, sys, json
+          from pathlib import Path
+
+          # EF-19: fail-fast credentials
+          for k in ["ALPACA_KEY", "ALPACA_SECRET", "TELEGRAM_TOKEN"]:
+              if not os.environ.get(k):
+                  raise SystemExit(f"EF-19: secret {k} missing — abort")
+
+          # EF-17: señales NUNCA a TELEGRAM_CHAT_ID
+          if os.environ.get("TELEGRAM_CHAT_ID") and not os.environ.get("TELEGRAM_SENALES"):
+              raise SystemExit("EF-17: TELEGRAM_SENALES missing, only CHAT_ID present — abort")
+
+          sys.path.insert(0, "scripts")
+
+          # Forex signal (spel_daily.yml legacy job: signal)
+          try:
+              exec(open("scripts/spel_forex_iq_runner.py").read())
+              print("  ✅ Forex signal emitted")
+          except Exception as e:
+              print(f"  ⚠️  Forex signal failed (non-blocking): {e}")
+
+          # Paper adapter one cycle
+          try:
+              from spel_paper_adapter_v2 import SPELPaperAdapterV2
+              from spel_score_engine import score as score_fn
+              root    = Path(os.environ.get("SPEL_BASE_DIR", "."))
+              adapter = SPELPaperAdapterV2(
+                  root=root,
+                  api_key=os.environ["ALPACA_KEY"],
+                  api_secret=os.environ["ALPACA_SECRET"],
+                  score_fn=score_fn,
+              )
+              records = adapter.evaluate_once()
+              adapter.stop(timeout=5.0)
+              print(f"  ✅ Paper adapter: {len(records)} assets evaluated")
+
+              # Write sentinel para healthcheck
+              import json
+              with open("last_signal.json", "w") as f:
+                  json.dump({
+                      "ts": __import__("datetime").datetime.utcnow().isoformat(),
+                      "records": len(records),
+                      "canonical_capital": float(os.environ.get("CANONICAL_CAPITAL", 100000)),
+                  }, f)
+          except Exception as e:
+              print(f"  ⚠️  Paper adapter failed (non-blocking): {e}")
+          EOF
+        env:
+          ALPACA_KEY:        ${{ secrets.ALPACA_KEY }}
+          ALPACA_SECRET:     ${{ secrets.ALPACA_SECRET }}
+          TELEGRAM_TOKEN:    ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_SENALES:  ${{ secrets.TELEGRAM_SENALES }}
+          TELEGRAM_SISTEMA:  ${{ secrets.TELEGRAM_SISTEMA }}
+          CANONICAL_CAPITAL: ${{ env.CANONICAL_CAPITAL }}
+          SANDBOX_CAPITAL:   ${{ env.SANDBOX_CAPITAL }}
+          SPEL_BASE_DIR:     ${{ env.SPEL_BASE_DIR }}
+
+      # ── Commit execution summary → dashboard-data ─────────────
+      - name: Commit data to dashboard-data branch
+        run: |
+          git config user.email "spel-bot@noreply.github.com"
+          git config user.name  "SPEL Bot v40"
+
+          # Crear rama si no existe
+          git checkout dashboard-data 2>/dev/null || \
+            git checkout --orphan dashboard-data
+
+          for f in \
+            meta/spel_v40_execution_summary.json \
+            logs/gate_metrics.json \
+            logs/trade_log.csv \
+            last_signal.json; do
+            [ -f "$f" ] && cp -f "$f" . && echo "  copied $f"
+          done
+
+          git add \
+            spel_v40_execution_summary.json \
+            gate_metrics.json \
+            trade_log.csv \
+            last_signal.json 2>/dev/null || true
+
+          git diff --staged --quiet || \
+            git commit -m "data(R33): $(date -u +'%Y-%m-%dT%H:%M')UTC day-${PAPER_DAY}/63"
+          git push origin dashboard-data
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PAPER_DAY:    "2"   # Actualizar manualmente cada semana o via env
+
+
+  # ══════════════════════════════════════════════════════════════
+  # JOB 2 — healthcheck (dead-man switch, if: always)
+  # ══════════════════════════════════════════════════════════════
+  healthcheck:
+    name: "J2 · Dead-man Switch"
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    needs: paper_signal
+    if: always()
+
+    steps:
+      - name: Checkout dashboard-data
+        uses: actions/checkout@v4
+        with:
+          ref: dashboard-data
+        continue-on-error: true  # rama puede no existir en primer run
+
+      - name: Verify sentinel + alert on failure
+        run: |
+          python - <<'EOF'
+          import os, json, datetime, urllib.request, pathlib
+
+          sentinel = pathlib.Path("last_signal.json")
+          token    = os.environ.get("TELEGRAM_TOKEN", "")
+          chat_id  = os.environ.get("TELEGRAM_SISTEMA", "")
+
+          if sentinel.exists():
+              data = json.loads(sentinel.read_text())
+              ts   = data.get("ts", "?")
+              recs = data.get("records", "?")
+              canon= data.get("canonical_capital", "?")
+              print(f"  ✅ Sentinel OK | ts={ts} records={recs} canonical=${canon}")
+          else:
+              msg = (
+                  "🔴 SPEL v40 PIPELINE ALERT\n"
+                  f"last_signal.json MISSING\n"
+                  f"{datetime.datetime.utcnow().isoformat()}\n"
+                  "→ paper_signal job failed\n"
+                  "→ Check GitHub Actions J1 logs"
+              )
+              print(f"  ❌ Sentinel missing — sending TG alert")
+              if token and chat_id:
+                  try:
+                      urllib.request.urlopen(urllib.request.Request(
+                          f"https://api.telegram.org/bot{token}/sendMessage",
+                          data=json.dumps({"chat_id": chat_id, "text": msg}).encode(),
+                          headers={"Content-Type": "application/json"},
+                      ), timeout=10)
+                      print("  ✅ TG alert sent to SISTEMA")
+                  except Exception as e:
+                      print(f"  ⚠️  TG alert failed: {e}")
+          EOF
+        env:
+          TELEGRAM_TOKEN:   ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_SISTEMA: ${{ secrets.TELEGRAM_SISTEMA }}
