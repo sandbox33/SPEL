@@ -13,11 +13,80 @@ from datetime import datetime, timezone, timedelta
 ROOT = Path(os.environ.get("SPEL_BASE_DIR",
             "/content/drive/MyDrive/SPEL-v2.0"))
 
-# ── PROXY_P90_MAP canónico R28 ─────────────────────────────────────
-PROXY_P90_MAP = {
-    "NVDA": 1.189820,   # EURUSD, AUDUSD
-    "XAU":  1.350316,   # GBPUSD, USDJPY, USDCHF
-}
+# ── PROXY_P90_MAP dinámico R28/R34 ──────────────────────────────────
+# Lee SHA_REGISTRY.json en runtime — propaga rolling-252d recalibrations
+# automáticamente a todos los proxies sin cambios de código.
+# Fallback explícito con alerta CRIT si el proxy no está en el registry.
+def _load_proxy_p90_map(registry_path: str | None = None) -> dict[str, float]:
+    """
+    Carga p90_entropy por activo proxy desde SHA_REGISTRY.json.
+
+    Hierarchy de búsqueda:
+      1. registry_path arg (test injection)
+      2. SPEL_BASE_DIR env var + /meta/SHA_REGISTRY.json
+      3. Relative ./meta/SHA_REGISTRY.json (Actions runner context)
+
+    Falla ruidosamente con CRIT alert si un proxy requerido está ausente.
+    No acepta KeyError silencioso — R34 compliance.
+    """
+    import os, json, logging
+    from pathlib import Path
+
+    log = logging.getLogger("spel.snapshot_updater")
+
+    # Locate registry
+    if registry_path:
+        reg_file = Path(registry_path)
+    else:
+        base = os.environ.get("SPEL_BASE_DIR")
+        reg_file = (Path(base) / "meta/SHA_REGISTRY.json") if base                    else Path("meta/SHA_REGISTRY.json")
+
+    if not reg_file.exists():
+        log.critical(f"CRIT [R34]: SHA_REGISTRY not found at {reg_file} — "
+                     f"falling back to conservative p90=1.5 for ALL proxies")
+        return {"NVDA": 1.5, "XAU": 1.5, "BTC": 1.5, "NIFTY50": 1.5}
+
+    try:
+        reg = json.loads(reg_file.read_text())
+    except Exception as e:
+        log.critical(f"CRIT [R34]: SHA_REGISTRY parse error: {e} — fallback p90=1.5")
+        return {"NVDA": 1.5, "XAU": 1.5, "BTC": 1.5, "NIFTY50": 1.5}
+
+    p90_map   = {}
+    REQUIRED  = {"NVDA", "XAU"}   # proxies usados en PAIR_CONFIG
+    FALLBACK  = 1.5                # conservador — Gödel menos activo que p90 histórico
+
+    for asset, meta in reg.items():
+        if not isinstance(meta, dict):
+            continue
+        p90 = meta.get("p90_entropy")
+        if p90 is None:
+            log.warning(f"WARN [R28]: {asset} in registry missing p90_entropy — skip")
+            continue
+        p90_val = float(p90)
+        # Sanity check: canonical entropy space [1.0, 3.0]
+        if not (1.0 <= p90_val <= 3.0):
+            log.warning(f"WARN [R28]: {asset} p90={p90_val} outside [1.0,3.0] — "
+                        f"using fallback {FALLBACK}")
+            p90_map[asset] = FALLBACK
+        else:
+            p90_map[asset] = p90_val
+
+    # Alert on missing required proxies
+    for proxy in REQUIRED:
+        if proxy not in p90_map:
+            log.critical(f"CRIT [R34]: proxy '{proxy}' absent from SHA_REGISTRY — "
+                         f"forex OR% will use fallback {FALLBACK}. "
+                         f"Run ingest + R32 sync before next Actions cycle.")
+            p90_map[proxy] = FALLBACK
+
+    log.info(f"PROXY_P90_MAP loaded from registry: "
+             f"{ {k: round(v,4) for k,v in p90_map.items()} }")
+    return p90_map
+
+# Called once at module load — Actions runner picks up rolling-252d values
+# No re-import needed: the map is rebuilt fresh on every J0 execution
+PROXY_P90_MAP = _load_proxy_p90_map()
 
 # ── FOREX config — PC-1 FIX: queries específicas por par ──────────
 FOREX_PAIRS = {
