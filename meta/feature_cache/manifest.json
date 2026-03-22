@@ -1,0 +1,68 @@
+{
+  "schema_version": "v5.1",
+  "exported_utc": "2026-03-22T04:02:15.998449+00:00",
+  "assets": [
+    "BTC",
+    "XAU",
+    "NIFTY50",
+    "NVDA"
+  ],
+  "tensor_cols": [
+    "high",
+    "low",
+    "log_return",
+    "entropy_shannon",
+    "entropy_decay_lambda",
+    "entropy_psych_vix",
+    "fibonacci_lag_1",
+    "fibonacci_lag_2",
+    "fibonacci_lag_3",
+    "fibonacci_lag_5",
+    "fibonacci_lag_8",
+    "fibonacci_lag_13",
+    "fibonacci_lag_21",
+    "goldstein_geo",
+    "n_events_ohlcv",
+    "vitality_tesla",
+    "mass_panic_index",
+    "fear_momentum",
+    "vix_norm",
+    "nash_frozen_7d"
+  ],
+  "r13_cols": 20,
+  "feature_commits": {
+    "BTC": "ed086cb0",
+    "XAU": "51009e73",
+    "NIFTY50": "affda63d",
+    "NVDA": "f57aba93"
+  },
+  "model_commits": {
+    "BTC": "0059d53a",
+    "XAU": "d7153ee4",
+    "NIFTY50": "319be847",
+    "NVDA": "fd931cc6"
+  },
+  "p90_map": {
+    "BTC": {
+      "p90_entropy": 2.002221,
+      "p90_method": "rolling_252d",
+      "sha_v5": "89f5872b5d4d"
+    },
+    "XAU": {
+      "p90_entropy": 1.904465,
+      "p90_method": "rolling_252d",
+      "sha_v5": "c38c6fac1084"
+    },
+    "NIFTY50": {
+      "p90_entropy": 1.186823,
+      "p90_method": "historical",
+      "sha_v5": "ec534663b272"
+    },
+    "NVDA": {
+      "p90_entropy": 1.900615,
+      "p90_method": "rolling_252d",
+      "sha_v5": "80dff64429d4"
+    }
+  },
+  "inference_ready": true
+}
