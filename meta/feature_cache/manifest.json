@@ -1,6 +1,6 @@
 {
   "schema_version": "v5.1",
-  "exported_utc": "2026-03-22T05:14:41.259956+00:00",
+  "exported_utc": "2026-03-22T05:14:46.672060+00:00",
   "assets": [
     "BTC",
     "XAU",
@@ -31,16 +31,16 @@
   ],
   "r13_cols": 20,
   "feature_commits": {
-    "BTC": "9f3e8f77",
-    "XAU": "aa6b424c",
-    "NIFTY50": "aacba473",
-    "NVDA": "a1eca023"
+    "BTC": "61178efd",
+    "XAU": "4a340169",
+    "NIFTY50": "f7859156",
+    "NVDA": "c45e9042"
   },
   "model_commits": {
-    "BTC": "b8349521",
-    "XAU": "232f6d73",
-    "NIFTY50": "3f1c9c06",
-    "NVDA": "9e7997ee"
+    "BTC": "3c1efc40",
+    "XAU": "4317280f",
+    "NIFTY50": "0c827ad0",
+    "NVDA": "3fcb4b67"
   },
   "p90_map": {
     "BTC": {
