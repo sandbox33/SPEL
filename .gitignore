@@ -1,0 +1,5 @@
+99_ARCHIVE_FENIX/
+01_HOLMES_OPS/
+*.parquet
+05_DATA_LAKE/
+00_VAULT/secrets.json
