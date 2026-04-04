@@ -1,702 +1,106 @@
-# ════════════════════════════════════════════════════════════════
-# SPEL — Asset Universe v1.0
-# Fuente de verdad para todos los activos del sistema.
-# Cada activo define: fuente de datos, semántica de volumen,
-# modos de trading aplicables, lookback SPEL y keywords GDELT.
-#
-# volume_type:
-#   NATIVE_FUTURES    → volumen real de contratos (commodities)
-#   SPOT_CRYPTO       → volumen spot real (crypto)
-#   TICK_PROXY        → tick volume como proxy (forex)
-#   SYNTHETIC_INDEX   → índice sin volumen nativo → 0.0 sentinel
-#   YIELD_INSTRUMENT  → bono/yield → sin volumen operativo
-#
-# trading_modes: [scalp, intraday, swing, crisis_contra]
-# priority: 1=core SPEL, 2=extended, 3=monitor-only
-# ════════════════════════════════════════════════════════════════
+name: SPEL Autonomous Patrol
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
 
-meta:
-  version: "1.0"
-  created: "2026-03-10"
-  session: "S22"
-  rules:
-    - "R11: nunca mezclar schemas de distintas versiones"
-    - "R4: lookbacks inamovibles por activo"
-    - "volume_type definido aquí es fuente de verdad para MathEngine"
+# RACE CONDITION FIX: un solo ciclo activo a la vez
+concurrency:
+  group: spel-patrol
+  cancel-in-progress: true
 
-# ────────────────────────────────────────────────────────────────
-# 1. ÍNDICES BURSÁTILES
-#    volume_type: SYNTHETIC_INDEX (todos)
-#    Score de Oro: Volume Profile weight = 0.0 para todos
-#    Excepción futura: integrar futuros E-mini como proxy
-# ────────────────────────────────────────────────────────────────
-indices:
+permissions:
+  contents: write        # para git commit de gate_metrics.json
+  actions: write         # para upload-artifact
 
-  - id: "SPX"
-    name: "S&P 500"
-    exchange: "NYSE/CBOE"
-    yfinance_ticker: "^GSPC"
-    futures_proxy_ticker: "ES=F"        # E-mini S&P 500 (volumen real)
-    asset_class: "INDEX"
-    region: "US"
-    volume_type: "SYNTHETIC_INDEX"
-    volume_proxy: "FUTURES_ES"
-    score_oro_volume_weight: 0.0
-    spel_lookback: 63
-    gdelt_keywords: ["S&P 500", "Wall Street", "Federal Reserve", "US economy", "stock market crash"]
-    trading_modes: ["intraday", "swing", "crisis_contra"]
-    market_hours_utc: "14:30-21:00"
-    trading_session: "US"
-    priority: 1
-    notes: "Activo core SPEL. 500 empresas más grandes EE.UU."
+env:
+  PYTHON_VER: "3.10"
+  SPEL_ROOT:  "."        # GH Actions: ROOT = GITHUB_WORKSPACE = repo root
 
-  - id: "NDX"
-    name: "Nasdaq 100"
-    exchange: "NASDAQ"
-    yfinance_ticker: "^NDX"
-    futures_proxy_ticker: "NQ=F"        # E-mini Nasdaq 100
-    asset_class: "INDEX"
-    region: "US"
-    volume_type: "SYNTHETIC_INDEX"
-    volume_proxy: "FUTURES_NQ"
-    score_oro_volume_weight: 0.0
-    spel_lookback: 42
-    gdelt_keywords: ["Nasdaq", "tech stocks", "Apple", "Nvidia", "Microsoft", "AI bubble", "semiconductor"]
-    trading_modes: ["intraday", "swing"]
-    market_hours_utc: "14:30-21:00"
-    trading_session: "US"
-    priority: 1
-    notes: "Alto beta tecnológico. Muy sensible a noticias Fed y earnings FAANG."
+jobs:
+  patrol:
+    runs-on: ubuntu-latest
+    timeout-minutes: 13  # Hard kill si el ciclo supera 13min (antes del próximo cron)
 
-  - id: "DAX"
-    name: "DAX 40"
-    exchange: "XETRA / Frankfurt"
-    yfinance_ticker: "^GDAXI"
-    futures_proxy_ticker: "FDAX"        # Eurex DAX futures
-    asset_class: "INDEX"
-    region: "EU"
-    volume_type: "SYNTHETIC_INDEX"
-    volume_proxy: "FUTURES_FDAX"
-    score_oro_volume_weight: 0.0
-    spel_lookback: 63
-    gdelt_keywords: ["DAX", "German economy", "ECB", "Eurozone", "Germany recession", "energy crisis Europe"]
-    trading_modes: ["intraday", "swing"]
-    market_hours_utc: "07:00-15:30"
-    trading_session: "EUROPE"
-    priority: 1
-    notes: "Referente europeo. Muy expuesto a geopolítica energía y guerra Ucrania."
+    steps:
+      # ── Download previous telemetry (Artifacts) ────────────────────────
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_TOKEN }}
 
-  - id: "NKY"
-    name: "Nikkei 225"
-    exchange: "JPX / Osaka"
-    yfinance_ticker: "^N225"
-    futures_proxy_ticker: "NK=F"        # CME Nikkei futures
-    asset_class: "INDEX"
-    region: "ASIA"
-    volume_type: "SYNTHETIC_INDEX"
-    volume_proxy: "FUTURES_NK"
-    score_oro_volume_weight: 0.0
-    spel_lookback: 63
-    gdelt_keywords: ["Nikkei", "Japan economy", "Bank of Japan", "yen intervention", "Tokyo market", "BOJ"]
-    trading_modes: ["intraday", "swing"]
-    market_hours_utc: "00:00-06:00"
-    trading_session: "ASIA"
-    priority: 2
-    notes: "Fuertes correlaciones con USD/JPY. BOJ intervencionista = alta volatilidad estructural."
-    bnf_kotegawa_note: >
-      BNF (Takashi Kotegawa) operó principalmente acciones individuales del TSE,
-      NO el índice Nikkei directamente. Para emular su estilo en SPEL:
-      usar Nikkei como contexto de régimen + operar constituyentes
-      (Toyota 7203.T, SoftBank 9984.T, Sony 6758.T) cuando Gödel activa.
+      - name: Download prev telemetry artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: spel-telemetry
+          path: 00_VAULT/
+        continue-on-error: true  # Primer ciclo: no hay artifact previo
 
-  - id: "NIFTY50"
-    name: "Nifty 50"
-    exchange: "NSE India"
-    yfinance_ticker: "^NSEI"
-    futures_proxy_ticker: "GIFT_NIFTY"  # GIFT City Nifty futures (pendiente integrar)
-    asset_class: "INDEX"
-    region: "ASIA"
-    volume_type: "SYNTHETIC_INDEX"
-    volume_proxy: "FUTURES_GIFT_NIFTY"  # pendiente: integrar como proxy real
-    score_oro_volume_weight: 0.0        # hasta integrar GIFT Nifty futures
-    spel_lookback: 42
-    gdelt_keywords: ["Nifty", "India economy", "Modi", "NSE", "RBI", "Indian rupee", "Mumbai market"]
-    trading_modes: ["swing"]            # solo swing hasta tener proxy volumen
-    market_hours_utc: "03:45-10:00"
-    trading_session: "ASIA"
-    priority: 1
-    notes: >
-      Activo core SPEL v2.0. volume=0.0 es sentinel estructural confirmado.
-      Score de Oro: Gödel(40%) + TE(30%) + Volume(0%) hasta integrar GIFT Nifty.
-      Redistribución propuesta: Gödel 55% + TE 45% (decidir en v31).
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VER }}
 
-# ────────────────────────────────────────────────────────────────
-# 2. MATERIAS PRIMAS — COMMODITIES
-#    volume_type: NATIVE_FUTURES (todos tienen contratos reales)
-#    Score de Oro: Volume Profile activado
-# ────────────────────────────────────────────────────────────────
-commodities:
+      - name: Install deps
+        run: pip install numpy yfinance requests --quiet
 
-  ## METALES PRECIOSOS
-  - id: "XAU"
-    name: "Gold"
-    exchange: "COMEX"
-    yfinance_ticker: "GC=F"
-    asset_class: "COMMODITY_METAL_PRECIOUS"
-    region: "GLOBAL"
-    volume_type: "NATIVE_FUTURES"
-    score_oro_volume_weight: 0.30
-    spel_lookback: 63
-    gdelt_keywords: ["gold price", "safe haven", "geopolitical risk", "inflation", "Fed rate", "war", "crisis"]
-    trading_modes: ["intraday", "swing", "crisis_contra"]
-    market_hours_utc: "23:00-22:00"     # casi 24h
-    trading_session: "24H"
-    priority: 1
-    notes: >
-      Activo core SPEL v2.0. Régimen 1 validado: vitality alta sin entropía extrema
-      → XAU +55.6% días siguientes (1001 días). Contra-trend post-Gödel: 52.1%.
+      # ── J0: Auth Gate + Dead Man's Switch check ────────────────────────
+      - name: J0 Auth Gate + DMS check
+        run: |
+          python 01_HOLMES_OPS/spel_dead_man_switch.py --check || true
+          python 04_GOLD_MODULES/spel_orchestrator_v10.py --status
+        env:
+          TELEGRAM_TOKEN:   ${{ secrets.TG_TOKEN }}
+          TELEGRAM_SISTEMA: ${{ secrets.TG_SISTEMA }}
+          TELEGRAM_CHAOS:   ${{ secrets.TG_CHAOS }}
+          GITHUB_TOKEN:     ${{ secrets.GH_TOKEN }}
+          ALPACA_API_KEY:   ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
 
-  - id: "XAG"
-    name: "Silver"
-    exchange: "COMEX"
-    yfinance_ticker: "SI=F"
-    asset_class: "COMMODITY_METAL_PRECIOUS"
-    region: "GLOBAL"
-    volume_type: "NATIVE_FUTURES"
-    score_oro_volume_weight: 0.30
-    spel_lookback: 42
-    gdelt_keywords: ["silver price", "solar panel", "industrial demand", "inflation hedge", "precious metals"]
-    trading_modes: ["intraday", "swing"]
-    market_hours_utc: "23:00-22:00"
-    trading_session: "24H"
-    priority: 2
-    notes: "Mayor beta que XAU. Alta correlación gold/silver ratio como señal."
+      # ── J1-J4: Ciclo principal ─────────────────────────────────────────
+      - name: J1-J4 Main patrol cycle
+        run: python 04_GOLD_MODULES/spel_orchestrator_v10.py
+        env:
+          TELEGRAM_TOKEN:   ${{ secrets.TG_TOKEN }}
+          TELEGRAM_SISTEMA: ${{ secrets.TG_SISTEMA }}
+          TELEGRAM_CHAOS:   ${{ secrets.TG_CHAOS }}
+          GITHUB_TOKEN:     ${{ secrets.GH_TOKEN }}
+          ALPACA_API_KEY:   ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+          SPEL_BASE_DIR:    "."  # GH Actions: ROOT = repo root
 
-  ## ENERGÍA
-  - id: "WTI"
-    name: "WTI Crude Oil"
-    exchange: "NYMEX"
-    yfinance_ticker: "CL=F"
-    asset_class: "COMMODITY_ENERGY"
-    region: "GLOBAL"
-    volume_type: "NATIVE_FUTURES"
-    score_oro_volume_weight: 0.30
-    spel_lookback: 21
-    gdelt_keywords: ["oil price", "OPEC", "WTI crude", "energy crisis", "refinery", "US oil inventory", "shale"]
-    trading_modes: ["scalp", "intraday", "swing"]
-    market_hours_utc: "23:00-22:00"
-    trading_session: "24H"
-    priority: 2
-    notes: "Alta volatilidad OPEC+ y geopolítica Medio Oriente. Lookback corto por decay rápido."
+      # ── Dead Man's Switch: actualizar pulso ────────────────────────────
+      - name: Update pulse (DMS)
+        if: success()
+        run: python 01_HOLMES_OPS/spel_dead_man_switch.py --pulse
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TG_TOKEN }}
+          SPEL_BASE_DIR:  "."
 
-  - id: "BRENT"
-    name: "Brent Crude Oil"
-    exchange: "ICE"
-    yfinance_ticker: "BZ=F"
-    asset_class: "COMMODITY_ENERGY"
-    region: "GLOBAL"
-    volume_type: "NATIVE_FUTURES"
-    score_oro_volume_weight: 0.30
-    spel_lookback: 21
-    gdelt_keywords: ["Brent crude", "oil price", "OPEC", "Europe energy", "sanctions Russia", "North Sea"]
-    trading_modes: ["intraday", "swing"]
-    market_hours_utc: "01:00-23:00"
-    trading_session: "EUROPE_US"
-    priority: 2
-    notes: "Referencia Europa. Spread Brent-WTI como señal geopolítica adicional."
+      # ── Upload TELEMETRY como Artifact (NO commits) ────────────────────
+      - name: Upload telemetry artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spel-telemetry
+          path: |
+            00_VAULT/live_bma_result.json
+            00_VAULT/system_pulse.json
+            00_VAULT/live_dashboard_stats.json
+            00_VAULT/live_forex_signal.json
+            00_VAULT/live_bma_history.json
+            00_VAULT/last_signal.json
+          retention-days: 1
+          overwrite: true
 
-  - id: "NG"
-    name: "Natural Gas"
-    exchange: "NYMEX"
-    yfinance_ticker: "NG=F"
-    asset_class: "COMMODITY_ENERGY"
-    region: "GLOBAL"
-    volume_type: "NATIVE_FUTURES"
-    score_oro_volume_weight: 0.30
-    spel_lookback: 21
-    gdelt_keywords: ["natural gas", "LNG", "gas price", "Europe energy", "Russia gas", "winter heating"]
-    trading_modes: ["swing"]
-    market_hours_utc: "23:00-22:00"
-    trading_session: "24H"
-    priority: 3
-    notes: "Volatilidad extrema estacional. Solo swing por complejidad de drivers."
-
-  ## METALES INDUSTRIALES
-  - id: "HG"
-    name: "Copper"
-    exchange: "COMEX"
-    yfinance_ticker: "HG=F"
-    asset_class: "COMMODITY_METAL_INDUSTRIAL"
-    region: "GLOBAL"
-    volume_type: "NATIVE_FUTURES"
-    score_oro_volume_weight: 0.30
-    spel_lookback: 42
-    gdelt_keywords: ["copper price", "China manufacturing", "electric vehicle", "infrastructure", "mining Chile"]
-    trading_modes: ["swing"]
-    market_hours_utc: "23:00-22:00"
-    trading_session: "24H"
-    priority: 2
-    notes: "Dr. Copper = indicador macro adelantado. Alta correlación PMI China."
-
-  - id: "LI"
-    name: "Lithium (proxy: LTHM)"
-    exchange: "NYSE"
-    yfinance_ticker: "LTHM"             # Livent Corp como proxy
-    alt_ticker: "ALB"                   # Albemarle Corp alternativa
-    asset_class: "COMMODITY_METAL_INDUSTRIAL"
-    region: "GLOBAL"
-    volume_type: "NATIVE_FUTURES"       # equity con volumen real
-    score_oro_volume_weight: 0.30
-    spel_lookback: 42
-    gdelt_keywords: ["lithium price", "battery", "EV demand", "Chile lithium", "Argentina lithium", "Tesla supply"]
-    trading_modes: ["swing"]
-    market_hours_utc: "14:30-21:00"
-    trading_session: "US"
-    priority: 3
-    notes: "Sin contrato de futuros líquido directo. Proxy via equity LTHM/ALB."
-
-  ## AGRÍCOLAS
-  - id: "ZS"
-    name: "Soybeans"
-    exchange: "CBOT"
-    yfinance_ticker: "ZS=F"
-    asset_class: "COMMODITY_AGRI"
-    region: "GLOBAL"
-    volume_type: "NATIVE_FUTURES"
-    score_oro_volume_weight: 0.30
-    spel_lookback: 42
-    gdelt_keywords: ["soybean", "Brazil harvest", "Argentina drought", "China soy import", "USDA crop report"]
-    trading_modes: ["swing"]
-    market_hours_utc: "19:00-13:45"
-    trading_session: "US"
-    priority: 3
-
-  - id: "ZC"
-    name: "Corn"
-    exchange: "CBOT"
-    yfinance_ticker: "ZC=F"
-    asset_class: "COMMODITY_AGRI"
-    region: "GLOBAL"
-    volume_type: "NATIVE_FUTURES"
-    score_oro_volume_weight: 0.30
-    spel_lookback: 42
-    gdelt_keywords: ["corn price", "ethanol demand", "USDA", "drought midwest", "Ukraine grain"]
-    trading_modes: ["swing"]
-    market_hours_utc: "19:00-13:45"
-    trading_session: "US"
-    priority: 3
-
-  - id: "ZW"
-    name: "Wheat"
-    exchange: "CBOT"
-    yfinance_ticker: "ZW=F"
-    asset_class: "COMMODITY_AGRI"
-    region: "GLOBAL"
-    volume_type: "NATIVE_FUTURES"
-    score_oro_volume_weight: 0.30
-    spel_lookback: 42
-    gdelt_keywords: ["wheat price", "Ukraine war grain", "Russia export", "food crisis", "drought wheat"]
-    trading_modes: ["swing"]
-    market_hours_utc: "19:00-13:45"
-    trading_session: "US"
-    priority: 3
-    notes: "Alta sensibilidad guerra Ucrania/Rusia. GDELT capta directamente."
-
-# ────────────────────────────────────────────────────────────────
-# 3. FOREX
-#    volume_type: TICK_PROXY (tick volume como proxy)
-#    Nota: mercado OTC → no existe volumen central
-#    El tick volume (número de cambios de precio por barra) es el
-#    mejor proxy disponible para confirmar movimiento.
-#    Score de Oro: Volume Profile adaptado = Tick Density Score
-# ────────────────────────────────────────────────────────────────
-forex:
-
-  - id: "EURUSD"
-    name: "Euro / US Dollar"
-    exchange: "FOREX_OTC"
-    yfinance_ticker: "EURUSD=X"
-    oanda_instrument: "EUR_USD"
-    asset_class: "FOREX_MAJOR"
-    region: "EU_US"
-    volume_type: "TICK_PROXY"
-    score_oro_volume_weight: 0.15       # reducido — tick proxy menos fiable que futuros
-    spel_lookback: 21
-    gdelt_keywords: ["Euro dollar", "ECB decision", "Fed rate", "EUR USD", "European inflation", "dollar index"]
-    trading_modes: ["scalp", "intraday"]
-    market_hours_utc: "00:00-22:00"
-    trading_session: "24H_EXCEPT_WEEKEND"
-    best_scalp_sessions: ["07:00-09:00", "13:30-16:00"]   # London open, NY open
-    priority: 1
-    notes: >
-      Par más negociado del mundo (24-28% volumen total forex).
-      Scalping óptimo en apertura Londres (07:00 UTC) y overlap
-      Londres-NY (13:30-16:00 UTC).
-
-  - id: "USDJPY"
-    name: "US Dollar / Japanese Yen"
-    exchange: "FOREX_OTC"
-    yfinance_ticker: "USDJPY=X"
-    oanda_instrument: "USD_JPY"
-    asset_class: "FOREX_MAJOR"
-    region: "US_ASIA"
-    volume_type: "TICK_PROXY"
-    score_oro_volume_weight: 0.15
-    spel_lookback: 21
-    gdelt_keywords: ["yen", "BOJ intervention", "Japan rate", "carry trade", "dollar yen", "risk off"]
-    trading_modes: ["scalp", "intraday", "swing"]
-    market_hours_utc: "00:00-22:00"
-    trading_session: "24H_EXCEPT_WEEKEND"
-    best_scalp_sessions: ["00:00-02:00", "07:00-09:00", "13:30-16:00"]
-    priority: 1
-    notes: >
-      Refleja carry trade global. Cuando Gödel activa (crisis) → yen se aprecia.
-      Señal contraria: vender USD/JPY post-vitality=9.
-      BOJ interviene sin aviso → riesgo cola extrema. Usar stops amplios en swing.
-    bnf_kotegawa_note: >
-      JPY es la divisa de operación de BNF. USD/JPY afecta directamente
-      el P&L en yenes de las posiciones japonesas. Monitorear siempre.
-
-  - id: "GBPUSD"
-    name: "British Pound / US Dollar"
-    exchange: "FOREX_OTC"
-    yfinance_ticker: "GBPUSD=X"
-    oanda_instrument: "GBP_USD"
-    asset_class: "FOREX_MAJOR"
-    region: "UK_US"
-    volume_type: "TICK_PROXY"
-    score_oro_volume_weight: 0.15
-    spel_lookback: 21
-    gdelt_keywords: ["pound sterling", "Bank of England", "UK inflation", "GBP USD", "Brexit aftermath"]
-    trading_modes: ["scalp", "intraday"]
-    market_hours_utc: "00:00-22:00"
-    trading_session: "24H_EXCEPT_WEEKEND"
-    best_scalp_sessions: ["07:00-09:00", "13:30-16:00"]
-    priority: 1
-    notes: "Alta volatilidad. Spread mayor que EUR/USD. Scalping solo en sesiones líquidas."
-
-  - id: "USDCHF"
-    name: "US Dollar / Swiss Franc"
-    exchange: "FOREX_OTC"
-    yfinance_ticker: "USDCHF=X"
-    oanda_instrument: "USD_CHF"
-    asset_class: "FOREX_MAJOR"
-    region: "US_EU"
-    volume_type: "TICK_PROXY"
-    score_oro_volume_weight: 0.15
-    spel_lookback: 21
-    gdelt_keywords: ["Swiss franc", "SNB", "safe haven franc", "USD CHF", "Swiss National Bank"]
-    trading_modes: ["intraday", "swing", "crisis_contra"]
-    market_hours_utc: "00:00-22:00"
-    trading_session: "24H_EXCEPT_WEEKEND"
-    priority: 2
-    notes: >
-      Refugio en crisis. Correlación inversa con XAU en eventos extremos.
-      Cuando Gödel activa: CHF se aprecia → vender USD/CHF.
-
-# ────────────────────────────────────────────────────────────────
-# 4. CRIPTOMONEDAS
-#    volume_type: SPOT_CRYPTO (volumen real de intercambios)
-#    Fuente primaria: Binance via CCXT
-#    Score de Oro: Volume Profile completamente activo
-# ────────────────────────────────────────────────────────────────
-crypto:
-
-  - id: "BTC"
-    name: "Bitcoin"
-    exchange: "BINANCE"
-    ccxt_symbol: "BTC/USDT"
-    yfinance_ticker: "BTC-USD"          # fallback
-    asset_class: "CRYPTO_MAJOR"
-    region: "GLOBAL"
-    volume_type: "SPOT_CRYPTO"
-    score_oro_volume_weight: 0.30
-    spel_lookback: 21
-    gdelt_keywords: ["Bitcoin", "crypto crash", "BTC", "Satoshi", "crypto regulation", "Bitcoin ETF", "halving"]
-    trading_modes: ["scalp", "intraday", "swing", "crisis_contra"]
-    market_hours_utc: "00:00-00:00"
-    trading_session: "24H"
-    priority: 1
-    notes: "Activo core SPEL v2.0. 45-50% market cap crypto total."
-
-  - id: "ETH"
-    name: "Ethereum"
-    exchange: "BINANCE"
-    ccxt_symbol: "ETH/USDT"
-    yfinance_ticker: "ETH-USD"
-    asset_class: "CRYPTO_MAJOR"
-    region: "GLOBAL"
-    volume_type: "SPOT_CRYPTO"
-    score_oro_volume_weight: 0.30
-    spel_lookback: 21
-    gdelt_keywords: ["Ethereum", "ETH", "DeFi", "smart contracts", "Ethereum ETF", "gas fees", "staking"]
-    trading_modes: ["scalp", "intraday", "swing"]
-    market_hours_utc: "00:00-00:00"
-    trading_session: "24H"
-    priority: 1
-    notes: "Red DeFi principal. Muy correlacionado con BTC pero con beta mayor."
-
-  - id: "SOL"
-    name: "Solana"
-    exchange: "BINANCE"
-    ccxt_symbol: "SOL/USDT"
-    yfinance_ticker: "SOL-USD"
-    asset_class: "CRYPTO_ALT"
-    region: "GLOBAL"
-    volume_type: "SPOT_CRYPTO"
-    score_oro_volume_weight: 0.30
-    spel_lookback: 14
-    gdelt_keywords: ["Solana", "SOL token", "Solana ETF", "Solana ecosystem", "memecoins Solana"]
-    trading_modes: ["intraday", "swing"]
-    market_hours_utc: "00:00-00:00"
-    trading_session: "24H"
-    priority: 2
-    notes: "Lookback corto (14d) por alta volatilidad y ciclos más cortos que BTC/ETH."
-
-  - id: "NVDA"
-    name: "NVIDIA Corporation"
-    exchange: "NASDAQ"
-    yfinance_ticker: "NVDA"
-    asset_class: "EQUITY"
-    region: "US"
-    volume_type: "NATIVE_FUTURES"       # acciones con volumen real
-    score_oro_volume_weight: 0.30
-    spel_lookback: 63
-    gdelt_keywords: ["NVIDIA", "GPU", "AI chips", "semiconductor", "data center", "Jensen Huang", "CUDA"]
-    trading_modes: ["intraday", "swing"]
-    market_hours_utc: "14:30-21:00"
-    trading_session: "US"
-    priority: 1
-    notes: "Activo core SPEL v2.0. Proxy AI/GPU demand. Alta correlación con NDX."
-
-# ────────────────────────────────────────────────────────────────
-# 5. RENTA FIJA — BONOS
-#    volume_type: YIELD_INSTRUMENT
-#    Nota: se opera el rendimiento (yield), no el bono directamente.
-#    Para volumen real → usar futuros ZN=F (10Y) o TLT (ETF)
-#    Score de Oro: Volume Profile = 0.0 (yield no tiene volumen)
-# ────────────────────────────────────────────────────────────────
-bonds:
-
-  - id: "US10Y"
-    name: "US Treasury 10-Year Yield"
-    exchange: "US_TREASURY"
-    yfinance_ticker: "^TNX"             # yield
-    futures_ticker: "ZN=F"             # 10Y Treasury Note futures (volumen real)
-    etf_proxy: "TLT"                   # ETF bond largo como proxy liquidez
-    asset_class: "BOND"
-    region: "US"
-    volume_type: "YIELD_INSTRUMENT"
-    score_oro_volume_weight: 0.0
-    spel_lookback: 63
-    gdelt_keywords: ["Treasury yield", "US bonds", "Fed tapering", "interest rates", "debt ceiling", "10 year yield"]
-    trading_modes: ["swing"]           # no se scalpa yield directamente
-    market_hours_utc: "14:30-21:00"
-    trading_session: "US"
-    priority: 1
-    notes: >
-      Tasa de referencia global. Cuando yield sube → presión en equity y XAU.
-      Usar ZN=F para operar con volumen real. ^TNX solo para señal de régimen.
-      SPEL lo usa como feature contextual, no activo operativo primario.
-
-  - id: "BUND10Y"
-    name: "German Bund 10-Year"
-    exchange: "EUREX"
-    yfinance_ticker: "^BUND"
-    futures_ticker: "FGBL"             # Eurex Bund futures
-    asset_class: "BOND"
-    region: "EU"
-    volume_type: "YIELD_INSTRUMENT"
-    score_oro_volume_weight: 0.0
-    spel_lookback: 63
-    gdelt_keywords: ["German bund", "ECB rate", "Eurozone bonds", "Germany bonds", "European debt"]
-    trading_modes: ["swing"]
-    market_hours_utc: "07:00-15:30"
-    trading_session: "EUROPE"
-    priority: 2
-    notes: "Activo más seguro Eurozona. Benchmark europeo de tasas."
-
-# ────────────────────────────────────────────────────────────────
-# BNF / KOTEGAWA — Metodología y activos históricos
-# ────────────────────────────────────────────────────────────────
-bnf_kotegawa:
-  trader: "Takashi Kotegawa (BNF)"
-  achievement: "¥1.6M → ¥18B operando acciones TSE Japón"
-  primary_assets:
-    - "Acciones individuales TSE (Tokyo Stock Exchange)"
-    - "Toyota Motor (7203.T)"
-    - "SoftBank Group (9984.T)"
-    - "Sony Group (6758.T)"
-    - "Fast Retailing (9983.T) — dueño de UNIQLO"
-    - "Fuji Heavy Industries / Subaru"
-  strategy_mapped_to_spel:
-    nuki_pattern: >
-      Compresión (nash_frozen_7d alto) → explosión de movimiento.
-      En SPEL: nash_frozen_7d >= P75 seguido de entropy_decay_lambda cayendo
-      = señal de nuki inminente.
-    volume_spike: >
-      BNF usaba volumen real para confirmar breakouts.
-      En SPEL: vitality_tesla=9 + n_events_ohlcv spike = equivalente institucional.
-    order_book_reading: >
-      BNF leía el libro de órdenes directamente.
-      En SPEL: Transfer Entropy GDELT→Precio como proxy de flujo informacional
-      que precede al movimiento de precio.
-    timeframes: ["intraday (1m-60m)", "multi-day swing"]
-    key_rule: >
-      BNF nunca operaba en contexto de caos puro. Esperaba compresión
-      y luego ruptura clara. En SPEL: Gödel INACTIVO (régimen calma)
-      para scalp/intraday. Gödel ACTIVO solo para swing/crisis_contra.
-  famous_trade:
-    name: "Livedoor Shock 2005"
-    description: >
-      Error de digitación en acciones de Livedoor (LDNET). BNF compró
-      masivamente durante el caos. Ganó ¥2B en un día.
-      En SPEL equivale a: vitality_tesla=9, entropy_shannon >> P90,
-      crisis_contra activado, contra-trend CALL post-pánico.
-
-# ────────────────────────────────────────────────────────────────
-# TRADING MODES — Definición de modos y condiciones de activación
-# ────────────────────────────────────────────────────────────────
-trading_modes:
-
-  scalp:
-    description: "Operaciones rápidas 1m-15m, múltiples trades/día"
-    godel_condition: "INACTIVE"         # Gödel OFF = mercado predecible
-    vitality_range: [0, 3]              # paz o tensión baja
-    entropy_condition: "below_p50"
-    nash_frozen_condition: "high"       # compresión → ruptura inminente
-    applicable_assets: ["EURUSD", "GBPUSD", "USDJPY", "BTC", "ETH", "WTI"]
-    timeframes: ["1m", "5m", "15m"]
-    stop_loss_atr_mult: 1.0
-    loss_weight: 0.5                    # vitality=0→3, W=0.5
-    notes: "Solo en sesiones líquidas. Stops estrechos. Máx 3-5 trades/día."
-
-  intraday:
-    description: "Operaciones en el día, no pernoctar posición"
-    godel_condition: "ACTIVATING"       # Gödel entrando
-    vitality_range: [3, 6]
-    entropy_condition: "p50_to_p90"
-    applicable_assets: ["SPX", "NDX", "DAX", "XAU", "WTI", "BRENT", "EURUSD", "BTC", "NVDA"]
-    timeframes: ["15m", "30m", "1h", "4h"]
-    stop_loss_atr_mult: 1.5
-    loss_weight: 1.0                    # vitality=6, W=1.0
-    notes: "Cerrar posiciones antes del cierre de sesión. Usar entropy_decay_lambda."
-
-  swing:
-    description: "Posiciones multiday 2-15 días"
-    godel_condition: "ACTIVE"           # Gödel encendido
-    vitality_range: [6, 9]
-    entropy_condition: "above_p90"
-    applicable_assets: ["SPX", "XAU", "NDX", "DAX", "NIFTY50", "NKY", "BTC", "ETH", "HG", "US10Y"]
-    timeframes: ["4h", "1D", "1W"]
-    stop_loss_atr_mult: 2.5
-    loss_weight: 2.0                    # vitality=9, W=2.0
-    notes: "Score de Oro completo. Kelly sizing. Walk-forward validation antes de live."
-
-  crisis_contra:
-    description: "Contra-tendencia post-pánico — XAU Régimen 2"
-    godel_condition: "POST_ACTIVE"      # Gödel fue activo, ahora decrece
-    vitality_condition: "was_9_now_falling"
-    entropy_condition: "peaked_descending"
-    applicable_assets: ["XAU", "SPX", "USDCHF", "USDJPY"]
-    timeframes: ["1D", "1W"]
-    stop_loss_atr_mult: 3.0
-    loss_weight: 2.0
-    notes: >
-      Señal más potente del sistema. El pánico ya fue descontado.
-      XAU validado: 52.1% edge post-Gödel (1001 días).
-      BNF Kotegawa usaba esto: comprar cuando todos venden en pánico.
-
-# ────────────────────────────────────────────────────────────────
-# DASHBOARD v24 — Spec de módulos y paneles
-# ────────────────────────────────────────────────────────────────
-dashboard_v24:
-  framework: "Streamlit"
-  port: 8501
-  refresh_seconds: 30
-
-  panels:
-    - name: "MARKET REGIME"
-      position: "header"
-      content:
-        - "Modo activo global: SCALP / INTRADAY / SWING / CRISIS_CONTRA"
-        - "Gödel status: OFF / ACTIVATING / ACTIVE / POST_ACTIVE"
-        - "Vitality global (promedio 4 activos core)"
-        - "Entropy percentile global"
-
-    - name: "ASSET GRID"
-      position: "main_top"
-      columns: 4
-      per_asset:
-        - "Mini OHLCV chart (50 barras)"
-        - "Vitality barra: [0][3][6][9]"
-        - "Entropy percentile gauge"
-        - "Score de Oro: número 0-100"
-        - "Modo recomendado"
-        - "SHA fingerprint (últimos 6 chars)"
-
-    - name: "FOREX SCALP PANEL"
-      position: "main_mid"
-      timeframes: ["15m", "30m", "1h"]
-      assets: ["EURUSD", "GBPUSD", "USDJPY"]
-      content:
-        - "Entropy en cada timeframe"
-        - "Nash frozen (compresión)"
-        - "Session indicator: ASIA/LONDON/NY/OVERLAP"
-        - "Señal nuki (BNF-style): compression→breakout"
-        - "Spread estimado + liquidez"
-
-    - name: "GODEL ALERTS"
-      position: "sidebar"
-      content:
-        - "Activaciones Gödel últimas 48h"
-        - "P(entropy >= P90) en tiempo real"
-        - "P(vitality == 9) en tiempo real"
-        - "Conteo días desde último Gödel activo"
-
-    - name: "TRADING LOG"
-      position: "main_bottom"
-      content:
-        - "Últimas señales generadas"
-        - "Modo en que se generó"
-        - "Score de Oro al momento de señal"
-        - "SHA parquet usada"
-
-# ────────────────────────────────────────────────────────────────
-# DATA SOURCES — Configuración por activo
-# ────────────────────────────────────────────────────────────────
-data_sources:
-  primary:
-    - provider: "yfinance"
-      assets: ["indices", "commodities", "bonds", "NVDA"]
-      max_history_years: 15
-      granularity: ["1d", "1h", "30m", "15m"]
-      notes: "Gratis. Throttling leve. Usar con cache local."
-
-    - provider: "ccxt_binance"
-      assets: ["BTC", "ETH", "SOL"]
-      max_history_years: 8
-      granularity: ["1d", "4h", "1h", "30m", "15m", "5m", "1m"]
-      notes: "API pública sin key para datos históricos. Límite 1000 velas/request."
-
-    - provider: "oanda_v20"
-      assets: ["forex"]
-      max_history_years: 10
-      granularity: ["D", "H4", "H1", "M30", "M15", "M5", "M1"]
-      notes: "Requiere cuenta demo gratuita. Tick volume disponible."
-
-  fallback:
-    - provider: "stooq"
-      access: "pandas_datareader"
-      notes: "Alternativa a yfinance para datos históricos largos."
-
-    - provider: "fred_st_louis"
-      access: "pandas_datareader"
-      assets: ["US10Y", "macro_features"]
-      notes: "Federal Reserve económicos. Gratis, confiable."
-
-  gdelt:
-    provider: "gdelt_foundation.py"
-    coverage: "2015-2025"
-    gap_2026: "PENDIENTE — migrar CSVs → gdelt_foundation.py"
-    notes: "NO TOCAR gdelt_foundation.py sin auditoría (R6)."
+      # ── Commit SOLO datos permanentes (no telemetry) ───────────────────
+      - name: Commit gate_metrics + SHA_REGISTRY
+        if: success()
+        run: |
+          git config user.name  "SPEL Holmes"
+          git config user.email "holmes@spel.ai"
+          git add 00_VAULT/gate_metrics.json
+          git add 00_VAULT/registry/SHA_REGISTRY.json
+          git diff --staged --quiet || git commit -m "chore(patrol): gate_metrics + SHA [$(date -u +%H%M)]"
+          git push origin main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
