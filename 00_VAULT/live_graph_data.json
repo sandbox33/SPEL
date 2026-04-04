@@ -1,0 +1,1194 @@
+{
+  "status": "SOVEREIGN_CLEAN",
+  "generated_at": "2026-04-02T20:39:59.024403+00:00",
+  "protocol": "TABULA_RASA_S44",
+  "lock": true,
+  "sovereign_root": "/content/drive/MyDrive/ORDEN/SPEL 3.0",
+  "total_nodes": 113,
+  "summary": {
+    "diamond": 62,
+    "gold": 1,
+    "data": 50,
+    "heavy_warning": 0,
+    "fails": 0
+  },
+  "nodes": [
+    {
+      "id": 0,
+      "file": "spel_posttraining_audit.py",
+      "rel_path": "01_HOLMES_OPS/spel_posttraining_audit.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:55.593702+00:00",
+      "issues": []
+    },
+    {
+      "id": 1,
+      "file": "SPEL_INSTITUTIONAL_AUDITOR_V41.py",
+      "rel_path": "01_HOLMES_OPS/SPEL_INSTITUTIONAL_AUDITOR_V41.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:55.650320+00:00",
+      "issues": []
+    },
+    {
+      "id": 2,
+      "file": "spel_sentinel_core.py",
+      "rel_path": "01_HOLMES_OPS/spel_sentinel_core.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:55.703641+00:00",
+      "issues": []
+    },
+    {
+      "id": 3,
+      "file": "spel_trainer_audit.py",
+      "rel_path": "01_HOLMES_OPS/spel_trainer_audit.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:55.757725+00:00",
+      "issues": []
+    },
+    {
+      "id": 4,
+      "file": "spel_guardian.py",
+      "rel_path": "01_HOLMES_OPS/spel_guardian.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:55.810617+00:00",
+      "issues": []
+    },
+    {
+      "id": 5,
+      "file": "spel_auditoria_total.py",
+      "rel_path": "01_HOLMES_OPS/spel_auditoria_total.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:55.864310+00:00",
+      "issues": []
+    },
+    {
+      "id": 6,
+      "file": "SPEL_v37_MASTER_AUDITOR_v2.py",
+      "rel_path": "01_HOLMES_OPS/SPEL_v37_MASTER_AUDITOR_v2.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:55.914490+00:00",
+      "issues": [
+        "STUB_ZOMBIE: last_signal.json"
+      ]
+    },
+    {
+      "id": 7,
+      "file": "holmes.py",
+      "rel_path": "01_HOLMES_OPS/holmes.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:55.955243+00:00",
+      "issues": []
+    },
+    {
+      "id": 8,
+      "file": "spel_meta_guardian.py",
+      "rel_path": "01_HOLMES_OPS/spel_meta_guardian.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:55.999690+00:00",
+      "issues": []
+    },
+    {
+      "id": 9,
+      "file": "gdelt_foundation.py",
+      "rel_path": "03_BRAIN_INTERNALS/gdelt_foundation.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:56.059127+00:00",
+      "issues": []
+    },
+    {
+      "id": 10,
+      "file": "spel_math_engine.py",
+      "rel_path": "04_GOLD_MODULES/spel_math_engine.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.3,
+      "last_heartbeat": "2026-04-02T20:39:56.110934+00:00",
+      "issues": []
+    },
+    {
+      "id": 11,
+      "file": "spel_github_setup.py",
+      "rel_path": "04_GOLD_MODULES/spel_github_setup.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:56.169118+00:00",
+      "issues": []
+    },
+    {
+      "id": 12,
+      "file": "spel_daily_check.py",
+      "rel_path": "04_GOLD_MODULES/spel_daily_check.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:56.220719+00:00",
+      "issues": []
+    },
+    {
+      "id": 13,
+      "file": "spel_patch_coordinated.py",
+      "rel_path": "04_GOLD_MODULES/spel_patch_coordinated.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:56.273725+00:00",
+      "issues": []
+    },
+    {
+      "id": 14,
+      "file": "spel_backbone_engine.py",
+      "rel_path": "04_GOLD_MODULES/spel_backbone_engine.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.23,
+      "last_heartbeat": "2026-04-02T20:39:56.325970+00:00",
+      "issues": []
+    },
+    {
+      "id": 15,
+      "file": "spel_daily_runner.py",
+      "rel_path": "04_GOLD_MODULES/spel_daily_runner.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:56.379452+00:00",
+      "issues": []
+    },
+    {
+      "id": 16,
+      "file": "main_ui.py",
+      "rel_path": "04_GOLD_MODULES/main_ui.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.48,
+      "last_heartbeat": "2026-04-02T20:39:56.433408+00:00",
+      "issues": []
+    },
+    {
+      "id": 17,
+      "file": "spel_modules.py",
+      "rel_path": "04_GOLD_MODULES/spel_modules.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:56.486720+00:00",
+      "issues": []
+    },
+    {
+      "id": 18,
+      "file": "ojo_de_dios_v26.py",
+      "rel_path": "04_GOLD_MODULES/ojo_de_dios_v26.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.36,
+      "last_heartbeat": "2026-04-02T20:39:56.539435+00:00",
+      "issues": []
+    },
+    {
+      "id": 19,
+      "file": "error_detective.py",
+      "rel_path": "04_GOLD_MODULES/error_detective.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:56.594975+00:00",
+      "issues": []
+    },
+    {
+      "id": 20,
+      "file": "spel_cost_model.py",
+      "rel_path": "04_GOLD_MODULES/spel_cost_model.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:56.647549+00:00",
+      "issues": []
+    },
+    {
+      "id": 21,
+      "file": "spel_export_feature_cache.py",
+      "rel_path": "04_GOLD_MODULES/spel_export_feature_cache.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:56.697535+00:00",
+      "issues": []
+    },
+    {
+      "id": 22,
+      "file": "spel_preflight_s24.py",
+      "rel_path": "04_GOLD_MODULES/spel_preflight_s24.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:56.749402+00:00",
+      "issues": []
+    },
+    {
+      "id": 23,
+      "file": "sha_detective.py",
+      "rel_path": "04_GOLD_MODULES/sha_detective.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:56.803767+00:00",
+      "issues": []
+    },
+    {
+      "id": 24,
+      "file": "spel_hud.py",
+      "rel_path": "04_GOLD_MODULES/spel_hud.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:56.857376+00:00",
+      "issues": []
+    },
+    {
+      "id": 25,
+      "file": "base_detective.py",
+      "rel_path": "04_GOLD_MODULES/base_detective.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:56.908309+00:00",
+      "issues": []
+    },
+    {
+      "id": 26,
+      "file": "spel_inventory_dashboard.py",
+      "rel_path": "04_GOLD_MODULES/spel_inventory_dashboard.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.46,
+      "last_heartbeat": "2026-04-02T20:39:56.957628+00:00",
+      "issues": []
+    },
+    {
+      "id": 27,
+      "file": "SPEL_S31_LAUNCHER.py",
+      "rel_path": "04_GOLD_MODULES/SPEL_S31_LAUNCHER.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.46,
+      "last_heartbeat": "2026-04-02T20:39:57.011698+00:00",
+      "issues": []
+    },
+    {
+      "id": 28,
+      "file": "spel_cloud_inference.py",
+      "rel_path": "04_GOLD_MODULES/spel_cloud_inference.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:57.070377+00:00",
+      "issues": []
+    },
+    {
+      "id": 29,
+      "file": "spel_drive_cleanup.py",
+      "rel_path": "04_GOLD_MODULES/spel_drive_cleanup.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:57.125120+00:00",
+      "issues": []
+    },
+    {
+      "id": 30,
+      "file": "__init__.py",
+      "rel_path": "04_GOLD_MODULES/__init__.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:57.183850+00:00",
+      "issues": []
+    },
+    {
+      "id": 31,
+      "file": "spel_orchestrator_v9.py",
+      "rel_path": "04_GOLD_MODULES/spel_orchestrator_v9.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:57.241302+00:00",
+      "issues": []
+    },
+    {
+      "id": 32,
+      "file": "spel_p90_recalibrate.py",
+      "rel_path": "04_GOLD_MODULES/spel_p90_recalibrate.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:57.294143+00:00",
+      "issues": []
+    },
+    {
+      "id": 33,
+      "file": "spel_forex_iq_runner.py",
+      "rel_path": "04_GOLD_MODULES/spel_forex_iq_runner.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:57.343830+00:00",
+      "issues": []
+    },
+    {
+      "id": 34,
+      "file": "spel_logger.py",
+      "rel_path": "04_GOLD_MODULES/spel_logger.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:57.391139+00:00",
+      "issues": []
+    },
+    {
+      "id": 35,
+      "file": "capa_c_inference.py",
+      "rel_path": "04_GOLD_MODULES/capa_c_inference.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:57.437975+00:00",
+      "issues": []
+    },
+    {
+      "id": 36,
+      "file": "isolator.py",
+      "rel_path": "04_GOLD_MODULES/isolator.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:57.486463+00:00",
+      "issues": []
+    },
+    {
+      "id": 37,
+      "file": "critical_loss_optimized.py",
+      "rel_path": "04_GOLD_MODULES/critical_loss_optimized.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:57.539808+00:00",
+      "issues": []
+    },
+    {
+      "id": 38,
+      "file": "spel_telegram_setup.py",
+      "rel_path": "04_GOLD_MODULES/spel_telegram_setup.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:57.594609+00:00",
+      "issues": []
+    },
+    {
+      "id": 39,
+      "file": "godel_bound.py",
+      "rel_path": "04_GOLD_MODULES/godel_bound.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.06,
+      "last_heartbeat": "2026-04-02T20:39:57.645964+00:00",
+      "issues": []
+    },
+    {
+      "id": 40,
+      "file": "dashboard_fx.py",
+      "rel_path": "04_GOLD_MODULES/dashboard_fx.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.19,
+      "last_heartbeat": "2026-04-02T20:39:57.698136+00:00",
+      "issues": [
+        "STUB_ZOMBIE: last_signal.json"
+      ]
+    },
+    {
+      "id": 41,
+      "file": "spel_forex_iq.py",
+      "rel_path": "04_GOLD_MODULES/spel_forex_iq.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.08,
+      "last_heartbeat": "2026-04-02T20:39:57.751309+00:00",
+      "issues": []
+    },
+    {
+      "id": 42,
+      "file": "spel_snapshot_updater.py",
+      "rel_path": "04_GOLD_MODULES/spel_snapshot_updater.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:57.802141+00:00",
+      "issues": []
+    },
+    {
+      "id": 43,
+      "file": "api_sensor.py",
+      "rel_path": "04_GOLD_MODULES/api_sensor.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:57.855578+00:00",
+      "issues": []
+    },
+    {
+      "id": 44,
+      "file": "spel_trading_router.py",
+      "rel_path": "04_GOLD_MODULES/spel_trading_router.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:57.908863+00:00",
+      "issues": []
+    },
+    {
+      "id": 45,
+      "file": "spel_session_start.py",
+      "rel_path": "04_GOLD_MODULES/spel_session_start.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:57.956169+00:00",
+      "issues": []
+    },
+    {
+      "id": 46,
+      "file": "messenger.py",
+      "rel_path": "04_GOLD_MODULES/messenger.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:57.998378+00:00",
+      "issues": []
+    },
+    {
+      "id": 47,
+      "file": "dna_sovereign.py",
+      "rel_path": "04_GOLD_MODULES/dna_sovereign.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.78,
+      "last_heartbeat": "2026-04-02T20:39:58.045924+00:00",
+      "issues": []
+    },
+    {
+      "id": 48,
+      "file": "ojo_de_dios_v23.py",
+      "rel_path": "04_GOLD_MODULES/ojo_de_dios_v23.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.4,
+      "last_heartbeat": "2026-04-02T20:39:58.100704+00:00",
+      "issues": []
+    },
+    {
+      "id": 49,
+      "file": "spel_asset_registry.py",
+      "rel_path": "04_GOLD_MODULES/spel_asset_registry.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:58.154071+00:00",
+      "issues": []
+    },
+    {
+      "id": 50,
+      "file": "spel_purger_v3.py",
+      "rel_path": "04_GOLD_MODULES/spel_purger_v3.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:58.208222+00:00",
+      "issues": []
+    },
+    {
+      "id": 51,
+      "file": "spel_ml_master.py",
+      "rel_path": "04_GOLD_MODULES/spel_ml_master.py",
+      "tier": "GOLD",
+      "status": "NOT_TESTED",
+      "ram_impact_mb": -1,
+      "last_heartbeat": "2026-04-02T20:39:58.264450+00:00",
+      "issues": []
+    },
+    {
+      "id": 52,
+      "file": "spel_ingestion.py",
+      "rel_path": "04_GOLD_MODULES/harvesters/spel_ingestion.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:58.321116+00:00",
+      "issues": []
+    },
+    {
+      "id": 53,
+      "file": "spel_data_harvester.py",
+      "rel_path": "04_GOLD_MODULES/harvesters/spel_data_harvester.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.4,
+      "last_heartbeat": "2026-04-02T20:39:58.369689+00:00",
+      "issues": []
+    },
+    {
+      "id": 54,
+      "file": "spel_ingest_incremental.py",
+      "rel_path": "04_GOLD_MODULES/harvesters/spel_ingest_incremental.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:58.414796+00:00",
+      "issues": []
+    },
+    {
+      "id": 55,
+      "file": "spel_bulk_harvester.py",
+      "rel_path": "04_GOLD_MODULES/harvesters/spel_bulk_harvester.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.66,
+      "last_heartbeat": "2026-04-02T20:39:58.460915+00:00",
+      "issues": []
+    },
+    {
+      "id": 56,
+      "file": "spel_harvester_v3.py",
+      "rel_path": "04_GOLD_MODULES/harvesters/spel_harvester_v3.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.03,
+      "last_heartbeat": "2026-04-02T20:39:58.506361+00:00",
+      "issues": []
+    },
+    {
+      "id": 57,
+      "file": "spel_score_fn_wrapper.py",
+      "rel_path": "04_GOLD_MODULES/indicators/spel_score_fn_wrapper.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:58.555618+00:00",
+      "issues": []
+    },
+    {
+      "id": 58,
+      "file": "spel_score_engine.py",
+      "rel_path": "04_GOLD_MODULES/indicators/spel_score_engine.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:58.609028+00:00",
+      "issues": []
+    },
+    {
+      "id": 59,
+      "file": "spel_adapter_bridge.py",
+      "rel_path": "04_GOLD_MODULES/executors/spel_adapter_bridge.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:58.663297+00:00",
+      "issues": []
+    },
+    {
+      "id": 60,
+      "file": "spel_paper_adapter_v2.py",
+      "rel_path": "04_GOLD_MODULES/executors/spel_paper_adapter_v2.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:58.715108+00:00",
+      "issues": [
+        "STUB_ZOMBIE: gate_metrics.json"
+      ]
+    },
+    {
+      "id": 61,
+      "file": "spel_paper_adapter.py",
+      "rel_path": "04_GOLD_MODULES/executors/spel_paper_adapter.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:58.768371+00:00",
+      "issues": []
+    },
+    {
+      "id": 62,
+      "file": "base_adapter.py",
+      "rel_path": "04_GOLD_MODULES/executors/base_adapter.py",
+      "tier": "DIAMOND",
+      "status": "SAFE",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.823483+00:00",
+      "issues": []
+    },
+    {
+      "id": 63,
+      "file": "NVDA_2026_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/NVDA/entropy/NVDA_2026_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:58.978730+00:00",
+      "issues": []
+    },
+    {
+      "id": 64,
+      "file": "NVDA_2023_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/NVDA/entropy/NVDA_2023_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.979411+00:00",
+      "issues": []
+    },
+    {
+      "id": 65,
+      "file": "NVDA_2015_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/NVDA/entropy/NVDA_2015_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.979956+00:00",
+      "issues": []
+    },
+    {
+      "id": 66,
+      "file": "NVDA_2019_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/NVDA/entropy/NVDA_2019_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.980531+00:00",
+      "issues": []
+    },
+    {
+      "id": 67,
+      "file": "NVDA_2017_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/NVDA/entropy/NVDA_2017_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.981238+00:00",
+      "issues": []
+    },
+    {
+      "id": 68,
+      "file": "NVDA_2020_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/NVDA/entropy/NVDA_2020_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.981814+00:00",
+      "issues": []
+    },
+    {
+      "id": 69,
+      "file": "NVDA_2016_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/NVDA/entropy/NVDA_2016_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.982354+00:00",
+      "issues": []
+    },
+    {
+      "id": 70,
+      "file": "NVDA_2021_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/NVDA/entropy/NVDA_2021_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.982846+00:00",
+      "issues": []
+    },
+    {
+      "id": 71,
+      "file": "NVDA_2022_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/NVDA/entropy/NVDA_2022_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.983442+00:00",
+      "issues": []
+    },
+    {
+      "id": 72,
+      "file": "NVDA_2018_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/NVDA/entropy/NVDA_2018_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.983957+00:00",
+      "issues": []
+    },
+    {
+      "id": 73,
+      "file": "NVDA_2024_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/NVDA/entropy/NVDA_2024_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.984545+00:00",
+      "issues": []
+    },
+    {
+      "id": 74,
+      "file": "NVDA_2025_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/NVDA/entropy/NVDA_2025_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.985082+00:00",
+      "issues": []
+    },
+    {
+      "id": 75,
+      "file": "NVDA_1m_v5.parquet",
+      "rel_path": "05_DATA_LAKE/processed/NVDA/intraday/NVDA_1m_v5.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 42.93,
+      "last_heartbeat": "2026-04-02T20:39:58.985732+00:00",
+      "issues": []
+    },
+    {
+      "id": 76,
+      "file": "NVDA_ohlcv_v5.parquet",
+      "rel_path": "05_DATA_LAKE/processed/NVDA/ohlcv/aggregated/NVDA_ohlcv_v5.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.38,
+      "last_heartbeat": "2026-04-02T20:39:58.986360+00:00",
+      "issues": []
+    },
+    {
+      "id": 77,
+      "file": "NVDA_gdelt_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/NVDA/gdelt/raw/NVDA_gdelt_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.09,
+      "last_heartbeat": "2026-04-02T20:39:58.986944+00:00",
+      "issues": []
+    },
+    {
+      "id": 78,
+      "file": "BTC_2026_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/BTC/entropy/BTC_2026_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:58.987553+00:00",
+      "issues": []
+    },
+    {
+      "id": 79,
+      "file": "BTC_2016_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/BTC/entropy/BTC_2016_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.988123+00:00",
+      "issues": []
+    },
+    {
+      "id": 80,
+      "file": "BTC_2015_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/BTC/entropy/BTC_2015_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.988657+00:00",
+      "issues": []
+    },
+    {
+      "id": 81,
+      "file": "BTC_2018_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/BTC/entropy/BTC_2018_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.989225+00:00",
+      "issues": []
+    },
+    {
+      "id": 82,
+      "file": "BTC_2017_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/BTC/entropy/BTC_2017_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.989769+00:00",
+      "issues": []
+    },
+    {
+      "id": 83,
+      "file": "BTC_2020_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/BTC/entropy/BTC_2020_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.990305+00:00",
+      "issues": []
+    },
+    {
+      "id": 84,
+      "file": "BTC_2019_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/BTC/entropy/BTC_2019_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.990846+00:00",
+      "issues": []
+    },
+    {
+      "id": 85,
+      "file": "BTC_2022_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/BTC/entropy/BTC_2022_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.991386+00:00",
+      "issues": []
+    },
+    {
+      "id": 86,
+      "file": "BTC_2021_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/BTC/entropy/BTC_2021_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.991914+00:00",
+      "issues": []
+    },
+    {
+      "id": 87,
+      "file": "BTC_2023_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/BTC/entropy/BTC_2023_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.992447+00:00",
+      "issues": []
+    },
+    {
+      "id": 88,
+      "file": "BTC_2024_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/BTC/entropy/BTC_2024_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.993001+00:00",
+      "issues": []
+    },
+    {
+      "id": 89,
+      "file": "BTC_2025_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/BTC/entropy/BTC_2025_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.993567+00:00",
+      "issues": []
+    },
+    {
+      "id": 90,
+      "file": "BTC_ohlcv_v5.parquet",
+      "rel_path": "05_DATA_LAKE/processed/BTC/ohlcv/aggregated/BTC_ohlcv_v5.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.58,
+      "last_heartbeat": "2026-04-02T20:39:58.994187+00:00",
+      "issues": []
+    },
+    {
+      "id": 91,
+      "file": "BTC_gdelt_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/BTC/gdelt/raw/BTC_gdelt_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.09,
+      "last_heartbeat": "2026-04-02T20:39:58.994794+00:00",
+      "issues": []
+    },
+    {
+      "id": 92,
+      "file": "XAU_2026_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/XAU/entropy/XAU_2026_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:58.995378+00:00",
+      "issues": []
+    },
+    {
+      "id": 93,
+      "file": "XAU_2015_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/XAU/entropy/XAU_2015_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.995921+00:00",
+      "issues": []
+    },
+    {
+      "id": 94,
+      "file": "XAU_2016_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/XAU/entropy/XAU_2016_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.996472+00:00",
+      "issues": []
+    },
+    {
+      "id": 95,
+      "file": "XAU_2018_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/XAU/entropy/XAU_2018_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.997007+00:00",
+      "issues": []
+    },
+    {
+      "id": 96,
+      "file": "XAU_2017_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/XAU/entropy/XAU_2017_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.997564+00:00",
+      "issues": []
+    },
+    {
+      "id": 97,
+      "file": "XAU_2020_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/XAU/entropy/XAU_2020_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.998088+00:00",
+      "issues": []
+    },
+    {
+      "id": 98,
+      "file": "XAU_2019_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/XAU/entropy/XAU_2019_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.998651+00:00",
+      "issues": []
+    },
+    {
+      "id": 99,
+      "file": "XAU_2022_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/XAU/entropy/XAU_2022_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.999163+00:00",
+      "issues": []
+    },
+    {
+      "id": 100,
+      "file": "XAU_2021_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/XAU/entropy/XAU_2021_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:58.999687+00:00",
+      "issues": []
+    },
+    {
+      "id": 101,
+      "file": "XAU_2023_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/XAU/entropy/XAU_2023_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:59.000244+00:00",
+      "issues": []
+    },
+    {
+      "id": 102,
+      "file": "XAU_2024_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/XAU/entropy/XAU_2024_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:59.000749+00:00",
+      "issues": []
+    },
+    {
+      "id": 103,
+      "file": "XAU_2025_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/XAU/entropy/XAU_2025_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:59.001277+00:00",
+      "issues": []
+    },
+    {
+      "id": 104,
+      "file": "XAU_1m_v5.parquet",
+      "rel_path": "05_DATA_LAKE/processed/XAU/intraday/XAU_1m_v5.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 2.5,
+      "last_heartbeat": "2026-04-02T20:39:59.001895+00:00",
+      "issues": []
+    },
+    {
+      "id": 105,
+      "file": "XAU_15m_v5.parquet",
+      "rel_path": "05_DATA_LAKE/processed/XAU/intraday/XAU_15m_v5.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 2.5,
+      "last_heartbeat": "2026-04-02T20:39:59.002425+00:00",
+      "issues": []
+    },
+    {
+      "id": 106,
+      "file": "XAU_5m_v5.parquet",
+      "rel_path": "05_DATA_LAKE/processed/XAU/intraday/XAU_5m_v5.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 2.5,
+      "last_heartbeat": "2026-04-02T20:39:59.002955+00:00",
+      "issues": []
+    },
+    {
+      "id": 107,
+      "file": "XAU_30m_v5.parquet",
+      "rel_path": "05_DATA_LAKE/processed/XAU/intraday/XAU_30m_v5.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 2.5,
+      "last_heartbeat": "2026-04-02T20:39:59.003504+00:00",
+      "issues": []
+    },
+    {
+      "id": 108,
+      "file": "XAU_ohlcv_v5.parquet",
+      "rel_path": "05_DATA_LAKE/processed/XAU/ohlcv/aggregated/XAU_ohlcv_v5.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.38,
+      "last_heartbeat": "2026-04-02T20:39:59.004138+00:00",
+      "issues": []
+    },
+    {
+      "id": 109,
+      "file": "XAU_gdelt_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/XAU/gdelt/raw/XAU_gdelt_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.09,
+      "last_heartbeat": "2026-04-02T20:39:59.004979+00:00",
+      "issues": []
+    },
+    {
+      "id": 110,
+      "file": "NIFTY50_2016_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/NIFTY50/entropy/NIFTY50_2016_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:59.005630+00:00",
+      "issues": []
+    },
+    {
+      "id": 111,
+      "file": "NIFTY50_2026_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/NIFTY50/entropy/NIFTY50_2026_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.0,
+      "last_heartbeat": "2026-04-02T20:39:59.006150+00:00",
+      "issues": []
+    },
+    {
+      "id": 112,
+      "file": "NIFTY50_2015_entropy.parquet",
+      "rel_path": "05_DATA_LAKE/processed/NIFTY50/entropy/NIFTY50_2015_entropy.parquet",
+      "tier": "DATA",
+      "status": "OK",
+      "ram_impact_mb": 0.01,
+      "last_heartbeat": "2026-04-02T20:39:59.006674+00:00",
+      "issues": []
+    }
+  ],
+  "deferred": [
+    "99_ARCHIVE_FENIX/collisions/20260402_203428/DRIVE___init__.py",
+    "99_ARCHIVE_FENIX/collisions/20260402_203428/DRIVE_spel_forex_iq_runner.py",
+    "99_ARCHIVE_FENIX/collisions/20260402_203428/DRIVE_spel_ingest_incremental.py",
+    "99_ARCHIVE_FENIX/collisions/20260402_203428/DRIVE_spel_score_engine.py",
+    "99_ARCHIVE_FENIX/collisions/20260402_203428/DRIVE_spel_session_start.py",
+    "99_ARCHIVE_FENIX/collisions/20260402_203428/DRIVE_spel_paper_adapter.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/01_HOLMES_OPS/PRE_FIX_spel_posttraining_audit.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/01_HOLMES_OPS/PRE_FIX_SPEL_INSTITUTIONAL_AUDITOR_V41.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/01_HOLMES_OPS/PRE_FIX_spel_trainer_audit.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/01_HOLMES_OPS/PRE_FIX_spel_auditoria_total.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/01_HOLMES_OPS/PRE_FIX_SPEL_v37_MASTER_AUDITOR_v2.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/01_HOLMES_OPS/PRE_FIX_holmes.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/04_GOLD_MODULES/PRE_FIX_spel_github_setup.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/04_GOLD_MODULES/PRE_FIX_spel_patch_coordinated.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/04_GOLD_MODULES/PRE_FIX_spel_daily_runner.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/04_GOLD_MODULES/PRE_FIX_ojo_de_dios_v26.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/04_GOLD_MODULES/PRE_FIX_error_detective.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/04_GOLD_MODULES/PRE_FIX_spel_export_feature_cache.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/04_GOLD_MODULES/PRE_FIX_spel_preflight_s24.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/04_GOLD_MODULES/PRE_FIX_spel_inventory_dashboard.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/04_GOLD_MODULES/PRE_FIX_SPEL_S31_LAUNCHER.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/04_GOLD_MODULES/PRE_FIX_spel_drive_cleanup.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/04_GOLD_MODULES/PRE_FIX_spel_p90_recalibrate.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/04_GOLD_MODULES/PRE_FIX_godel_bound.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/04_GOLD_MODULES/PRE_FIX_spel_forex_iq.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/04_GOLD_MODULES/PRE_FIX_spel_snapshot_updater.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/04_GOLD_MODULES/PRE_FIX_spel_session_start.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/04_GOLD_MODULES/PRE_FIX_dna_sovereign.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/04_GOLD_MODULES/PRE_FIX_spel_asset_registry.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/04_GOLD_MODULES/harvesters/PRE_FIX_spel_ingest_incremental.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/04_GOLD_MODULES/harvesters/PRE_FIX_spel_harvester_v3.py",
+    "99_ARCHIVE_FENIX/PATH_CRUSADE_BACKUPS/04_GOLD_MODULES/executors/PRE_FIX_spel_paper_adapter.py"
+  ],
+  "cycles_detected": 0,
+  "r13_invariants": {
+    "input_size": 20,
+    "hidden_size": 64,
+    "num_layers": 1,
+    "note": "INAMOVIBLE — no modificar"
+  }
+}

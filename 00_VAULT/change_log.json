@@ -1,0 +1,18 @@
+{
+  "S28_retraining": {
+    "ts": "2026-03-18T05:42:47.873722+00:00",
+    "checkpoints": {
+      "BTC": "BTC_LSTM_v3c_F1_0.4994.pt",
+      "XAU": "XAU_LSTM_v3_godel_valloss0.4386.pt",
+      "NIFTY50": "NIFTY50_LSTM_v3_godel_valloss0.3784.pt",
+      "NVDA": "NVDA_LSTM_v3_godel_valloss0.3857.pt"
+    },
+    "sha_parquets": {
+      "BTC": "acf0e05a774f",
+      "XAU": "d21af7f1b6f4",
+      "NIFTY50": "9945fc117921",
+      "NVDA": "73667850184b"
+    },
+    "status": "COMPLETE"
+  }
+}

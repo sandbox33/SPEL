@@ -38,8 +38,18 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 # ─── Paths ─────────────────────────────────────────────────────────────────────
-ROOT    = Path(os.environ.get("SPEL_BASE_DIR",
-               "/content/drive/MyDrive/ORDEN/SPEL 3.0"))
+# ─── 3-way ROOT detection (S46 PATH_COLLISION fix) ───────────────────────────
+_IS_GH = os.environ.get('GITHUB_ACTIONS') == 'true'
+def _detect_root() -> Path:
+    if _IS_GH:
+        return Path(os.environ.get('GITHUB_WORKSPACE', '.')).resolve()
+    if os.environ.get('SPEL_BASE_DIR'):
+        return Path(os.environ['SPEL_BASE_DIR']).resolve()
+    _p = Path('/content/drive/MyDrive/ORDEN/SPEL 3.0')
+    return _p if _p.exists() else Path('.')
+ROOT = _detect_root()
+# ─────────────────────────────────────────────────────────────────────────────
+
 VAULT   = ROOT / "00_VAULT"
 SECRETS = VAULT / "secrets_template.json"
 REGISTRY_PATH    = VAULT / "registry" / "SHA_REGISTRY.json"
@@ -53,7 +63,7 @@ DATA_LAKE        = ROOT  / "05_DATA_LAKE"
 ORCH_LOG_PATH    = VAULT / "orchestrator_v10_log.json"
 
 # Watchdog: SOS if pulse older than this
-PULSE_MAX_AGE_SECONDS = 900  # 15 minutes
+PULSE_MAX_AGE_SECONDS = 1200  # S46 FIX: 20min (GH scheduler latency tolerance)
 
 # Gold SPEL modules (add to sys.path safely)
 GOLD_DIR   = ROOT / "04_GOLD_MODULES"
@@ -551,6 +561,49 @@ def _persist_orch_log(events: list) -> None:
 
 
 # ─── Main orchestrator cycle ────────────────────────────────────────────────────
+
+
+
+def _secrets_health_check() -> bool:
+    """
+    V-01 FIX: Verifica presencia y validez de secrets críticos.
+    En GH Actions: lee de os.environ (GitHub Secrets inyectados).
+    En Colab: lee de secrets_template.json con fallback a os.environ.
+    Detecta placeholders <YOUR_X_HERE> — tan peligrosos como ausentes.
+    Retorna False si algún secret crítico falta o es placeholder.
+    Emite SOS a TG_CHAOS y (en GH Actions) llama sys.exit(1).
+    """
+    import re as _re_sh
+    _PH_RE = _re_sh.compile(r'<YOUR_|YOUR_|CHANGE_ME|PLACEHOLDER', _re_sh.I)
+    _CRITICAL = ['TELEGRAM_TOKEN', 'TELEGRAM_SISTEMA', 'TELEGRAM_CHAOS',
+                  'GITHUB_TOKEN']
+    _is_gh = os.environ.get('GITHUB_ACTIONS') == 'true'
+    _sec = _load_secrets()
+    _env = os.environ
+
+    missing, placeholder = [], []
+    for k in _CRITICAL:
+        v = _env.get(k) or _sec.get(k, '')
+        if not v:
+            missing.append(k)
+        elif _PH_RE.search(str(v)):
+            placeholder.append(k)
+
+    if missing or placeholder:
+        _msg = (f'AUTH_VOID ciclo {datetime.now(timezone.utc).isoformat()}: '
+                f'{"MISSING="+str(missing) if missing else ""} '
+                f'{"PLACEHOLDER="+str(placeholder) if placeholder else ""}')
+        print(f'  AUTH_VOID: {_msg}')
+        # Intento TG (si el token sí existe)
+        _tg_tok = _env.get('TELEGRAM_TOKEN') or _sec.get('TELEGRAM_TOKEN', '')
+        _tg_ch  = _env.get('TELEGRAM_CHAOS', '-1003736496382')
+        if _tg_tok and not _PH_RE.search(_tg_tok):
+            _tg(_tg_tok, _tg_ch,
+                f'🚫 AUTH_VOID\nEnv: {"GH" if _is_gh else "COLAB"}\n{_msg}')
+        if _is_gh:
+            sys.exit(1)  # Marca job FAIL en GH — watchdog distingue vs Colab muerto
+        return False
+    return True
 
 def run_cycle(dry_run: bool = False, verbose: bool = False) -> dict:
     """

@@ -1,0 +1,10 @@
+polars>=0.20
+numpy>=1.26
+requests>=2.31
+yfinance>=0.2
+scikit-learn>=1.4
+alpaca-py>=0.21
+plotly>=5.0
+pandas>=2.0
+streamlit>=1.30
+torch>=2.0

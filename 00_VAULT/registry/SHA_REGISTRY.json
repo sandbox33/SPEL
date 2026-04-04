@@ -1,0 +1,34 @@
+{
+  "BTC": {
+    "sha_v5": "28932efcb0f4",
+    "p90_entropy": 2.002221,
+    "checkpoint_file": "BTC_LSTM_v3_S43_clean.pt",
+    "checkpoint_status": "PENDING_RETRAIN"
+  },
+  "XAU": {
+    "sha_v5": "abdbafeab097",
+    "p90_entropy": 1.904465,
+    "checkpoint_file": "XAU_LSTM_v3_S43_clean.pt",
+    "checkpoint_status": "PENDING_RETRAIN"
+  },
+  "NIFTY50": {
+    "sha_v5": "ec534663b272",
+    "p90_entropy": 1.186823,
+    "checkpoint_file": "NIFTY50_LSTM_v3_S43_clean.pt",
+    "checkpoint_status": "PENDING_RETRAIN"
+  },
+  "NVDA": {
+    "sha_v5": "a8d231a60a02",
+    "p90_entropy": 1.900615,
+    "checkpoint_file": "NVDA_LSTM_v3_S43_clean.pt",
+    "checkpoint_status": "PENDING_RETRAIN"
+  },
+  "spel_orchestrator_v10.py": "561aed9672da",
+  "spel_bayesian_core.py": "edc0b57e2a60",
+  "spel_score_engine.py": "25d7c58dea1c",
+  "holmes.py": "275abb584303",
+  "spel_guardian.py": "6f8628fe53f6",
+  "spel_dead_man_switch.py": "850645f0f253",
+  "_s46_ts": "2026-04-04T19:12:07.401791+00:00",
+  "_s46_version": "SOT_V46.0"
+}

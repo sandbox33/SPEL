@@ -1,0 +1,55 @@
+{
+  "updated": "2026-04-02T14:08:53.290853+00:00",
+  "pairs": {
+    "EURUSD": {
+      "entropy": 1.7463,
+      "p90": 1.900615,
+      "vitality": 5,
+      "godel_active": false,
+      "fear_momentum": -0.154315,
+      "nash_frozen": 0.9188,
+      "proxy": "NVDA",
+      "as_of": "2026-04-02T14:08:53.290853+00:00"
+    },
+    "GBPUSD": {
+      "entropy": 1.7463,
+      "p90": 1.904465,
+      "vitality": 5,
+      "godel_active": false,
+      "fear_momentum": -0.158165,
+      "nash_frozen": 0.917,
+      "proxy": "XAU",
+      "as_of": "2026-04-02T14:08:53.290853+00:00"
+    },
+    "USDJPY": {
+      "entropy": 1.7463,
+      "p90": 1.904465,
+      "vitality": 5,
+      "godel_active": false,
+      "fear_momentum": -0.158165,
+      "nash_frozen": 0.917,
+      "proxy": "XAU",
+      "as_of": "2026-04-02T14:08:53.290853+00:00"
+    },
+    "USDCHF": {
+      "entropy": 1.7463,
+      "p90": 1.904465,
+      "vitality": 5,
+      "godel_active": false,
+      "fear_momentum": -0.158165,
+      "nash_frozen": 0.917,
+      "proxy": "XAU",
+      "as_of": "2026-04-02T14:08:53.290853+00:00"
+    },
+    "AUDUSD": {
+      "entropy": 1.7463,
+      "p90": 1.900615,
+      "vitality": 5,
+      "godel_active": false,
+      "fear_momentum": -0.154315,
+      "nash_frozen": 0.9188,
+      "proxy": "NVDA",
+      "as_of": "2026-04-02T14:08:53.290853+00:00"
+    }
+  }
+}

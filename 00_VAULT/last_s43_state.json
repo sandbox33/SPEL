@@ -1,0 +1,54 @@
+{
+  "session": "S43",
+  "date": "2026-03-31T23:39:38.718926+00:00",
+  "gate_r30": {
+    "day": 9,
+    "target": 63,
+    "capital": 100000
+  },
+  "guardian": "scripts/spel_guardian.py DEPLOYED",
+  "holmes_role": "market_ops + patrol (infra-agnostic)",
+  "guardian_role": "Drive/GH integrity + SHA_REGISTRY owner",
+  "checkpoints": {
+    "BTC": {
+      "ok": true,
+      "sha": "58fb3c6e11dc",
+      "val_loss": 0.1997,
+      "status": "OK_S43"
+    },
+    "XAU": {
+      "ok": true,
+      "sha": "9cc74532f14e",
+      "val_loss": 0.0889,
+      "status": "OK_S43"
+    },
+    "NIFTY50": {
+      "ok": true,
+      "sha": "24e640f89335",
+      "val_loss": 0.1862,
+      "status": "OK_S43"
+    },
+    "NVDA": {
+      "ok": true,
+      "sha": "d0a17a68446c",
+      "val_loss": 0.398,
+      "status": "OK_S43"
+    }
+  },
+  "scaler_strategy": "SEPARATE JSON meta/scalers/ -- never inside .pt",
+  "sha_schema": "v45 S43",
+  "r13": {
+    "input_size": 20,
+    "hidden_size": 64,
+    "num_layers": 1
+  },
+  "bugs_closed": [
+    "BUG-YAML-001",
+    "BUG-J2-001",
+    "BUG-J2-002",
+    "BUG-J2-003",
+    "BUG-DASH-1",
+    "BUG-DASH-2",
+    "BUG-CKPT-LEGACY-SCALER"
+  ]
+}

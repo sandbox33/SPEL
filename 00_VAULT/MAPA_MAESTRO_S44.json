@@ -1,0 +1,40 @@
+{
+  "protocol": "TABULA_RASA_S44",
+  "ts": "2026-04-02T20:39:59.042194+00:00",
+  "orden_root": "/content/drive/MyDrive/ORDEN",
+  "spel30_root": "/content/drive/MyDrive/ORDEN/SPEL 3.0",
+  "phases": {
+    "cloud_rescue": {
+      "rescued": 29
+    },
+    "collisions": {
+      "total": 60,
+      "gh_wins": 6,
+      "canon_sync": 54,
+      "sovereign_core": 0
+    },
+    "pycache_nuke": {
+      "pyc_killed": 24
+    },
+    "data_lake": {
+      "parquets": 75,
+      "checkpoints": 4
+    },
+    "path_crusade": {
+      "total_fixes": 43
+    },
+    "heartbeat": {
+      "safe": 62,
+      "heavy": 0,
+      "fail": 0
+    },
+    "ml_master_seed": {
+      "generated": true,
+      "cycles": 0
+    }
+  },
+  "secrets_template": "/content/drive/MyDrive/ORDEN/SPEL 3.0/00_VAULT/secrets_template.json",
+  "live_graph": "/content/drive/MyDrive/ORDEN/SPEL 3.0/00_VAULT/live_graph_data.json",
+  "ready_for_s44": true,
+  "_map_sha": "f9a0834ec504d5ea339a2acd"
+}

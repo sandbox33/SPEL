@@ -1,0 +1,151 @@
+{
+  "system": "SPEL 3.0 — Holmes OS",
+  "version": "1.0",
+  "motto": "Hinc Omnia Cerno",
+  "author": "Abraham Fuenmayor Hernández",
+  "generated": "2026-03-27",
+  "log_version": "v44",
+
+  "laws": {
+    "L1": "SHA-256 en toda escritura de artefacto. HashChain encadenada en SignalPacket.",
+    "L2": "import torch NUNCA top-level (R37). Solo lazy dentro de funciones/métodos.",
+    "L3": "Cada anomalía CRITICAL incluye: descripción, componente, comando exacto de reparación.",
+    "L4": "NUNCA eliminar. Solo mover a ARCHIVE_S37/. Toda cuarentena queda en quarantine_log.json."
+  },
+
+  "rules": {
+    "R13": "TENSOR_COLS[20] inamovibles. input_size=20, hidden_size=64, num_layers=1.",
+    "R28": "godel_active = entropy >= SHA_REGISTRY[asset].p90. Nunca hardcoded.",
+    "R29": "Checkpoints NO en GitHub main. Backup semanal TG_BACKUP.",
+    "R32": "Toda escritura parquet = atómica con SHA_REGISTRY sync y GH push.",
+    "R33": "Gate metrics EXCLUSIVAMENTE $100k canonical. $10 micro-fractal excluido (EF-20).",
+    "R34": "GH Secrets: verificar nombre exacto antes de referenciar.",
+    "R35": "SPELLSTM output layer = self.linear (NO self.fc). strict=True.",
+    "R36": "Módulos v2.0 NO reemplazan v1 hasta GT-Score > 0.15.",
+    "R37": "LEY 2 ABSOLUTA: import torch solo dentro de funciones. Violación = J-Audit falla."
+  },
+
+  "error_fatals": {
+    "EF-20": "Micro-fractal $10 como denominador gate. 63d gate inválido.",
+    "EF-21": "SPELLSTM self.fc + strict=False → NaN silencioso → inference muerta.",
+    "EF-22": "Integrar Holmes sobre v1 sin GT-Score validation → regresión silenciosa.",
+    "EF-23": "Modificar gdelt_foundation.py o critical_loss_optimized.py → reentrenamiento completo."
+  },
+
+  "state_machine": {
+    "states": ["IDLE", "AUDIT", "QUARANTINE", "DEGRADED", "AUDIT_PASS", "AUDIT_FAIL"],
+    "transitions": {
+      "IDLE → AUDIT":         "patrol() called",
+      "AUDIT → AUDIT_PASS":   "no CRITICAL or HIGH anomalies",
+      "AUDIT → DEGRADED":     "HIGH anomalies only",
+      "AUDIT → AUDIT_FAIL":   "CRITICAL anomalies present",
+      "AUDIT_FAIL → QUARANTINE": "CRITICAL component has physical file",
+      "QUARANTINE → IDLE":    "isolator completes + TG notification sent"
+    }
+  },
+
+  "modes": {
+    "AUDIT":     {"trigger": "every patrol", "description": "Verifica secrets, torch, SHA_REGISTRY, sentinel staleness"},
+    "PATROL":    {"trigger": "every 15min",  "description": "Full detective sweep → SignalPacket"},
+    "PURGE":     {"trigger": "02:00 UTC L-V","description": "Limpieza Bóveda Zombi (Ley 4)"},
+    "REPORT":    {"trigger": "J3 always",    "description": "Sentinel check + Telegram estado"},
+    "INFERENCE": {"trigger": "13-16 UTC",    "description": "Paper adapter + forex signal"}
+  },
+
+  "detectives": {
+    "ErrorDetective": {
+      "module":   "modules.detective.error_detective",
+      "tracks":   ["GH Actions last 5 runs", "R37 torch top-level scan", "YAML BUG-YAML-001"],
+      "anomaly_types": ["GH_RUN_FAILURE", "TORCH_VIOLATION", "YAML_CONDITION_BUG",
+                        "GH_ACTIONS_UNREACHABLE"]
+    },
+    "SHADetective": {
+      "module":   "modules.detective.sha_detective",
+      "tracks":   ["SHA_REGISTRY load", "parquet SHA vs registry", "checkpoint existence R29"],
+      "anomaly_types": ["SHA_MISMATCH", "SHA_REGISTRY_EMPTY", "CHECKPOINT_CORRUPT"]
+    }
+  },
+
+  "anomaly_types": {
+    "SECRET_MISSING":       {"severity": "CRITICAL", "repair": "Colab: Secrets panel → verificar nombre exacto (R34)."},
+    "TORCH_VIOLATION":      {"severity": "CRITICAL", "repair": "Mover 'import torch' dentro de función. Ver sección 7 v44."},
+    "SHA_MISMATCH":         {"severity": "CRITICAL", "repair": "Ejecutar: python scripts/SPEL_INSTITUTIONAL_AUDITOR_V41.py"},
+    "CHECKPOINT_CORRUPT":   {"severity": "CRITICAL", "repair": "Restaurar desde TG_BACKUP. R29: backup semanal obligatorio."},
+    "YAML_CONDITION_BUG":   {"severity": "CRITICAL", "repair": "GitHub UI → editar j_audit.if: github.event.schedule != \"\""},
+    "SHA_REGISTRY_EMPTY":   {"severity": "CRITICAL", "repair": "python scripts/spel_preflight_s24.py → rebuild registry"},
+    "GH_RUN_FAILURE":       {"severity": "HIGH",     "repair": "Verificar GH Actions log. workflow_dispatch manual."},
+    "GH_ACTIONS_UNREACHABLE":{"severity":"MEDIUM",   "repair": "Verificar GH_TOKEN en Colab Secrets (R34)."},
+    "DETECTOR_CRASH":       {"severity": "HIGH",     "repair": "Ver Holmes repair_history.json para traceback."},
+    "LAST_SIGNAL_STALE":    {"severity": "HIGH",     "repair": "workflow_dispatch manual → verificar J2 escribe last_signal.json"}
+  },
+
+  "sha_registry_canonical": {
+    "BTC":     {"sha_v5": "89f5872b5d4d", "p90": 2.002221, "n_rows": 4077},
+    "XAU":     {"sha_v5": "c38c6fac1084", "p90": 1.904465, "n_rows": 2748},
+    "NIFTY50": {"sha_v5": "ec534663b272", "p90": 1.186823, "n_rows": 2748},
+    "NVDA":    {"sha_v5": "80dff64429d4", "p90": 1.900615, "n_rows": 2748}
+  },
+
+  "telegram_channels": {
+    "SISTEMA":  "-1003712424420",
+    "SIGNALS":  "-1003733702589",
+    "BACKUP":   "-1003761735254",
+    "CAOS":     ""
+  },
+
+  "known_bugs": {
+    "BUG-YAML-001": {
+      "status":    "OPEN — fix via GitHub UI",
+      "component": ".github/workflows/spel_master_v3.yml",
+      "description": "j_audit.if uses startsWith('0 ') which fails for multi-minute crons.",
+      "fix": "Change condition to: github.event.schedule != \"\""
+    },
+    "BUG-LEY2-001": {
+      "status":    "OPEN — fix in Colab",
+      "component": "scripts/capa_c_inference.py L13-14",
+      "description": "import torch top-level violates R37.",
+      "fix": "Move 'import torch' inside SPELLSTMModel.__init__, safe_load_checkpoint, and inferir()"
+    },
+    "BUG-DASH-1": {
+      "status":    "OPEN — S40 backlog",
+      "component": "main_ui.py _fetch_private()",
+      "fix": "Rewrite with st.secrets GH_TOKEN + Contents API raw Accept header"
+    },
+    "BUG-DASH-2": {
+      "status":    "OPEN — S40 backlog",
+      "component": "main_ui.py candlestick",
+      "fix": "Use increasing_line_color kwarg directly on go.Candlestick()"
+    }
+  },
+
+  "gate_r30": {
+    "start":         "2026-03-21T22:13:00Z",
+    "current_day":   6,
+    "total_days":    63,
+    "target":        "~2026-05-20",
+    "capital":       100000,
+    "capital_note":  "Canonical $100k only (R33). $10 micro-fractal excluded (EF-20).",
+    "conditions": [
+      {"id": "C1", "name": "63 días paper trading",    "met": false},
+      {"id": "C2", "name": "OR% GDELT real",           "met": true, "note": "Lifted S36"},
+      {"id": "C3", "name": "hit_rate_godel > 56%",     "met": false},
+      {"id": "C4", "name": "max_drawdown_7d < 8%",     "met": false},
+      {"id": "C5", "name": "no_trade_rate 30-70%",     "met": false},
+      {"id": "C6", "name": "PnL_kelly_weighted > 0",   "met": false},
+      {"id": "C7", "name": "Pipeline sin errores 63d", "met": false, "blocker": "BUG-YAML-001"}
+    ]
+  },
+
+  "integration_contract": {
+    "holmes_v1": {
+      "capability": "detect + notify",
+      "no_auto_fix": true,
+      "prerequisite": "BUG-YAML-001 fixed before Holmes reads real GH Actions state"
+    },
+    "holmes_v2": {
+      "capability": "detect + notify + auto-fix via Colab dispatch",
+      "status": "future",
+      "gate": "Holmes v1 stable for 5 consecutive patrol cycles"
+    }
+  }
+}

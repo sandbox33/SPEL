@@ -1,0 +1,504 @@
+{
+  "SPEL_S31_LAUNCHER.py": {
+    "file": "SPEL_S31_LAUNCHER.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.46,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "__init__.py": {
+    "file": "__init__.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "api_sensor.py": {
+    "file": "api_sensor.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.01,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "base_detective.py": {
+    "file": "base_detective.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "capa_c_inference.py": {
+    "file": "capa_c_inference.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.01,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "critical_loss_optimized.py": {
+    "file": "critical_loss_optimized.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "dashboard_fx.py": {
+    "file": "dashboard_fx.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.19,
+    "heavy": false,
+    "issues": [
+      "STUB_ZOMBIE: last_signal.json"
+    ],
+    "verdict": "SAFE"
+  },
+  "dna_sovereign.py": {
+    "file": "dna_sovereign.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.78,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "error_detective.py": {
+    "file": "error_detective.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.01,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "base_adapter.py": {
+    "file": "base_adapter.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.01,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_adapter_bridge.py": {
+    "file": "spel_adapter_bridge.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_paper_adapter.py": {
+    "file": "spel_paper_adapter.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_paper_adapter_v2.py": {
+    "file": "spel_paper_adapter_v2.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [
+      "STUB_ZOMBIE: gate_metrics.json"
+    ],
+    "verdict": "SAFE"
+  },
+  "godel_bound.py": {
+    "file": "godel_bound.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.06,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_bulk_harvester.py": {
+    "file": "spel_bulk_harvester.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.66,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_data_harvester.py": {
+    "file": "spel_data_harvester.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.4,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_harvester_v3.py": {
+    "file": "spel_harvester_v3.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.03,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_ingest_incremental.py": {
+    "file": "spel_ingest_incremental.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_ingestion.py": {
+    "file": "spel_ingestion.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_score_engine.py": {
+    "file": "spel_score_engine.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_score_fn_wrapper.py": {
+    "file": "spel_score_fn_wrapper.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "isolator.py": {
+    "file": "isolator.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "main_ui.py": {
+    "file": "main_ui.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.48,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "messenger.py": {
+    "file": "messenger.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "ojo_de_dios_v23.py": {
+    "file": "ojo_de_dios_v23.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.4,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "ojo_de_dios_v26.py": {
+    "file": "ojo_de_dios_v26.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.36,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "sha_detective.py": {
+    "file": "sha_detective.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_asset_registry.py": {
+    "file": "spel_asset_registry.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_backbone_engine.py": {
+    "file": "spel_backbone_engine.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.23,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_cloud_inference.py": {
+    "file": "spel_cloud_inference.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_cost_model.py": {
+    "file": "spel_cost_model.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_daily_check.py": {
+    "file": "spel_daily_check.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_daily_runner.py": {
+    "file": "spel_daily_runner.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_drive_cleanup.py": {
+    "file": "spel_drive_cleanup.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_export_feature_cache.py": {
+    "file": "spel_export_feature_cache.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_forex_iq.py": {
+    "file": "spel_forex_iq.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.08,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_forex_iq_runner.py": {
+    "file": "spel_forex_iq_runner.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_github_setup.py": {
+    "file": "spel_github_setup.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_hud.py": {
+    "file": "spel_hud.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_inventory_dashboard.py": {
+    "file": "spel_inventory_dashboard.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.46,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_logger.py": {
+    "file": "spel_logger.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_math_engine.py": {
+    "file": "spel_math_engine.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.3,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_modules.py": {
+    "file": "spel_modules.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_orchestrator_v9.py": {
+    "file": "spel_orchestrator_v9.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_p90_recalibrate.py": {
+    "file": "spel_p90_recalibrate.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_patch_coordinated.py": {
+    "file": "spel_patch_coordinated.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_preflight_s24.py": {
+    "file": "spel_preflight_s24.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_purger_v3.py": {
+    "file": "spel_purger_v3.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_session_start.py": {
+    "file": "spel_session_start.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_snapshot_updater.py": {
+    "file": "spel_snapshot_updater.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_telegram_setup.py": {
+    "file": "spel_telegram_setup.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_trading_router.py": {
+    "file": "spel_trading_router.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "SPEL_INSTITUTIONAL_AUDITOR_V41.py": {
+    "file": "SPEL_INSTITUTIONAL_AUDITOR_V41.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "SPEL_v37_MASTER_AUDITOR_v2.py": {
+    "file": "SPEL_v37_MASTER_AUDITOR_v2.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [
+      "STUB_ZOMBIE: last_signal.json"
+    ],
+    "verdict": "SAFE"
+  },
+  "holmes.py": {
+    "file": "holmes.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_auditoria_total.py": {
+    "file": "spel_auditoria_total.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_guardian.py": {
+    "file": "spel_guardian.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_meta_guardian.py": {
+    "file": "spel_meta_guardian.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_posttraining_audit.py": {
+    "file": "spel_posttraining_audit.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_sentinel_core.py": {
+    "file": "spel_sentinel_core.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "spel_trainer_audit.py": {
+    "file": "spel_trainer_audit.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  },
+  "gdelt_foundation.py": {
+    "file": "gdelt_foundation.py",
+    "status": "SYNTAX_OK",
+    "ram_delta_mb": 0.0,
+    "heavy": false,
+    "issues": [],
+    "verdict": "SAFE"
+  }
+}

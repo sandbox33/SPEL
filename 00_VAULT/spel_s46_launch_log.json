@@ -1,0 +1,247 @@
+{
+  "session": "S46",
+  "protocol": "SPEL_SOVEREIGN_PROTOCOL v4.0 \u2014 LANZAMIENTO SOBERANO BLINDADO",
+  "ts": "2026-04-04T19:12:07.439396+00:00",
+  "syntax_ok": true,
+  "patches_applied": {
+    "V-01_AUTH_GATE": false,
+    "V-02_PATH_COLLISION": true,
+    "V-03_KL_ROLLING": true,
+    "V-04_STALENESS_GUARD": true,
+    "IQ_OPTION_SURGERY": true,
+    "MONTE_CARLO_GBM": true,
+    "RACE_CONDITION_CONCURRENCY": true,
+    "PULSE_MAX_AGE_900\u21921200": true
+  },
+  "open_items_s47": [
+    {
+      "id": "OI-01",
+      "bug": "KL_SPIKE_WINDOW_CALIBRATION",
+      "detail": "KL rolling window=5 es conservador. Ajustar a 3 ciclos si se\u00f1al XAU reacciona lento. Calibrar con datos reales semana 1 post-launch.",
+      "priority": "MEDIUM",
+      "session": "S47"
+    },
+    {
+      "id": "OI-02",
+      "bug": "VITALITY_STALENESS_SENSITIVITY_MAP",
+      "detail": "SENSITIVITY por activo (XAU=0.04, BTC=0.07) es estimado. Calibrar con correlaci\u00f3n emp\u00edrica price\u2194score durante Gate R30.",
+      "priority": "MEDIUM",
+      "session": "S47"
+    },
+    {
+      "id": "OI-03",
+      "bug": "gate_metrics_commit_conflict",
+      "detail": "El commit de gate_metrics.json puede fallar por divergencia si el YAML anterior ya hizo push. Fix: git pull --rebase antes del commit en el step final del YML.",
+      "priority": "HIGH",
+      "session": "S47"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-04-04T19:00:07.518011+00:00",
+      "s": "WARN",
+      "m": "secrets_health_check",
+      "d": "MISSING: ['ALPACA_API_KEY', 'ALPACA_SECRET_KEY', 'TELEGRAM_TOKEN', 'TELEGRAM_SISTEMA', 'TELEGRAM_CHAOS', 'GITHUB_TOKEN']"
+    },
+    {
+      "ts": "2026-04-04T19:00:08.508431+00:00",
+      "s": "WARN",
+      "m": "optional_secrets",
+      "d": "opcionales ausentes: ['COINBASE_API_KEY', 'TIINGO_API_KEY', 'ALPHAVANTAGE_API_KEY']"
+    },
+    {
+      "ts": "2026-04-04T19:07:37.526539+00:00",
+      "s": "ARCH",
+      "m": "ojo_de_dios_v23.py",
+      "d": "\u2192 EUTHANASIA: v23 archivado \u2014 v26 (JSON REST) can\u00f3nico"
+    },
+    {
+      "ts": "2026-04-04T19:07:37.717563+00:00",
+      "s": "ARCH",
+      "m": "spel_harvester_v3.py",
+      "d": "\u2192 EUTHANASIA: redundante \u2014 spel_ingest_incremental es canon"
+    },
+    {
+      "ts": "2026-04-04T19:07:37.722928+00:00",
+      "s": "ARCH",
+      "m": "spel_data_harvester.py",
+      "d": "\u2192 EUTHANASIA: redundante \u2014 spel_bulk_harvester es canon"
+    },
+    {
+      "ts": "2026-04-04T19:07:37.730143+00:00",
+      "s": "ARCH",
+      "m": "spel_ingestion.py",
+      "d": "\u2192 EUTHANASIA: redundante \u2014 spel_ingest_incremental es canon"
+    },
+    {
+      "ts": "2026-04-04T19:07:37.738486+00:00",
+      "s": "ARCH",
+      "m": "spel_paper_adapter.py",
+      "d": "\u2192 EUTHANASIA: v1 sin versi\u00f3n \u2014 v2 es activo"
+    },
+    {
+      "ts": "2026-04-04T19:07:58.582569+00:00",
+      "s": "FIX",
+      "m": "orchestrator_v10/ROOT",
+      "d": "3-way detection inyectado"
+    },
+    {
+      "ts": "2026-04-04T19:07:58.582805+00:00",
+      "s": "FIX",
+      "m": "orchestrator_v10/_secrets_health_check",
+      "d": "V-01 inyectado"
+    },
+    {
+      "ts": "2026-04-04T19:07:58.582883+00:00",
+      "s": "FIX",
+      "m": "orchestrator_v10/PULSE_MAX_AGE",
+      "d": "900s \u2192 1200s (GH latency tolerance)"
+    },
+    {
+      "ts": "2026-04-04T19:07:58.599490+00:00",
+      "s": "FIX",
+      "m": "orchestrator_v10.py",
+      "d": "3 patches aplicados"
+    },
+    {
+      "ts": "2026-04-04T19:07:58.608029+00:00",
+      "s": "OK",
+      "m": "orchestrator_v10.py",
+      "d": "SYNTAX_OK post-patch"
+    },
+    {
+      "ts": "2026-04-04T19:08:10.420423+00:00",
+      "s": "FIX",
+      "m": "spel_forex_bridge/place_demo_order",
+      "d": "funci\u00f3n nueva inyectada"
+    },
+    {
+      "ts": "2026-04-04T19:08:10.559092+00:00",
+      "s": "OK",
+      "m": "spel_forex_bridge.py",
+      "d": "SYNTAX_OK \u2014 4 cirug\u00edas aplicadas"
+    },
+    {
+      "ts": "2026-04-04T19:08:21.335127+00:00",
+      "s": "FIX",
+      "m": "bayesian_core/ROOT",
+      "d": "3-way detection inyectado"
+    },
+    {
+      "ts": "2026-04-04T19:08:21.335333+00:00",
+      "s": "GBM",
+      "m": "bayesian_core/MC+KL+Staleness",
+      "d": "3 funciones nuevas inyectadas"
+    },
+    {
+      "ts": "2026-04-04T19:08:21.335424+00:00",
+      "s": "FIX",
+      "m": "bayesian_core/kl_rolling",
+      "d": "V-03 integrado en run_bma_cycle"
+    },
+    {
+      "ts": "2026-04-04T19:08:21.335491+00:00",
+      "s": "FIX",
+      "m": "bayesian_core/staleness",
+      "d": "V-04 integrado en run_bma_cycle"
+    },
+    {
+      "ts": "2026-04-04T19:08:21.363871+00:00",
+      "s": "OK",
+      "m": "spel_bayesian_core.py",
+      "d": "SYNTAX_OK \u2014 4 patches"
+    },
+    {
+      "ts": "2026-04-04T19:08:35.827826+00:00",
+      "s": "OK",
+      "m": "spel_dead_man_switch.py",
+      "d": "GH-native DMS \u2014 4177 bytes SYNTAX_OK"
+    },
+    {
+      "ts": "2026-04-04T19:08:35.889457+00:00",
+      "s": "CREATED",
+      "m": "system_pulse.json",
+      "d": "Dead Man's Switch inicializado"
+    },
+    {
+      "ts": "2026-04-04T19:08:35.963381+00:00",
+      "s": "CREATED",
+      "m": "live_bma_history.json",
+      "d": "rolling KL buffer inicializado"
+    },
+    {
+      "ts": "2026-04-04T19:08:46.575274+00:00",
+      "s": "FIX",
+      "m": "spel_universe.yml",
+      "d": "concurrency guard + Artifacts telemetry + commit gate_metrics only"
+    },
+    {
+      "ts": "2026-04-04T19:08:46.590182+00:00",
+      "s": "CREATED",
+      "m": "gate_metrics.json",
+      "d": "Gate R30 tracker inicializado"
+    },
+    {
+      "ts": "2026-04-04T19:09:03.012866+00:00",
+      "s": "OK",
+      "m": "spel_universe.yml",
+      "d": "\u2192 GH adafcf9b"
+    },
+    {
+      "ts": "2026-04-04T19:09:03.604892+00:00",
+      "s": "OK",
+      "m": "spel_dead_man_switch.py",
+      "d": "\u2192 GH 981e547b"
+    },
+    {
+      "ts": "2026-04-04T19:09:04.215270+00:00",
+      "s": "OK",
+      "m": "spel_orchestrator_v10.py",
+      "d": "\u2192 GH ee48f12a"
+    },
+    {
+      "ts": "2026-04-04T19:09:06.102381+00:00",
+      "s": "OK",
+      "m": "spel_bayesian_core.py",
+      "d": "\u2192 GH 1a23d7f1"
+    },
+    {
+      "ts": "2026-04-04T19:09:08.578549+00:00",
+      "s": "OK",
+      "m": "spel_forex_bridge.py",
+      "d": "\u2192 GH c93e62ca"
+    },
+    {
+      "ts": "2026-04-04T19:10:23.736203+00:00",
+      "s": "SKIP",
+      "m": "BMA",
+      "d": "live_bma_result.json vac\u00edo o inexistente \u2014 primer ciclo"
+    },
+    {
+      "ts": "2026-04-04T19:10:23.742813+00:00",
+      "s": "OK",
+      "m": "live_bma_history.json",
+      "d": "0 registros hist\u00f3ricos KL"
+    },
+    {
+      "ts": "2026-04-04T19:12:07.438687+00:00",
+      "s": "OK",
+      "m": "live_dashboard_stats.json",
+      "d": "783B \u2014 dashboard listo"
+    }
+  ],
+  "counts": {
+    "fix": 24,
+    "warn": 2,
+    "err": 0
+  },
+  "artifacts_out": [
+    "00_VAULT/live_dashboard_stats.json",
+    "00_VAULT/spel_s46_launch_log.json",
+    "00_VAULT/system_pulse.json",
+    "00_VAULT/live_bma_history.json",
+    "00_VAULT/gate_metrics.json",
+    ".github/workflows/spel_universe.yml"
+  ],
+  "_sha": "f6558581352404af971395cc"
+}

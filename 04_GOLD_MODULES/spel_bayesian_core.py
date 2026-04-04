@@ -30,8 +30,16 @@ from datetime import datetime, timezone
 from typing import Optional
 
 # ─── Constants ────────────────────────────────────────────────────────────────
-ROOT = Path(os.environ.get("SPEL_BASE_DIR",
-            "/content/drive/MyDrive/ORDEN/SPEL 3.0"))
+# ─── 3-way ROOT (S46) ────────────────────────────────────────────────────────
+_IS_GH_BMA = os.environ.get('GITHUB_ACTIONS') == 'true'
+def _detect_root_bma() -> Path:
+    if _IS_GH_BMA: return Path(os.environ.get('GITHUB_WORKSPACE', '.')).resolve()
+    if os.environ.get('SPEL_BASE_DIR'): return Path(os.environ['SPEL_BASE_DIR']).resolve()
+    _p = Path('/content/drive/MyDrive/ORDEN/SPEL 3.0')
+    return _p if _p.exists() else Path('.')
+ROOT = _detect_root_bma()
+# ─────────────────────────────────────────────────────────────────────────────
+
 VAULT = ROOT / "00_VAULT"
 SECRETS_PATH = VAULT / "secrets_template.json"
 REGISTRY_PATH = VAULT / "registry" / "SHA_REGISTRY.json"
@@ -105,6 +113,149 @@ def _tg_chaos(token: str, chat_id: str, text: str) -> bool:
 
 
 # ─── Core BMA computation ─────────────────────────────────────────────────────
+
+
+
+# ─── S46 INJECTIONS ── Monte Carlo · KL Rolling · Staleness Guard ─────────────
+
+def check_data_staleness(timestamp_str: str, max_age_seconds: int = 780) -> bool:
+    """
+    V-04 FIX: Circuit Breaker de datos viejos.
+    Si el dato OHLCV tiene > 13 min (780s), la vitalidad debe ser 0.
+    Retorna True si el dato es fresco, False si es stale.
+
+    max_age_seconds=780 = 13 min: tolerancia máxima para ciclo de 15min.
+    El harvester tiene ~2min de margen antes del compute BMA.
+    """
+    if not timestamp_str:
+        return False  # Sin timestamp = stale por default
+    try:
+        data_ts = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+        age = (datetime.now(timezone.utc) - data_ts).total_seconds()
+        if age > max_age_seconds:
+            print(f'  ⚠️ DATA_STALE: datos de hace {int(age)}s > {max_age_seconds}s umbral' )
+            return False
+        return True
+    except Exception as e:
+        print(f'  ERR staleness check: {e}')
+        return False  # Error = tratar como stale (conservador)
+
+
+def get_rolling_kl(current_kl: float, vault_path, window: int = 5) -> float:
+    """
+    V-03 FIX: Rolling average de KL_Divergence sobre los últimos N ciclos.
+    Evita que un spike GDELT de 15min active HOLD sobre señal estructural sólida.
+
+    Lee live_bma_history.json (lista de registros con campo 'kl').
+    Escribe el registro del ciclo actual al final del ciclo.
+    Retorna: kl_rolling (promedio de los últimos window+1 valores).
+
+    threshold=0.20 se aplica sobre kl_rolling, no sobre current_kl puntual.
+    Efecto: un spike único eleva rolling 0.20/5 = 0.04 (no activa HOLD).
+    5 ciclos consecutivos en spike → rolling = 0.20+ → HOLD activado.
+    """
+    import json as _jj
+    from pathlib import Path as _PP
+    _hist_path = _PP(vault_path) / 'live_bma_history.json'
+    try:
+        history = _jj.loads(_hist_path.read_text()) if _hist_path.exists() else []
+    except Exception:
+        history = []
+
+    _kl_window = [h.get('kl', 0.0) for h in history[-window:] if isinstance(h.get('kl'), (int, float))]
+    _kl_window.append(current_kl)
+    rolling = sum(_kl_window) / len(_kl_window)
+    return round(rolling, 6)
+
+
+def append_bma_history(record: dict, vault_path, max_records: int = 50) -> None:
+    """
+    Appends a BMA cycle record to live_bma_history.json.
+    Mantiene max_records registros (rolling buffer FIFO).
+    Escritura atómica R32.
+    Expected record fields: ts, asset, kl, shannon, gold_score, action.
+    """
+    import json as _jj
+    from pathlib import Path as _PP
+    _hist_path = _PP(vault_path) / 'live_bma_history.json'
+    try:
+        history = _jj.loads(_hist_path.read_text()) if _hist_path.exists() else []
+    except Exception:
+        history = []
+    history.append(record)
+    if len(history) > max_records:
+        history = history[-max_records:]
+    _tmp = _hist_path.with_suffix('.tmp')
+    _tmp.write_bytes(_jj.dumps(history, indent=2).encode())
+    _tmp.replace(_hist_path)
+
+
+def run_monte_carlo_validation(
+    current_price: float,
+    volatility: float,
+    base_gold_score: float,
+    asset: str = 'UNKNOWN',
+    iterations: int = 1000,
+) -> dict:
+    """
+    GBM Monte Carlo Vectorizado — S46 (XML §Monte_Carlo_Architecture)
+
+    Simula 1000 trayectorias GBM de 15min sobre el gold_score.
+    Runtime: < 50ms (NumPy vectorizado, una operación np.exp()).
+
+    GBM: S_T = S_0 * exp((μ - σ²/2)*T + σ*√T*Z)  Z ~ N(0,1)
+    T = 15min / (252*24*4) = fracción de año para 15min.
+
+    PRICE_SENSITIVITY por activo (calibrar con datos reales post Gate R30):
+      BTC:     0.07-0.08 (alta reactividad)
+      XAU:     0.03-0.04 (menor reactividad)
+      NVDA:    0.05 (baseline)
+      NIFTY50: 0.04 (índice — menos reactivo)
+      EURUSD:  0.02 (forex — muy baja reactividad)
+
+    Threshold: >= 850/1000 trayectorias con gold_score > 0.85 → MC_APPROVE.
+    """
+    import numpy as _np  # R37/Ley2: lazy import dentro de función
+
+    # Sensibilidad por activo (pendiente de calibración post Gate R30)
+    SENSITIVITY_MAP = {'BTC': 0.07, 'XAU': 0.04, 'NVDA': 0.05,
+                        'NIFTY50': 0.04, 'EURUSD': 0.02}
+    SENSITIVITY = SENSITIVITY_MAP.get(asset, 0.05)
+
+    T  = 15 / (252 * 24 * 4)   # 15 min en fracción de año
+    mu = 0.0                    # drift neutro (sin sesgo de dirección)
+
+    Z       = _np.random.standard_normal(iterations)
+    returns = _np.exp((mu - 0.5 * volatility**2) * T + volatility * _np.sqrt(T) * Z)
+    sim_prices  = current_price * returns
+    price_diff  = (sim_prices - current_price) / max(current_price, 1e-10)
+    sim_scores  = base_gold_score + (price_diff * SENSITIVITY)
+    sim_scores  = _np.clip(sim_scores, 0.0, 1.0)
+
+    success_rate  = float(_np.mean(sim_scores > 0.85))
+    p5, p50, p95  = float(_np.percentile(sim_scores, [5, 50, 95]))
+    mc_approved   = success_rate >= 0.85
+
+    return {
+        'mc_approved':
+            mc_approved,
+        'success_rate':
+            round(success_rate, 4),
+        'p5_score':
+            round(p5, 4),
+        'p50_score':
+            round(p50, 4),
+        'p95_score':
+            round(p95, 4),
+        'sensitivity':
+            SENSITIVITY,
+        'iterations':
+            iterations,
+        'asset':
+            asset,
+    }
+
+# ─── END S46 INJECTIONS ──────────────────────────────────────────────────────
 
 def compute_gold_score_bma(
     godel_score: float,
@@ -305,10 +456,19 @@ def run_bma_cycle(root: Path = ROOT, verbose: bool = False) -> dict:
             pass
 
     lambda_decay = compute_lambda_decay(signal_age)
+    # V-04 S46: Staleness guard — si dato OHLCV > 13min, vitality forzada a 0
+    _ohlcv_ts = signal.get('timestamp') or signal.get('ts') or ''
+    if not check_data_staleness(_ohlcv_ts):
+        vitality_tesla = 0
+        print('  V-04: vitality_tesla=0 (DATA_STALE)')
+
 
     # Read entropy from last signal or godel data
     shannon_entropy = float(signal.get("entropy_shannon", 0.3))
     kl_divergence   = float(signal.get("kl_divergence", 0.0))
+    # V-03 S46: KL rolling — 5 ciclos para evitar falsos HOLD por spike GDELT
+    kl_divergence = get_rolling_kl(kl_divergence, vault)
+
 
     # P33/P66 defaults (from HINC OMNIA CERNO §Vitality_Tesla)
     p33 = float(godel_thresholds.get("global_p33", 0.30))

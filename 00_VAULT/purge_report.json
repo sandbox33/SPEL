@@ -1,0 +1,157 @@
+{
+  "ts": "2026-03-27T04:39:03Z",
+  "mode": "execute",
+  "scan_dirs": [
+    "scripts",
+    "codigo/core",
+    "codigo/interface",
+    "."
+  ],
+  "total_found": 7,
+  "total_moved": 7,
+  "total_kb": 148.52,
+  "zombies": [
+    {
+      "path": "scripts/SPEL_S31_LAUNCHER.py",
+      "filename": "SPEL_S31_LAUNCHER.py",
+      "reason": "^SPEL_S\\d+_.+\\.py$",
+      "size_kb": 19.7,
+      "sha12": "dd7450a274d0",
+      "scan_dir": "scripts",
+      "archived_to": "ARCHIVE_S37/scripts/SPEL_S31_LAUNCHER.py",
+      "moved_at": "2026-03-27T04:39:03Z"
+    },
+    {
+      "path": "scripts/SPEL_v37_MASTER_AUDITOR_v2.py",
+      "filename": "SPEL_v37_MASTER_AUDITOR_v2.py",
+      "reason": "^SPEL_v\\d+_MASTER_AUDITOR_v\\d+\\.py$",
+      "size_kb": 13.86,
+      "sha12": "c4e581f12d41",
+      "scan_dir": "scripts",
+      "archived_to": "ARCHIVE_S37/scripts/SPEL_v37_MASTER_AUDITOR_v2.py",
+      "moved_at": "2026-03-27T04:39:03Z"
+    },
+    {
+      "path": "scripts/ojo_de_dios_v26.py",
+      "filename": "ojo_de_dios_v26.py",
+      "reason": "^ojo_de_dios_v\\d+\\.py$",
+      "size_kb": 31.45,
+      "sha12": "f7c025c73035",
+      "scan_dir": "scripts",
+      "archived_to": "ARCHIVE_S37/scripts/ojo_de_dios_v26.py",
+      "moved_at": "2026-03-27T04:39:03Z"
+    },
+    {
+      "path": "scripts/spel_patch_coordinated.py",
+      "filename": "spel_patch_coordinated.py",
+      "reason": "^spel_patch_.+\\.py$",
+      "size_kb": 20.8,
+      "sha12": "a705027dfad2",
+      "scan_dir": "scripts",
+      "archived_to": "ARCHIVE_S37/scripts/spel_patch_coordinated.py",
+      "moved_at": "2026-03-27T04:39:03Z"
+    },
+    {
+      "path": "codigo/interface/ojo_de_dios_v23.py",
+      "filename": "ojo_de_dios_v23.py",
+      "reason": "^ojo_de_dios_v\\d+\\.py$",
+      "size_kb": 47.09,
+      "sha12": "e557c27522a5",
+      "scan_dir": "codigo/interface",
+      "archived_to": "ARCHIVE_S37/codigo/interface/ojo_de_dios_v23.py",
+      "moved_at": "2026-03-27T04:39:03Z"
+    },
+    {
+      "path": "meta/SHA_REGISTRY_backup_S24_20260316.json",
+      "filename": "SHA_REGISTRY_backup_S24_20260316.json",
+      "reason": "^SHA_REGISTRY_backup_.+\\.json$",
+      "size_kb": 1.41,
+      "sha12": "2069249cbcba",
+      "scan_dir": "meta",
+      "archived_to": "ARCHIVE_S37/meta/SHA_REGISTRY_backup_S24_20260316.json",
+      "moved_at": "2026-03-27T04:39:03Z"
+    },
+    {
+      "path": "meta/auditoria_total_20260311_1736.json",
+      "filename": "auditoria_total_20260311_1736.json",
+      "reason": "^auditoria_total_\\d{8}_\\d{4}\\.json$",
+      "size_kb": 14.21,
+      "sha12": "879589fbb186",
+      "scan_dir": "meta",
+      "archived_to": "ARCHIVE_S37/meta/auditoria_total_20260311_1736.json",
+      "moved_at": "2026-03-27T04:39:03Z"
+    }
+  ],
+  "moved": [
+    {
+      "path": "scripts/SPEL_S31_LAUNCHER.py",
+      "filename": "SPEL_S31_LAUNCHER.py",
+      "reason": "^SPEL_S\\d+_.+\\.py$",
+      "size_kb": 19.7,
+      "sha12": "dd7450a274d0",
+      "scan_dir": "scripts",
+      "archived_to": "ARCHIVE_S37/scripts/SPEL_S31_LAUNCHER.py",
+      "moved_at": "2026-03-27T04:39:03Z"
+    },
+    {
+      "path": "scripts/SPEL_v37_MASTER_AUDITOR_v2.py",
+      "filename": "SPEL_v37_MASTER_AUDITOR_v2.py",
+      "reason": "^SPEL_v\\d+_MASTER_AUDITOR_v\\d+\\.py$",
+      "size_kb": 13.86,
+      "sha12": "c4e581f12d41",
+      "scan_dir": "scripts",
+      "archived_to": "ARCHIVE_S37/scripts/SPEL_v37_MASTER_AUDITOR_v2.py",
+      "moved_at": "2026-03-27T04:39:03Z"
+    },
+    {
+      "path": "scripts/ojo_de_dios_v26.py",
+      "filename": "ojo_de_dios_v26.py",
+      "reason": "^ojo_de_dios_v\\d+\\.py$",
+      "size_kb": 31.45,
+      "sha12": "f7c025c73035",
+      "scan_dir": "scripts",
+      "archived_to": "ARCHIVE_S37/scripts/ojo_de_dios_v26.py",
+      "moved_at": "2026-03-27T04:39:03Z"
+    },
+    {
+      "path": "scripts/spel_patch_coordinated.py",
+      "filename": "spel_patch_coordinated.py",
+      "reason": "^spel_patch_.+\\.py$",
+      "size_kb": 20.8,
+      "sha12": "a705027dfad2",
+      "scan_dir": "scripts",
+      "archived_to": "ARCHIVE_S37/scripts/spel_patch_coordinated.py",
+      "moved_at": "2026-03-27T04:39:03Z"
+    },
+    {
+      "path": "codigo/interface/ojo_de_dios_v23.py",
+      "filename": "ojo_de_dios_v23.py",
+      "reason": "^ojo_de_dios_v\\d+\\.py$",
+      "size_kb": 47.09,
+      "sha12": "e557c27522a5",
+      "scan_dir": "codigo/interface",
+      "archived_to": "ARCHIVE_S37/codigo/interface/ojo_de_dios_v23.py",
+      "moved_at": "2026-03-27T04:39:03Z"
+    },
+    {
+      "path": "meta/SHA_REGISTRY_backup_S24_20260316.json",
+      "filename": "SHA_REGISTRY_backup_S24_20260316.json",
+      "reason": "^SHA_REGISTRY_backup_.+\\.json$",
+      "size_kb": 1.41,
+      "sha12": "2069249cbcba",
+      "scan_dir": "meta",
+      "archived_to": "ARCHIVE_S37/meta/SHA_REGISTRY_backup_S24_20260316.json",
+      "moved_at": "2026-03-27T04:39:03Z"
+    },
+    {
+      "path": "meta/auditoria_total_20260311_1736.json",
+      "filename": "auditoria_total_20260311_1736.json",
+      "reason": "^auditoria_total_\\d{8}_\\d{4}\\.json$",
+      "size_kb": 14.21,
+      "sha12": "879589fbb186",
+      "scan_dir": "meta",
+      "archived_to": "ARCHIVE_S37/meta/auditoria_total_20260311_1736.json",
+      "moved_at": "2026-03-27T04:39:03Z"
+    }
+  ]
+}

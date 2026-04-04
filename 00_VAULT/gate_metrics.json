@@ -1,0 +1,12 @@
+{
+  "gate": "R30",
+  "day": 9,
+  "target_days": 63,
+  "capital_base": 100000,
+  "gt_score": null,
+  "trades": [],
+  "equity_curve": [],
+  "pass_threshold": 0.15,
+  "verdict": "IN_PROGRESS",
+  "updated_at": "2026-04-04T19:08:46.576644+00:00"
+}

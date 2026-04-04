@@ -1,0 +1,13 @@
+{
+  "last_pulse_utc": "2026-04-04T19:08:35.842558+00:00",
+  "cycle_number": 0,
+  "last_decision": "S46_LAUNCH",
+  "active_assets": [
+    "NVDA",
+    "BTC",
+    "XAU",
+    "NIFTY50"
+  ],
+  "gate_day": 9,
+  "system_health": "SOVEREIGN_CLEAN"
+}

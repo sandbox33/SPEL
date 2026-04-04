@@ -1,5 +1,5 @@
 """
-spel_forex_bridge.py — SPEL 3.0 · Forex Bridge · IQ Option Demo
+spel_forex_bridge.py — SPEL 3.0 · Forex Bridge · TG_CHAOS Router (IQ Option extirpado S46)
 Protocolo: SPEL_Sovereign_Architecture v4.4 · Execution_Heads §Forex_Bridge
 
 Provider:  IQ Option (Demo account — NEVER live funds)
@@ -48,7 +48,7 @@ SHIELD_LAMBDA_MIN    = 0.30   # Minimum signal freshness (Lambda Decay)
 SHIELD_GOLD_MIN_EURUSD = 0.55 # Minimum Gold Score BMA to consider EURUSD entry
 
 # IQ Option demo API endpoint (conceptual — replace with real SDK call)
-IQ_DEMO_ENDPOINT = "https://iqoption.com/api/demo"   # placeholder
+FOREX_CHAOS_ENDPOINT  # IQ extirpado = "https://iqoption.com/api/demo"   # placeholder
 
 
 # ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -190,9 +190,9 @@ def _simulate_iq_order(
     account_id: str = "spel-demo",
 ) -> dict:
     """
-    Simulate IQ Option Demo order placement.
-    Real implementation: iqoptionapi SDK
-      from iqoptionapi.stable_api import IQ_Option
+    Simulate TG_CHAOS Router (IQ Option extirpado S46) order placement.
+    Real implementation: # iqoptionapi REMOVIDO S46 — ver 99_ARCHIVE_FENIX SDK
+      from # iqoptionapi REMOVIDO S46 — ver 99_ARCHIVE_FENIX.stable_api import IQ_Option
       api = IQ_Option(email, password)
       api.buy(amount, "EURUSD-OTC", action, expiry_seconds)
     """
@@ -213,7 +213,7 @@ def _simulate_iq_order(
         "account_id":    account_id,
         "gold_score":    gold_score,
         "mode":          "DEMO",
-        "note":          "Simulated IQ Option Demo. Zero real funds.",
+        "note":          "Simulated TG_CHAOS Router (IQ Option extirpado S46). Zero real funds.",
         "ts":            datetime.now(timezone.utc).isoformat(),
     }
 
@@ -230,7 +230,7 @@ def place_order(
     verbose: bool = False,
 ) -> dict:
     """
-    Attempt to place an EURUSD order through IQ Option Demo.
+    Attempt to place an EURUSD order through TG_CHAOS Router (IQ Option extirpado S46).
     Blocked immediately if shield_result["blocked"] is True.
     """
     result = {
@@ -382,7 +382,7 @@ def run_forex_cycle(root: Path = ROOT, verbose: bool = False) -> dict:
                 f"Action: {iq_action} | Gold: {gold_score_eur:.4f}\n"
                 f"Shield: CLEAR ✅\n"
                 f"Order: {order_result.get('order', {}).get('order_id', 'N/A')}\n"
-                f"<i>IQ Option Demo — Simulated</i>")
+                f"<i>TG_CHAOS Router (IQ Option extirpado S46) — Simulated</i>")
     elif shield["blocked"] and tg_token and tg_chaos:
         # Optionally report blocks to CHAOS for visibility
         _tg(tg_token, tg_chaos,
@@ -402,7 +402,7 @@ def run_forex_cycle(root: Path = ROOT, verbose: bool = False) -> dict:
 # ─── CLI ────────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="SPEL Forex Bridge — IQ Option Demo")
+    parser = argparse.ArgumentParser(description="SPEL Forex Bridge — TG_CHAOS Router (IQ Option extirpado S46)")
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--check",      action="store_true",
                        help="Print current BMA state + shield evaluation")
@@ -475,3 +475,39 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+def place_demo_order(signal: dict, vault_path) -> dict:
+    """
+    S46: IQ Option extirpado. Emite señal a TG_CHAOS y guarda
+    live_forex_signal.json para entrada manual o integración futura.
+    Sin llamadas bloqueantes externas (timeout 0ms).
+    """
+    import json as _j, urllib.request as _ur, os as _os
+    from pathlib import Path as _P
+    from datetime import datetime, timezone
+
+    result = {
+        'ts': datetime.now(timezone.utc).isoformat(),
+        'signal': signal,
+        'mode': 'TG_CHAOS_MANUAL',
+        'iq_option': 'EXTIRPATED_S46',
+    }
+    # Atomic write
+    _path = _P(vault_path) / 'live_forex_signal.json'
+    _tmp  = _path.with_suffix('.tmp')
+    _tmp.write_bytes(_j.dumps(result, indent=2).encode())
+    _tmp.replace(_path)
+
+    # TG_CHAOS alert (non-blocking, timeout=8)
+    _tok = _os.environ.get('TELEGRAM_TOKEN', '')
+    _cid = _os.environ.get('TELEGRAM_CHAOS', '-1003736496382')
+    if _tok:
+        try:
+            _ur.urlopen(_ur.Request(
+                f'https://api.telegram.org/bot{_tok}/sendMessage',
+                data=_j.dumps({'chat_id': _cid,
+                    'text': f'💱 FOREX SIGNAL\n{_j.dumps(signal, indent=2)[:800]}',
+                    'parse_mode': 'HTML'}).encode(),
+                headers={'Content-Type': 'application/json'}), timeout=8)
+        except Exception: pass
+    return result

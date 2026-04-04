@@ -1,0 +1,31 @@
+{
+  "generated_at": "2026-04-04T19:12:07.425962+00:00",
+  "session": "S46",
+  "system_status": "SOVEREIGN_LAUNCH",
+  "gold_score_bma": 0.0,
+  "vitality_tesla": 0,
+  "lambda_decay": 0.0,
+  "kl_divergence": 0.0,
+  "kl_rolling": 0.0,
+  "shannon_entropy": 0.0,
+  "regime": "UNKNOWN",
+  "action": "HOLD",
+  "gate_r30": {
+    "day": 9,
+    "target": 63,
+    "gt_score": null,
+    "verdict": "IN_PROGRESS"
+  },
+  "system_pulse": "2026-04-04T19:08:35.842558+00:00",
+  "chaos_armed": true,
+  "tg_chaos": "-1003736496382",
+  "s46_patches": {
+    "v01_auth_gate": "APPLIED",
+    "v02_path_collision": "APPLIED",
+    "v03_kl_rolling": "APPLIED",
+    "v04_staleness_guard": "APPLIED",
+    "iq_option_surgery": "APPLIED",
+    "monte_carlo_gbm": "APPLIED",
+    "race_condition_yml": "APPLIED"
+  }
+}
