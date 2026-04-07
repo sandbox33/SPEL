@@ -2,7 +2,7 @@
   "status": "SOVEREIGN_CLEAN",
   "generated_at": "2026-04-02T20:39:59.024403+00:00",
   "protocol": "TABULA_RASA_S44",
-  "lock": true,
+  "lock": false,
   "sovereign_root": "/content/drive/MyDrive/ORDEN/SPEL 3.0",
   "total_nodes": 113,
   "summary": {
@@ -657,7 +657,11 @@
       "status": "OK",
       "ram_impact_mb": 0.0,
       "last_heartbeat": "2026-04-02T20:39:58.978730+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 64,
@@ -667,7 +671,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.979411+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 65,
@@ -677,7 +685,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.979956+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 66,
@@ -687,7 +699,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.980531+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 67,
@@ -697,7 +713,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.981238+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 68,
@@ -707,7 +727,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.981814+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 69,
@@ -717,7 +741,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.982354+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 70,
@@ -727,7 +755,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.982846+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 71,
@@ -737,7 +769,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.983442+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 72,
@@ -747,7 +783,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.983957+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 73,
@@ -757,7 +797,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.984545+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 74,
@@ -767,7 +811,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.985082+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 75,
@@ -777,7 +825,11 @@
       "status": "OK",
       "ram_impact_mb": 42.93,
       "last_heartbeat": "2026-04-02T20:39:58.985732+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 76,
@@ -787,7 +839,11 @@
       "status": "OK",
       "ram_impact_mb": 0.38,
       "last_heartbeat": "2026-04-02T20:39:58.986360+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 77,
@@ -797,7 +853,11 @@
       "status": "OK",
       "ram_impact_mb": 0.09,
       "last_heartbeat": "2026-04-02T20:39:58.986944+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 78,
@@ -807,7 +867,11 @@
       "status": "OK",
       "ram_impact_mb": 0.0,
       "last_heartbeat": "2026-04-02T20:39:58.987553+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 79,
@@ -817,7 +881,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.988123+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 80,
@@ -827,7 +895,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.988657+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 81,
@@ -837,7 +909,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.989225+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 82,
@@ -847,7 +923,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.989769+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 83,
@@ -857,7 +937,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.990305+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 84,
@@ -867,7 +951,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.990846+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 85,
@@ -877,7 +965,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.991386+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 86,
@@ -887,7 +979,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.991914+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 87,
@@ -897,7 +993,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.992447+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 88,
@@ -907,7 +1007,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.993001+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 89,
@@ -917,7 +1021,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.993567+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 90,
@@ -927,7 +1035,11 @@
       "status": "OK",
       "ram_impact_mb": 0.58,
       "last_heartbeat": "2026-04-02T20:39:58.994187+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 91,
@@ -937,7 +1049,11 @@
       "status": "OK",
       "ram_impact_mb": 0.09,
       "last_heartbeat": "2026-04-02T20:39:58.994794+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 92,
@@ -947,7 +1063,11 @@
       "status": "OK",
       "ram_impact_mb": 0.0,
       "last_heartbeat": "2026-04-02T20:39:58.995378+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 93,
@@ -957,7 +1077,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.995921+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 94,
@@ -967,7 +1091,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.996472+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 95,
@@ -977,7 +1105,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.997007+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 96,
@@ -987,7 +1119,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.997564+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 97,
@@ -997,7 +1133,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.998088+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 98,
@@ -1007,7 +1147,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.998651+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 99,
@@ -1017,7 +1161,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.999163+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 100,
@@ -1027,7 +1175,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:58.999687+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 101,
@@ -1037,7 +1189,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:59.000244+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 102,
@@ -1047,7 +1203,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:59.000749+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 103,
@@ -1057,7 +1217,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:59.001277+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 104,
@@ -1067,7 +1231,11 @@
       "status": "OK",
       "ram_impact_mb": 2.5,
       "last_heartbeat": "2026-04-02T20:39:59.001895+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 105,
@@ -1077,7 +1245,11 @@
       "status": "OK",
       "ram_impact_mb": 2.5,
       "last_heartbeat": "2026-04-02T20:39:59.002425+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 106,
@@ -1087,7 +1259,11 @@
       "status": "OK",
       "ram_impact_mb": 2.5,
       "last_heartbeat": "2026-04-02T20:39:59.002955+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 107,
@@ -1097,7 +1273,11 @@
       "status": "OK",
       "ram_impact_mb": 2.5,
       "last_heartbeat": "2026-04-02T20:39:59.003504+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 108,
@@ -1107,7 +1287,11 @@
       "status": "OK",
       "ram_impact_mb": 0.38,
       "last_heartbeat": "2026-04-02T20:39:59.004138+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 109,
@@ -1117,7 +1301,11 @@
       "status": "OK",
       "ram_impact_mb": 0.09,
       "last_heartbeat": "2026-04-02T20:39:59.004979+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 110,
@@ -1127,7 +1315,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:59.005630+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 111,
@@ -1137,7 +1329,11 @@
       "status": "OK",
       "ram_impact_mb": 0.0,
       "last_heartbeat": "2026-04-02T20:39:59.006150+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     },
     {
       "id": 112,
@@ -1147,7 +1343,11 @@
       "status": "OK",
       "ram_impact_mb": 0.01,
       "last_heartbeat": "2026-04-02T20:39:59.006674+00:00",
-      "issues": []
+      "issues": [],
+      "gold_score_bma": 0.0,
+      "bma_action": "HOLD",
+      "bma_regime": "CREATION",
+      "bma_ts": "2026-04-07T21:05:29.191014+00:00"
     }
   ],
   "deferred": [
@@ -1189,6 +1389,16 @@
     "input_size": 20,
     "hidden_size": 64,
     "num_layers": 1,
-    "note": "INAMOVIBLE — no modificar"
+    "note": "INAMOVIBLE \u2014 no modificar"
+  },
+  "lock_released_by": "orchestrator_v10",
+  "lock_released_at": "2026-04-07T21:05:29.182947+00:00",
+  "bma_summary": {
+    "kill_active": false,
+    "vitality_tesla": 3,
+    "lambda_decay": 0.606798,
+    "shannon_entropy": 0.28,
+    "regime": "CREATION",
+    "bma_ts": "2026-04-07T21:05:29.191014+00:00"
   }
 }

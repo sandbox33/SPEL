@@ -30,5 +30,10 @@
   "spel_guardian.py": "6f8628fe53f6",
   "spel_dead_man_switch.py": "850645f0f253",
   "_s46_ts": "2026-04-04T19:12:07.401791+00:00",
-  "_s46_version": "SOT_V46.0"
+  "_s46_version": "SOT_V46.0",
+  "EURUSD": "PENDING_HARVEST",
+  "XAU_1m": "PENDING_HARVEST",
+  "XAU_5m": "PENDING_HARVEST",
+  "XAU_15m": "PENDING_HARVEST",
+  "XAU_30m": "PENDING_HARVEST"
 }
