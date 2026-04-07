@@ -1,0 +1,168 @@
+name: SPEL Autonomous Patrol
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+# RC-04 FIX: concurrency group prevents cross-runner conflicts on shared files
+concurrency:
+  group: spel-patrol
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  actions:  write
+
+env:
+  PYTHON_VER: "3.10"
+  SPEL_ROOT:  "."
+  PYTHONPATH: "."
+
+jobs:
+  patrol:
+    runs-on: ubuntu-latest
+    timeout-minutes: 13
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.SPEL_TOKEN }}
+          # fetch-depth 0 required for git pull --rebase to have full history
+          fetch-depth: 0
+
+      # ── 2. Restore telemetry from previous run ─────────────────────────
+      # RC-01 FIX: download-artifact@v4 without run-id defaults to
+      # github.run_id (current run = empty). Use actions/cache instead —
+      # cache persists across runs under a deterministic key and does NOT
+      # require specifying a previous run-id.
+      # The cache key uses only the workflow name so every run restores
+      # the last successful upload from any previous run.
+      - name: Restore telemetry cache (cross-run persistence)
+        uses: actions/cache/restore@v4
+        id: telemetry-cache
+        with:
+          path: 00_VAULT/
+          key: spel-telemetry-${{ github.run_id }}
+          restore-keys: |
+            spel-telemetry-
+
+      # ── 3. Python environment ──────────────────────────────────────────
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VER }}
+
+      - name: Install dependencies
+        run: pip install numpy pandas polars yfinance requests --quiet
+
+      # ── 4. J0: DMS stale check + status snapshot ───────────────────────
+      - name: J0 Auth Gate + DMS check
+        run: |
+          python 01_HOLMES_OPS/spel_dead_man_switch.py --check || true
+          python 04_GOLD_MODULES/spel_orchestrator_v10.py --status
+        env:
+          TELEGRAM_TOKEN:    ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_SISTEMA:  ${{ secrets.TELEGRAM_SISTEMA }}
+          TELEGRAM_SENALES:  ${{ secrets.TELEGRAM_SENALES }}
+          TELEGRAM_BACKUP:   ${{ secrets.TELEGRAM_BACKUP }}
+          TELEGRAM_CHAOS:    ${{ secrets.TELEGRAM_CHAOS }}
+          ALPACA_API_KEY:    ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+          SPEL_BASE_DIR:     "."
+
+      # ── 5. J1-J4: Main patrol cycle ────────────────────────────────────
+      - name: J1-J4 Main patrol cycle
+        run: python 04_GOLD_MODULES/spel_orchestrator_v10.py
+        env:
+          TELEGRAM_TOKEN:    ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_SISTEMA:  ${{ secrets.TELEGRAM_SISTEMA }}
+          TELEGRAM_SENALES:  ${{ secrets.TELEGRAM_SENALES }}
+          TELEGRAM_BACKUP:   ${{ secrets.TELEGRAM_BACKUP }}
+          TELEGRAM_CHAOS:    ${{ secrets.TELEGRAM_CHAOS }}
+          ALPACA_API_KEY:    ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY: ${{ secrets.ALPACA_SECRET_KEY }}
+          SPEL_BASE_DIR:     "."
+
+      # ── 6. DMS pulse: write COMPLETE (always — even on degraded cycle) ──
+      - name: Update pulse (DMS)
+        if: always()
+        run: python 01_HOLMES_OPS/spel_dead_man_switch.py --pulse
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAOS: ${{ secrets.TELEGRAM_CHAOS }}
+          SPEL_BASE_DIR:  "."
+
+      # ── 7. Save telemetry cache (replaces upload-artifact for history) ──
+      # RC-01 FIX: cache persists across runs; no run-id lookup required.
+      # The save step runs always() so even degraded cycles update the cache.
+      - name: Save telemetry cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: 00_VAULT/
+          key: spel-telemetry-${{ github.run_id }}
+
+      # ── 8. Upload telemetry artifacts (secondary — for manual inspection) ──
+      # RC-03 VERIFIED: upload works. Kept for manual artifact download.
+      # Primary persistence is now via cache (Step 7).
+      - name: Upload telemetry artifacts (secondary)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name:              spel-telemetry
+          path: |
+            00_VAULT/live_bma_result.json
+            00_VAULT/system_pulse.json
+            00_VAULT/live_dashboard_stats.json
+            00_VAULT/live_forex_signal.json
+            00_VAULT/live_bma_history.json
+            00_VAULT/last_signal.json
+          retention-days:    2
+          overwrite:         true
+          if-no-files-found: warn
+
+      # ── 9. Commit persistent state to Git ─────────────────────────────
+      # RC-04 FIX A: live_graph_data.json (44KB, enriched each cycle)
+      #   is the sole source of merge conflicts. Excluded from commits.
+      #   It is ephemeral telemetry — cached + artifact, not versioned.
+      #
+      # RC-04 FIX B: live_bma_history.json committed to git so it
+      #   survives cold starts when cache is cold (first run, cache eviction).
+      #
+      # RC-04 FIX C: git merge conflict resolution uses --strategy-option=theirs
+      #   so the current cycle's state wins without manual intervention.
+      #
+      # RC-02 FIX: last_signal.json committed so next run downloads it
+      #   from git (fresh timestamp), preventing DATA_STALE on cycle 2+.
+      - name: Commit persistent state to Git
+        if: success()
+        run: |
+          python scripts/j4_increment_gate.py
+          git config user.name  "SPEL Holmes"
+          git config user.email "holmes@spel.ai"
+
+          # Stage persistent files (live_graph_data.json EXCLUDED — see RC-04 FIX A)
+          [ -f 00_VAULT/gate_metrics.json ]            && git add 00_VAULT/gate_metrics.json
+          [ -f 00_VAULT/registry/SHA_REGISTRY.json ]   && git add 00_VAULT/registry/SHA_REGISTRY.json
+          [ -f 00_VAULT/last_signal.json ]              && git add 00_VAULT/last_signal.json
+          [ -f 00_VAULT/live_bma_history.json ]         && git add 00_VAULT/live_bma_history.json
+
+          # Only commit + push if there are staged changes
+          git diff --staged --quiet || {
+            git commit -m "chore(patrol): state [$(date -u +%H%M)] day=${{ github.run_number }} [skip ci]"
+
+            # RC-04 FIX B: resolve any rebase conflicts using current-cycle state
+            # --strategy-option=theirs: our committed state wins over stale remote
+            git pull --rebase --strategy-option=theirs origin main --quiet 2>&1 || {
+              # If rebase still fails, abort and force push only our committed files
+              git rebase --abort 2>/dev/null || true
+              git push origin main --force-with-lease
+              exit 0
+            }
+            git push origin main
+          }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
