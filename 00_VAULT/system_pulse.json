@@ -1,7 +1,7 @@
 {
-  "last_pulse_utc": "2026-04-04T19:08:35.842558+00:00",
+  "last_pulse_utc": "2026-04-07T20:22:14.626585+00:00",
   "cycle_number": 0,
-  "last_decision": "S46_LAUNCH",
+  "last_decision": "EMERGENCY_SEED_S48",
   "active_assets": [
     "NVDA",
     "BTC",
@@ -9,5 +9,5 @@
     "NIFTY50"
   ],
   "gate_day": 9,
-  "system_health": "SOVEREIGN_CLEAN"
+  "system_health": "RECOVERING"
 }
