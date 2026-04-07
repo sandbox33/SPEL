@@ -1,0 +1,4 @@
+meta:
+  version: "1.0"
+  rules: ["R11: No mezclar schemas", "R4: Lookbacks inamovibles"]
+# ... (el resto de tu YAML de activos)
