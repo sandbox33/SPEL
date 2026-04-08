@@ -1,5 +1,5 @@
 {
-  "ts": "2026-04-08T04:36:16.899903+00:00",
+  "ts": "2026-04-08T04:52:38.566157+00:00",
   "decision": "RESET_S49",
   "asset": "EURUSD",
   "session": "S49",
@@ -14,5 +14,5 @@
   "close": 0.0,
   "_source": "spel_colab_sync_s49.step3_reset",
   "_warning": "RESET signal \u2014 placeholder until next GH Actions cycle overwrites",
-  "_sha": "a2ed712ddee1"
+  "_sha": "d6466661870c"
 }
