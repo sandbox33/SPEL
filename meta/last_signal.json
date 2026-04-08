@@ -1,0 +1,18 @@
+{
+  "ts": "2026-04-08T04:36:16.899903+00:00",
+  "decision": "RESET_S49",
+  "asset": "EURUSD",
+  "session": "S49",
+  "vitality_tesla": 6,
+  "entropy_shannon": 1.85,
+  "transfer_entropy": 0.3,
+  "kl_divergence": 0.04,
+  "backbone_direction": 0.0,
+  "backbone_pred": 0.0,
+  "gold_score": 0.0,
+  "regime": "NORMAL",
+  "close": 0.0,
+  "_source": "spel_colab_sync_s49.step3_reset",
+  "_warning": "RESET signal \u2014 placeholder until next GH Actions cycle overwrites",
+  "_sha": "a2ed712ddee1"
+}
