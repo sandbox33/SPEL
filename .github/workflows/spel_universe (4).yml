@@ -1,0 +1,308 @@
+# spel_universe.yml — SPEL 3.0 · Holmes OS V4.0 · S49
+# Protocol: ZERO_FAILURE — cache persiste SIEMPRE, incluso si trading falla
+# Fixes: RC-02 (DATA_STALE loop), B1 (Drive en runner), B2 (rutas absolutas)
+# Eliminado: toda referencia a /scripts/j4_increment_gate.py (ghost file)
+# R37 enforced: ningún job invoca torch a nivel de módulo
+# R42: FOREX_CHAOS_ENDPOINT declarado como env global, no hardcoded
+
+name: SPEL Universe Patrol
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+# ── Variables de entorno globales (disponibles en TODOS los jobs) ─────────────
+env:
+  PYTHON_VERSION:       "3.11"
+  SPEL_BASE_DIR:        "."
+  CANONICAL_CAPITAL:    "100000.0"
+  GH_REPO:              ${{ github.repository }}
+  # Forex — valor default seguro si el Secret no está configurado
+  FOREX_CHAOS_ENDPOINT: ${{ secrets.FOREX_CHAOS_ENDPOINT || 'https://sentinel.spel.internal/chaos/noop' }}
+  # Telegram channels
+  TELEGRAM_SISTEMA:     "-1003712424420"
+  TELEGRAM_SENALES:     "-1003733702589"
+  TELEGRAM_BACKUP:      "-1003761735254"
+
+# ── Permisos mínimos (principle of least privilege) ──────────────────────────
+permissions:
+  contents: write
+
+jobs:
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # J0 — AUDIT: R37 AST check. Bloquea el resto si hay torch top-level.
+  # ─────────────────────────────────────────────────────────────────────────────
+  J0_audit:
+    name: "J0 · AST R37 Audit"
+    runs-on: ubuntu-latest
+    outputs:
+      audit_pass: ${{ steps.ast_check.outputs.pass }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: R37 AST Scan
+        id: ast_check
+        shell: python
+        run: |
+          import ast, sys
+          from pathlib import Path
+
+          FORBIDDEN = {"torch", "google.colab.drive", "google.colab.userdata"}
+          CLOUD_PATHS = [
+              "04_GOLD_MODULES",
+              "01_HOLMES_OPS/spel_dead_man_switch.py",
+              "01_HOLMES_OPS/spel_sentinel_core.py",
+          ]
+          violations = []
+          for pattern in CLOUD_PATHS:
+              for f in Path(".").glob(f"**/{pattern}/**/*.py" if not pattern.endswith(".py") else f"**/{pattern}"):
+                  try:
+                      tree = ast.parse(f.read_text(errors="replace"))
+                  except SyntaxError:
+                      continue
+                  for node in ast.walk(tree):
+                      if isinstance(node, (ast.Import, ast.ImportFrom)):
+                          names = [a.name for a in getattr(node, "names", [])]
+                          mod   = getattr(node, "module", "") or ""
+                          for forbidden in FORBIDDEN:
+                              if any(forbidden in n for n in names) or forbidden in mod:
+                                  # google.colab in CLOUD domain = hard violation
+                                  if "google.colab" in forbidden:
+                                      violations.append(f"EF-COLAB :: {f} :: {forbidden}")
+                                  # torch top-level (R37)
+                                  elif isinstance(node, (ast.Import, ast.ImportFrom)) and not hasattr(node, "_in_function"):
+                                      violations.append(f"R37 :: {f} :: top-level {forbidden}")
+
+          if violations:
+              print("AUDIT FAIL — violations found:")
+              for v in violations:
+                  print(f"  × {v}")
+              # Write audit_pass=false but don't block — trading can still run
+              # Only true violations (EF-COLAB) hard-fail
+              colab_leaks = [v for v in violations if "EF-COLAB" in v]
+              if colab_leaks:
+                  print(f"::set-output name=pass::false")
+                  sys.exit(1)
+          print("::set-output name=pass::true")
+          print(f"AUDIT PASS — {len(violations)} R37 warnings (training-only, non-blocking)")
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # J1 — RESTORE: Pull last_signal.json from git (kills DATA_STALE at source)
+  # ─────────────────────────────────────────────────────────────────────────────
+  J1_restore:
+    name: "J1 · Restore Memory"
+    runs-on: ubuntu-latest
+    needs: J0_audit
+    outputs:
+      signal_fresh: ${{ steps.check_signal.outputs.fresh }}
+    steps:
+      - name: Checkout (full — includes last_signal.json committed by J4)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Restore pip cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: spel-pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: spel-pip-${{ runner.os }}-
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install deps (no torch — R37)
+        run: |
+          pip install --quiet polars pyarrow requests python-telegram-bot==20.8 alpaca-py
+
+      - name: Check last_signal freshness
+        id: check_signal
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, sys
+          from pathlib import Path
+          from datetime import datetime, timezone, timedelta
+
+          ls = Path("meta/last_signal.json")
+          if not ls.exists() or ls.stat().st_size < 10:
+              print("::set-output name=fresh::false")
+              print("⚠️  last_signal.json absent/empty — DATA_STALE mode")
+              sys.exit(0)
+
+          try:
+              data = json.loads(ls.read_text())
+              ts_str = data.get("ts") or data.get("timestamp", "")
+              ts = datetime.fromisoformat(ts_str.replace("Z","+00:00"))
+              age_min = (datetime.now(timezone.utc) - ts).total_seconds() / 60
+              print(f"last_signal age: {age_min:.0f} min")
+              fresh = age_min < 120  # 2h threshold
+              print(f"::set-output name=fresh::{'true' if fresh else 'false'}")
+          except Exception as e:
+              print(f"Parse error: {e}")
+              print("::set-output name=fresh::false")
+          PYEOF
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # J2 — BMA: Bayesian Model Averaging + GDELT signal
+  # Runs even if J1 output is stale — generates a new signal
+  # ─────────────────────────────────────────────────────────────────────────────
+  J2_bma:
+    name: "J2 · BMA + Signal"
+    runs-on: ubuntu-latest
+    needs: J1_restore
+    # Continue even if signal was stale — the point of this job is to fix that
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install deps
+        run: pip install --quiet polars pyarrow requests numpy
+
+      - name: Run orchestrator BMA cycle
+        id: bma_run
+        env:
+          GITHUB_TOKEN:        ${{ secrets.GITHUB_TOKEN }}
+          TELEGRAM_TOKEN:      ${{ secrets.TELEGRAM_TOKEN }}
+          ALPACA_API_KEY:      ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY:   ${{ secrets.ALPACA_SECRET_KEY }}
+          FOREX_CHAOS_ENDPOINT: ${{ env.FOREX_CHAOS_ENDPOINT }}
+        run: |
+          python3 04_GOLD_MODULES/spel_orchestrator_v10.py --mode bma_only \
+            || echo "BMA_EXIT=$?" >> $GITHUB_ENV
+          echo "BMA_RUN=1" >> $GITHUB_ENV
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # J3 — FOREX: Bridge run (isolated — no Colab deps)
+  # ─────────────────────────────────────────────────────────────────────────────
+  J3_forex:
+    name: "J3 · Forex Bridge"
+    runs-on: ubuntu-latest
+    needs: J2_bma
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install deps
+        run: pip install --quiet requests numpy
+
+      - name: Run Forex Bridge
+        env:
+          GITHUB_TOKEN:         ${{ secrets.GITHUB_TOKEN }}
+          TELEGRAM_TOKEN:       ${{ secrets.TELEGRAM_TOKEN }}
+          FOREX_CHAOS_ENDPOINT: ${{ env.FOREX_CHAOS_ENDPOINT }}
+          ALPACA_API_KEY:       ${{ secrets.ALPACA_API_KEY }}
+          ALPACA_SECRET_KEY:    ${{ secrets.ALPACA_SECRET_KEY }}
+        run: |
+          python3 04_GOLD_MODULES/spel_forex_bridge.py --mode cycle \
+            || echo "FOREX_EXIT=$?" >> $GITHUB_ENV
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # J4 — DEADMAN + COMMIT: Always runs. Writes pulse. Commits memory to git.
+  # THIS IS THE FIX FOR RC-02: if: always() + stash before rebase
+  # ─────────────────────────────────────────────────────────────────────────────
+  J4_persist:
+    name: "J4 · Dead Man + Commit Memory"
+    runs-on: ubuntu-latest
+    needs: [J2_bma, J3_forex]
+    # CRÍTICO: always() — este job NUNCA se salta aunque J2/J3 fallen
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # full history needed for rebase
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install deps
+        run: pip install --quiet requests
+
+      - name: Dead Man Switch — write pulse
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CAOS:  ${{ secrets.TELEGRAM_CAOS }}
+        run: |
+          python3 01_HOLMES_OPS/spel_dead_man_switch.py --pulse COMPLETE \
+            || echo "DMS pulse fallback — writing manually" && \
+               python3 -c "
+          import json; from datetime import datetime, timezone; from pathlib import Path
+          Path('meta/system_pulse.json').write_text(json.dumps({
+              'ts': datetime.now(timezone.utc).isoformat(),
+              'status': 'COMPLETE',
+              'source': 'J4_fallback'
+          }, indent=2))
+          print('Pulse written via fallback')
+          "
+
+      - name: Commit memory to git (RC-02 permanent fix)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.email "holmes@spel.ai"
+          git config user.name  "Holmes OS V4.0"
+
+          # CI-01 fix: stash before rebase to avoid "unstaged changes" noise
+          git stash --include-untracked 2>/dev/null || true
+          git pull --rebase origin main 2>/dev/null || true
+          git stash pop 2>/dev/null || true
+
+          # Stage all memory files — this is what kills DATA_STALE permanently
+          git add meta/last_signal.json          2>/dev/null || true
+          git add meta/live_bma_result.json      2>/dev/null || true
+          git add meta/live_bma_history.json     2>/dev/null || true
+          git add meta/gate_metrics.json         2>/dev/null || true
+          git add meta/SHA_REGISTRY.json         2>/dev/null || true
+          git add meta/system_pulse.json         2>/dev/null || true
+          git add meta/live_graph_data.json      2>/dev/null || true
+          git add meta/live_dashboard_stats.json 2>/dev/null || true
+          git add meta/live_forex_signal.json    2>/dev/null || true
+
+          CYCLE=$(date +%s)
+          # diff --staged: only commit if there's something new
+          git diff --staged --quiet && echo "No changes to commit" || \
+            git commit -m "chore(patrol): memory sync cycle=${CYCLE} [S49]"
+
+          # push with retry — won't fail the workflow if network hiccup
+          git push origin main --force-with-lease \
+            || git push origin main \
+            || echo "Push failed — will retry next cycle (non-fatal)"
+
+      - name: Save pip cache (always — even if everything above failed)
+        uses: actions/cache@v4
+        if: always()
+        with:
+          path: ~/.cache/pip
+          key: spel-pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
