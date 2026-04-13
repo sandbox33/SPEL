@@ -1,0 +1,111 @@
+{
+  "session": "S49",
+  "version": "2.0",
+  "ts": "2026-04-13T21:13:32.400255+00:00",
+  "audit_sot": "/content/drive/MyDrive/ORDEN/SPEL 3.0/NATHAN_DRAKE_AUDIT.json",
+  "methodology": "Corrección S49-ERR-BIT-001: git-blob SHA1 vs sha256-raw — dual-hash registry",
+  "cb_final": "CLOSED(fails=0)",
+  "summary": {
+    "total": 112,
+    "synced": 99,
+    "false_positives_resolved": 99,
+    "local_pushed": 6,
+    "remote_pulled": 4,
+    "truly_different": 3,
+    "modules_deployed": 7,
+    "errors": 0
+  },
+  "push_log": [
+    {
+      "path": "ORDEN/SPEL 3.0/.gitignore.txt",
+      "ok": true,
+      "reason": "pushed"
+    },
+    {
+      "path": "ORDEN/SPEL 3.0/00_VAULT/.gitkeep",
+      "ok": true,
+      "reason": "already_synced"
+    },
+    {
+      "path": "ORDEN/SPEL 3.0/00_VAULT/spel_github_sync.yml",
+      "ok": true,
+      "reason": "pushed"
+    },
+    {
+      "path": "ORDEN/SPEL 3.0/00_VAULT/spel_s47_ignition_log.json",
+      "ok": true,
+      "reason": "pushed"
+    },
+    {
+      "path": "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_daily_check.py",
+      "ok": true,
+      "reason": "already_synced"
+    },
+    {
+      "path": "ORDEN/SPEL 3.0/spel_colab_sync_s49.py",
+      "ok": true,
+      "reason": "pushed"
+    }
+  ],
+  "pull_log": [
+    {
+      "path": "ORDEN/SPEL 3.0/.devcontainer/devcontainer.json",
+      "ok": true
+    },
+    {
+      "path": "ORDEN/SPEL 3.0/.gitignore",
+      "ok": true
+    },
+    {
+      "path": "ORDEN/SPEL 3.0/meta/last_signal.json",
+      "ok": true
+    },
+    {
+      "path": "ORDEN/SPEL 3.0/meta/system_pulse.json",
+      "ok": true
+    }
+  ],
+  "deploy_log": [
+    {
+      "module": "messenger_v2.py",
+      "status": "deployed",
+      "target": "01_HOLMES_OPS/messenger_v2.py"
+    },
+    {
+      "module": "spel_narrative.py",
+      "status": "already_synced",
+      "target": "04_GOLD_MODULES/spel_narrative.py"
+    },
+    {
+      "module": "main_ui_vFinal.py",
+      "status": "already_synced",
+      "target": "04_GOLD_MODULES/main_ui_vFinal.py"
+    },
+    {
+      "module": "spel_guardian.py",
+      "status": "already_synced",
+      "target": "01_HOLMES_OPS/spel_guardian.py"
+    },
+    {
+      "module": "spel_registry_repair.py",
+      "status": "already_synced",
+      "target": "01_HOLMES_OPS/spel_registry_repair.py"
+    },
+    {
+      "module": "roadmap_spel_s48.json",
+      "status": "already_synced",
+      "target": "00_VAULT/roadmap_spel_s48.json"
+    },
+    {
+      "module": "secrets_template.json",
+      "status": "already_synced",
+      "target": "00_VAULT/secrets_template.json"
+    }
+  ],
+  "truly_different_paths": [
+    "ORDEN/SPEL 3.0/00_VAULT/last_signal.json",
+    "ORDEN/SPEL 3.0/00_VAULT/live_graph_data.json",
+    "ORDEN/SPEL 3.0/00_VAULT/registry/SHA_REGISTRY.json"
+  ],
+  "error_paths": []
+}
