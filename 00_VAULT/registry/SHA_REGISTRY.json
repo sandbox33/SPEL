@@ -1,39 +1,909 @@
 {
-  "BTC": {
-    "sha_v5": "28932efcb0f4",
-    "p90_entropy": 2.002221,
-    "checkpoint_file": "BTC_LSTM_v3_S43_clean.pt",
-    "checkpoint_status": "PENDING_RETRAIN"
+  "_metadata": {
+    "generated": "2026-04-13T21:02:46.142034+00:00",
+    "session": "S49",
+    "version": "2.0",
+    "total": 112,
+    "audit_sot": "/content/drive/MyDrive/ORDEN/SPEL 3.0/NATHAN_DRAKE_AUDIT.json",
+    "synced": 99,
+    "fp_resolved": 99,
+    "note": "sha256=SHA256(raw_bytes) — integridad LOCAL (Ley-1). sha_git=SHA1(\"blob N\\0content\") — métrica Drive↔GitHub. NO comparar entre sí: son espacios de hash distintos.",
+    "registry_sha256": "6ae0b04230e2b19a689758a747ebd8f73111d3dc0009eeb434278e4a6456d09e"
   },
-  "XAU": {
-    "sha_v5": "abdbafeab097",
-    "p90_entropy": 1.904465,
-    "checkpoint_file": "XAU_LSTM_v3_S43_clean.pt",
-    "checkpoint_status": "PENDING_RETRAIN"
+  "ORDEN/SPEL 3.0/.gitignore.txt": {
+    "sha256": "367dfc76735dc3f9ee0d433bf8f79d64dfe7cb8a8252dd425ae50a80edaa9875",
+    "sha_git": "3e5f55b649fc19c1daad7731f5264d0391b57342",
+    "size_kb": 0.03,
+    "ts_validated": "2026-04-13T21:02:46.145363+00:00",
+    "status": "synced",
+    "action": "pushed_to_github"
   },
-  "NIFTY50": {
-    "sha_v5": "ec534663b272",
-    "p90_entropy": 1.186823,
-    "checkpoint_file": "NIFTY50_LSTM_v3_S43_clean.pt",
-    "checkpoint_status": "PENDING_RETRAIN"
+  "ORDEN/SPEL 3.0/.devcontainer/devcontainer.json": {
+    "sha256": "3e0a01ba5a2488db56a1be86b4470cb34c37b04a400abef4007e45537a5066c7",
+    "sha_git": "60af29c97e782dea1f47157785f868c038cd0e14",
+    "size_kb": 1.043,
+    "ts_validated": "2026-04-13T21:02:46.149041+00:00",
+    "status": "synced",
+    "action": "pulled_from_github"
   },
-  "NVDA": {
-    "sha_v5": "a8d231a60a02",
-    "p90_entropy": 1.900615,
-    "checkpoint_file": "NVDA_LSTM_v3_S43_clean.pt",
-    "checkpoint_status": "PENDING_RETRAIN"
+  "ORDEN/SPEL 3.0/00_VAULT/MAPA_MAESTRO_S44.json": {
+    "sha256": "93b2472c831ef1a59cfd2653ad09e82755c615233b39e1e9d3e35785e82ecf83",
+    "sha_git": "112af887e0893e560bd50a3e2b046d079c1d3b0a",
+    "size_kb": 0.922,
+    "ts_validated": "2026-04-13T21:02:46.152118+00:00",
+    "status": "synced",
+    "action": ""
   },
-  "spel_orchestrator_v10.py": "561aed9672da",
-  "spel_bayesian_core.py": "edc0b57e2a60",
-  "spel_score_engine.py": "25d7c58dea1c",
-  "holmes.py": "275abb584303",
-  "spel_guardian.py": "6f8628fe53f6",
-  "spel_dead_man_switch.py": "850645f0f253",
-  "_s46_ts": "2026-04-04T19:12:07.401791+00:00",
-  "_s46_version": "SOT_V46.0",
-  "EURUSD": "PENDING_HARVEST",
-  "XAU_1m": "PENDING_HARVEST",
-  "XAU_5m": "PENDING_HARVEST",
-  "XAU_15m": "PENDING_HARVEST",
-  "XAU_30m": "PENDING_HARVEST"
+  "ORDEN/SPEL 3.0/00_VAULT/README.md": {
+    "sha256": "14bbb73661c4faeeaf25604c6a25f0f3da66f7b08693e56c8814e3e735dcb43f",
+    "sha_git": "9710459fc8cd85f218aa0e3684bc019f72e03e45",
+    "size_kb": 0.06,
+    "ts_validated": "2026-04-13T21:02:46.155155+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/HOLMES_MANIFEST.json": {
+    "sha256": "c776de5d9aed9b20181c4a0218b7d57534bf1b661dc692ba50060a2332f19204",
+    "sha_git": "67f047d58b5de74bcd3e1f35fbc4db8990c9f0be",
+    "size_kb": 7.192,
+    "ts_validated": "2026-04-13T21:02:46.158289+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/.gitkeep": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sha_git": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+    "size_kb": 0.0,
+    "ts_validated": "2026-04-13T21:02:46.160514+00:00",
+    "status": "synced",
+    "action": "already_synced"
+  },
+  "ORDEN/SPEL 3.0/.gitignore": {
+    "sha256": "f3686dc6805becbdef29b0db66b61a101783a938033cf604fd6eda4a79a34533",
+    "sha_git": "54761325fa8010f0c0bd6fa067aa1fd7de3b91b3",
+    "size_kb": 0.077,
+    "ts_validated": "2026-04-13T21:02:46.163934+00:00",
+    "status": "synced",
+    "action": "pulled_from_github"
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/NVDA_scaler.json": {
+    "sha256": "0306665fa37367f93c177d7e50a5da670be1d0ad245c74dfb319bef1eaee8c74",
+    "sha_git": "91b462ef97dc51ac0e810c8078dfb34b56bfa852",
+    "size_kb": 1.881,
+    "ts_validated": "2026-04-13T21:02:46.167372+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/.github/workflows/spel_universe.yml": {
+    "sha256": "08b04ae73855f9f21db82f55ae8574fa2e28cbcf2afcace8f91d6e2f8959fefc",
+    "sha_git": "a2b10b12e5460c7811fbb03bdc0e68bdba2f2123",
+    "size_kb": 13.724,
+    "ts_validated": "2026-04-13T21:02:46.171953+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/SPEL_META.json": {
+    "sha256": "c5025d18382b75278e18abb0ba39f6ac96e6d70c2f7920d08c7b1e0d56a6bb80",
+    "sha_git": "732d351b12fb0b462c1197dca072a7a5564d78f8",
+    "size_kb": 7.957,
+    "ts_validated": "2026-04-13T21:02:46.175889+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/SPEL_S24_Plan_Accion.md": {
+    "sha256": "f26ccb5a11ee2d4fe74eb99e5e45bdfd8e6a71dc6dd50c20295cceaf28b3a84c",
+    "sha_git": "854802c441dca258d2279129aa96719e37d71a31",
+    "size_kb": 26.835,
+    "ts_validated": "2026-04-13T21:02:46.179456+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/change_log.json": {
+    "sha256": "de4d23549a1ffccd8ab73cc99e250c96926f576956bb20efe10f0963848b1f3d",
+    "sha_git": "18bf6ae47fa7703d2510820dd9392ee8b056027f",
+    "size_kb": 0.47,
+    "ts_validated": "2026-04-13T21:02:46.183712+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/asset_registry.json": {
+    "sha256": "8188333b19a5ea67faef642e75d69b0c0f9de1653b9bdf764a2926bcd4c79482",
+    "sha_git": "94d23ed46b56bcc60bf2c3f16ea9f26a360d6b84",
+    "size_kb": 4.886,
+    "ts_validated": "2026-04-13T21:02:46.188381+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/auditoria_total_20260311_1736.json": {
+    "sha256": "879589fbb186b1a195db6db808ddea16035ee71a02ab6391f0cd11fc353230c6",
+    "sha_git": "6868622c8a4b37d13bb372e3fa6ba456b5a5217e",
+    "size_kb": 14.205,
+    "ts_validated": "2026-04-13T21:02:46.192686+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/devcontainer.json": {
+    "sha256": "300bcb993e9aa5a07bdacd28ebbed3afa62d2b77e2ed6c1e42cd5f4eb170afb3",
+    "sha_git": "df6c04a5e7b64b23798319f205a089a7802d5b72",
+    "size_kb": 1.014,
+    "ts_validated": "2026-04-13T21:02:46.195906+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/forex_macro_snapshot.json": {
+    "sha256": "cd33c3f92c8701dfc9f2bb6e4530d04c3ed7cb7ae456afc2be7b94a9f18aab13",
+    "sha_git": "d914a15748f74933d5268e9f5237307b4739272e",
+    "size_kb": 1.315,
+    "ts_validated": "2026-04-13T21:02:46.198889+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/forex_scalers.json": {
+    "sha256": "9396df9ca100436e3a1cb28f326b7cc4b43fc77825693c0527b2dbbe94f4269a",
+    "sha_git": "203a809618e544f827856e824a196f37371e70ec",
+    "size_kb": 5.257,
+    "ts_validated": "2026-04-13T21:02:46.203386+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/heartbeat_progress.json": {
+    "sha256": "b4fa9bafd9fffede5016adb70204eaf01ec63b4cd4f3c9f3bf29627f376692b5",
+    "sha_git": "721f670022e77afc6fb0d02a02aee771a6617396",
+    "size_kb": 11.067,
+    "ts_validated": "2026-04-13T21:02:46.207160+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/gate_metrics.json": {
+    "sha256": "177f955829fb3d44d70566be0ac282673dc87adfa43f54d6b8a2c7a82d8ce9df",
+    "sha_git": "59771ab81581dd1f0c4e1801c126631ac8a81bc5",
+    "size_kb": 0.236,
+    "ts_validated": "2026-04-13T21:02:46.209540+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/last_s43_state.json": {
+    "sha256": "f09707cd481e9c8ef913f635d6194d343a7fb9ab558c87e575425d1360dc341b",
+    "sha_git": "057ff9973adf8996dcd35483189e00d89221c1ec",
+    "size_kb": 1.128,
+    "ts_validated": "2026-04-13T21:02:46.213079+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/live_bma_history.json": {
+    "sha256": "c4fe84572f0697991b20d661ca946bde6a5fdcbf9916a20d8fcd54533c7390d3",
+    "sha_git": "c1e6915c6b167a59b8957e4806792af3436e5736",
+    "size_kb": 1.139,
+    "ts_validated": "2026-04-13T21:02:46.216507+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/godel_thresholds_v2.json": {
+    "sha256": "7c64252535bd0192cedf1ac6df93159e5f0a105684bff78a26e4badbed4f3839",
+    "sha_git": "641e04c6026e105cb5ee35535f25950c92271d1e",
+    "size_kb": 3.094,
+    "ts_validated": "2026-04-13T21:02:46.220071+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/last_s42_state.json": {
+    "sha256": "7ce8a101c540906d457f2242624751e8de540aa207820415b4f2ed584825d23c",
+    "sha_git": "114edcedc1ea9d3666edea687dba66332ead39b1",
+    "size_kb": 0.982,
+    "ts_validated": "2026-04-13T21:02:46.224600+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/last_signal.json": {
+    "sha256": "0eac412f70a98c645fd3bc26c61a2b119bc270ff1536e0d12d3d99bfff7ec2a5",
+    "sha_git": "22e7042da8df48bb277f2203a01aae6afcfacfa2",
+    "size_kb": 0.479,
+    "ts_validated": "2026-04-13T21:02:46.229650+00:00",
+    "status": "truly_different",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/spel_github_sync.yml": {
+    "sha256": "c159980804aac941c83d4ef30de7e441b859489390d892ba0447214be7fa932c",
+    "sha_git": "284d53e254e2dbac2f9986b10cbf16dec6541ccc",
+    "size_kb": 5.585,
+    "ts_validated": "2026-04-13T21:02:46.234351+00:00",
+    "status": "synced",
+    "action": "pushed_to_github"
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/live_dashboard_stats.json": {
+    "sha256": "8166ef6b2df78632c78578cf0e0fdc03a44d4f91f17826a3e84c416b09f54c2c",
+    "sha_git": "0c77d9e536fc3b9172cc491fb921c19f11d5e7c1",
+    "size_kb": 0.765,
+    "ts_validated": "2026-04-13T21:02:46.238098+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/spel_s47_ignition_log.json": {
+    "sha256": "4106098be9511845833eaabaa8e80331b9b491c505384e917ba34c6ee592f494",
+    "sha_git": "7e28865d06d1aacc7bbe964332d0a115ef3fb71b",
+    "size_kb": 2.411,
+    "ts_validated": "2026-04-13T21:02:46.241609+00:00",
+    "status": "synced",
+    "action": "pushed_to_github"
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/live_graph_data.json": {
+    "sha256": "f4698621c767dce81dbe817ffcd49a92e4bcbfa0150ef803d043c298ef1f1784",
+    "sha_git": "eb837eeb14fdb022fdb4113dee49ba956ae8ee8b",
+    "size_kb": 35.692,
+    "ts_validated": "2026-04-13T21:02:46.246146+00:00",
+    "status": "truly_different",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/registry/SHA_REGISTRY.json": {
+    "sha256": "c9a34345731005e4508b076164d971f69219c34aaff0e3b54b7d9da7a1b27aaa",
+    "sha_git": "4691b250c774cf494f1d37fbbcff23a675713547",
+    "size_kb": 0.989,
+    "ts_validated": "2026-04-13T21:02:46.273332+00:00",
+    "status": "truly_different",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/registry/SHA_REGISTRY_backup_S24_20260316.json": {
+    "sha256": "2069249cbcbaad1dd737731736c464f7a3ac3fc23473c1c2b4b30a50e7897c10",
+    "sha_git": "9427208caf63344a3017491aab50820d617a60dd",
+    "size_kb": 1.41,
+    "ts_validated": "2026-04-13T21:02:46.276755+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/requirements.txt": {
+    "sha256": "3b48ce68c359b0c896b9da74e4b6cfe6786e3f39e24580827e78e091d90cf5d5",
+    "sha_git": "33cb22c32b147cbd7744987cf565cbe57d43a6da",
+    "size_kb": 0.136,
+    "ts_validated": "2026-04-13T21:02:46.280091+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/spel_s46_launch_log.json": {
+    "sha256": "d955de43c6d7a0d0b561c9ebc7833b8542c5645d7c673216ec363e3f6e56bed9",
+    "sha_git": "1bd0c35e7f03c95b382b3bd0cd33a4be3a797461",
+    "size_kb": 6.995,
+    "ts_validated": "2026-04-13T21:02:46.283669+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/purge_report.json": {
+    "sha256": "63a180e54a4f6c436128f9ae68bb6ec54024382dfe9d10ce210943564b06196e",
+    "sha_git": "30c9a7b28ef82ca8a1cdc901b539195b9bc51a3f",
+    "size_kb": 5.12,
+    "ts_validated": "2026-04-13T21:02:46.288241+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/spel_asset_catalog.json": {
+    "sha256": "fa7f9174340672cc1a9eeb2799ab88f8a59e2870dce71aefb813d5cb4ed0de75",
+    "sha_git": "8746e59459a1b6ad2c129b804f2bee1a9325e1ef",
+    "size_kb": 39.319,
+    "ts_validated": "2026-04-13T21:02:46.291992+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/spel_universe_config.yml": {
+    "sha256": "09a038fd00ea11e3aa6254b6459634b9c7903b71ed6d14ebaf339bf2568ca7a1",
+    "sha_git": "d80eef218cf0c9ebeb607bd0f6fbf217b1833078",
+    "size_kb": 0.125,
+    "ts_validated": "2026-04-13T21:02:46.296836+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/system_pulse.json": {
+    "sha256": "b372c030f6520744d458ce90f0a93caded48425037f6606813f502cae8218e2b",
+    "sha_git": "27ff2f76205e11d31b470b07b0fb8e08e0b110ae",
+    "size_kb": 0.238,
+    "ts_validated": "2026-04-13T21:02:46.299360+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/telegram_canales.json": {
+    "sha256": "4120017802d5165bad0105d739f495fcfe5008510fbe181c99452cd08ccb1c2c",
+    "sha_git": "d3df93c2fa18505fab0068c61881b1edb8029d72",
+    "size_kb": 0.166,
+    "ts_validated": "2026-04-13T21:02:46.304181+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/00_VAULT/vix_fix_report_20260310_1504.json": {
+    "sha256": "469502f4698cc382bb404b1fdaedf24b95f10c6a09638409462b4b7177a7a0b3",
+    "sha_git": "1da44f7787dc85727761b16c0f834e15e6ac2f30",
+    "size_kb": 0.471,
+    "ts_validated": "2026-04-13T21:02:46.306865+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/01_HOLMES_OPS/SPEL_INSTITUTIONAL_AUDITOR_V41.py": {
+    "sha256": "cb0e11c5ec140b3c32db5f26a4ecd1afd77d0bad174f536ba77d6d9b8b505edd",
+    "sha_git": "1d9318d23171f9695b38e117b47610d11193fd82",
+    "size_kb": 34.528,
+    "ts_validated": "2026-04-13T21:02:46.311498+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/01_HOLMES_OPS/holmes.py": {
+    "sha256": "275abb5843039b134c3b3791160a41f93185462a5f6a68758c07d9a6715399b4",
+    "sha_git": "4919f91496e4ea7120d53166680ad5b65d4ff508",
+    "size_kb": 15.106,
+    "ts_validated": "2026-04-13T21:02:46.315374+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/01_HOLMES_OPS/SPEL_v37_MASTER_AUDITOR_v2.py": {
+    "sha256": "bbe531b6a7aae09ecbc3986dd5833ad3530fb960327e0cd87168d862a9956bc5",
+    "sha_git": "f04e41eefe167765c0180bac60043d8a4b41b3b5",
+    "size_kb": 13.861,
+    "ts_validated": "2026-04-13T21:02:46.318110+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/01_HOLMES_OPS/spel_dead_man_switch.py": {
+    "sha256": "8c533f969b09ce068540155248b69b4fbb87d5e58ddbb2e956429f16c9484025",
+    "sha_git": "6d7ed1a99c316bb152aa087242abe5698d88e89a",
+    "size_kb": 7.052,
+    "ts_validated": "2026-04-13T21:02:46.321557+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/01_HOLMES_OPS/spel_auditoria_total.py": {
+    "sha256": "510c72fabd57f7a8b6a88ab4b5f40da497877f2aca5c6d4cea444fbd8655d10a",
+    "sha_git": "f3f6b4ba8e7a45db25e27861852b10ab09bf3447",
+    "size_kb": 35.021,
+    "ts_validated": "2026-04-13T21:02:46.325431+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/01_HOLMES_OPS/spel_posttraining_audit.py": {
+    "sha256": "255e8de02a9ceb920523e149301d8664212c33506cd4cc0a5f1a9756008788b0",
+    "sha_git": "9eb3237df729b35cd71b0b1a9aab458f22061ef7",
+    "size_kb": 12.148,
+    "ts_validated": "2026-04-13T21:02:46.328389+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/01_HOLMES_OPS/spel_guardian.py": {
+    "sha256": "6f8628fe53f6471d56c79fc981c611c1468a24ff4cc56b4c902e7ff83c96a0f0",
+    "sha_git": "c43c564e77493d136aa9fe3549f82014c8531177",
+    "size_kb": 4.318,
+    "ts_validated": "2026-04-13T21:02:46.331205+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/01_HOLMES_OPS/spel_meta_guardian.py": {
+    "sha256": "c5c77edbb015b51b783c6f87f0874886c487aab47cf8ba872222d5ffb3e83763",
+    "sha_git": "f67fd8f75435a5b4e10576924817911ba587b08b",
+    "size_kb": 23.438,
+    "ts_validated": "2026-04-13T21:02:46.334324+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/01_HOLMES_OPS/spel_trainer_audit.py": {
+    "sha256": "c3eb2a30f51757c0417de70a0b658623254794a0804483de2d13cfcbaa3b28b6",
+    "sha_git": "8b1a3f6ff537febed16b394d79030d29599a0aad",
+    "size_kb": 17.952,
+    "ts_validated": "2026-04-13T21:02:46.338243+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/01_HOLMES_OPS/spel_sentinel_core.py": {
+    "sha256": "ed9bc15a6dcbdda6444da17d09523974ca58ecffce6108475ee9af953b4950eb",
+    "sha_git": "dfd3bc5f32d567ce77f728753e1e3b7942c55188",
+    "size_kb": 3.952,
+    "ts_validated": "2026-04-13T21:02:46.341758+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/02_ACTIONS_BRIDGE/workflows/spel_github_sync.yml": {
+    "sha256": "c159980804aac941c83d4ef30de7e441b859489390d892ba0447214be7fa932c",
+    "sha_git": "284d53e254e2dbac2f9986b10cbf16dec6541ccc",
+    "size_kb": 5.585,
+    "ts_validated": "2026-04-13T21:02:46.349294+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/03_BRAIN_INTERNALS/gdelt_foundation.py": {
+    "sha256": "eaba69839142c87b876d9b3045537e2de10b8bd3924390b90cbfa2aaeb386bb1",
+    "sha_git": "911ae0f37cdf569bedec5a0e69d93906453fa79c",
+    "size_kb": 37.662,
+    "ts_validated": "2026-04-13T21:02:46.354579+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/02_ACTIONS_BRIDGE/workflows/spel_universe.yml": {
+    "sha256": "c2c8cc8a9f51d18a70246300834d6ed9c7045c840c54b18f7088964d47731869",
+    "sha_git": "3a9e0173568839cbca84f7927f8d38e44ffbd1d9",
+    "size_kb": 28.495,
+    "ts_validated": "2026-04-13T21:02:46.357904+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/__init__.py": {
+    "sha256": "0690b456d4a2e2c76dff62f71266fcc68945d35ceaaf6ded00d4dfaf03ad59fb",
+    "sha_git": "9abb329aa60499577da1ab63bb48fa4d702b1ee8",
+    "size_kb": 0.027,
+    "ts_validated": "2026-04-13T21:02:46.360885+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/SPEL_S31_LAUNCHER.py": {
+    "sha256": "a7bfbc54dd4a247b2f20e328e8c5bbe301d8f6b4ac9748b5bc6b8b0378a85744",
+    "sha_git": "e0182431457d6cfbf20ee89a7251a5e9642e7325",
+    "size_kb": 19.711,
+    "ts_validated": "2026-04-13T21:02:46.364928+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/api_sensor.py": {
+    "sha256": "453fa31b4bfaacbb0220f2dc14f959c82ed6f5de21d5f635bb88ce09e1c5f662",
+    "sha_git": "2b427191a4dfe0d74b4d8230d37338216c20346b",
+    "size_kb": 10.876,
+    "ts_validated": "2026-04-13T21:02:46.369128+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/base_detective.py": {
+    "sha256": "c720f83520c01ee21b8f496f831e3dc3fdcc94eee36a9f1e050046a4e3341b07",
+    "sha_git": "c017ed04a0df51a756ebdb14f7549e6a17acc6ae",
+    "size_kb": 1.004,
+    "ts_validated": "2026-04-13T21:02:46.374037+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/capa_c_inference.py": {
+    "sha256": "ac0ea9605cc2b280019a284570423c4c48910fd2dd3adaf35c43a045a263c1f4",
+    "sha_git": "c7f00373964e855dea38ad9313188b63e878284b",
+    "size_kb": 14.336,
+    "ts_validated": "2026-04-13T21:02:46.377336+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/critical_loss_optimized.py": {
+    "sha256": "a1314e013523a5b1ff4098b487a6eb5cc31914fd6bf91a23975af84b030e0511",
+    "sha_git": "ff91bb84a5d81e8dc72a0db94923bbaa32027a81",
+    "size_kb": 16.282,
+    "ts_validated": "2026-04-13T21:02:46.381165+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/dna_sovereign.py": {
+    "sha256": "b07169bade20b162024af41b22729cb4c1597a545ea216224509002566c9221d",
+    "sha_git": "95dbc97fe2855a263b0d14de5bf6b93924469a4b",
+    "size_kb": 30.946,
+    "ts_validated": "2026-04-13T21:02:46.385473+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/dashboard_fx.py": {
+    "sha256": "ed1bc4568922f9b70ed064e87f53557fbcb07f71e1724ef99b08b3e6af7d2363",
+    "sha_git": "6d7e8848958da101d4fbd583da0b51f4453831ca",
+    "size_kb": 19.754,
+    "ts_validated": "2026-04-13T21:02:46.390532+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/error_detective.py": {
+    "sha256": "db093f7eaff7a8d66180490e7fdabbb078b1ba16e17807fa24fc79301dc09342",
+    "sha_git": "50c3bf260b3ca87833849dc6b77c4a0a5fa17834",
+    "size_kb": 8.263,
+    "ts_validated": "2026-04-13T21:02:46.394304+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/executors/spel_adapter_bridge.py": {
+    "sha256": "c604f3ec0ece183d8a1add78d49dcc7a83880477d9e58fa2ba2a16321811006f",
+    "sha_git": "f8cba9816def8277889454bedffc33845f80169f",
+    "size_kb": 14.763,
+    "ts_validated": "2026-04-13T21:02:46.399255+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/executors/base_adapter.py": {
+    "sha256": "24d67aadfcd172b8871aee0e38224bf5e58d0a0b199412d51db9ad9cd3703662",
+    "sha_git": "8e6a8192f1bf028a231d8cfe1adb0240e27a3210",
+    "size_kb": 31.882,
+    "ts_validated": "2026-04-13T21:02:46.403651+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/executors/spel_paper_adapter_v2.py": {
+    "sha256": "0f32136256c545d5a6273b4d199295517dd9bd9fea21b12a5e477855756e468d",
+    "sha_git": "de0475bf13ffdd708424c0cc721d637bfcac9e35",
+    "size_kb": 25.616,
+    "ts_validated": "2026-04-13T21:02:46.407478+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/godel_bound.py": {
+    "sha256": "90ea6e9cbed7ce33fffd18bd646f7364f3088cfcb70611154d15ded81973df80",
+    "sha_git": "0cc982be7f2aff1bfc52525435f290cdc8797577",
+    "size_kb": 17.188,
+    "ts_validated": "2026-04-13T21:02:46.410612+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/harvesters/spel_bulk_harvester.py": {
+    "sha256": "58f5597d3dcc6fec9f4703633b9383d694f7b1de046c09ee269502fe272bddbd",
+    "sha_git": "38557bac4d7b02fdce2265a1deaf55181ca4acb6",
+    "size_kb": 45.399,
+    "ts_validated": "2026-04-13T21:02:46.414623+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/harvesters/spel_ingest_incremental.py": {
+    "sha256": "94cfcd88242c15da929319b8e4652bfd874d9b96f953888f93cb761534dc6bb0",
+    "sha_git": "83418e630e4292d27f1b3a7e272dda6a7690b66e",
+    "size_kb": 19.096,
+    "ts_validated": "2026-04-13T21:02:46.418605+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/indicators/spel_score_engine.py": {
+    "sha256": "25d7c58dea1c86d7b2ba8e0dd502a2c9552dc1520b39503db17e288e4c6a77d2",
+    "sha_git": "1e7759249a81202fa32b5f82415c246e493b2133",
+    "size_kb": 12.232,
+    "ts_validated": "2026-04-13T21:02:46.423417+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/indicators/spel_score_fn_wrapper.py": {
+    "sha256": "76583103da76d82844f6a6221c8c19c19c61981a719e5dc34d33f58d5f8fc87c",
+    "sha_git": "0e3f621e6b24149ac67dd07f8fede3d2375471ea",
+    "size_kb": 1.542,
+    "ts_validated": "2026-04-13T21:02:46.428032+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/isolator.py": {
+    "sha256": "58437718e8330b99274e1a272853e8c47a75ad5436497551e8a9f82a912f0623",
+    "sha_git": "e8a6deb3f338f32c30bb969f74c7d83979bdd37f",
+    "size_kb": 1.898,
+    "ts_validated": "2026-04-13T21:02:46.432989+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/main_ui.py": {
+    "sha256": "cb0f0c78ceed8d710dd53b51b4127245611f89473c250174bbdde141dc64af96",
+    "sha_git": "be2603f3010b74358f74a6b14ad1cff0e8a644c3",
+    "size_kb": 36.971,
+    "ts_validated": "2026-04-13T21:02:46.438106+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/messenger.py": {
+    "sha256": "0fd2597a59c30a89e37770acc8c9829363dcb722cb0ee262285b72bc3e32f06a",
+    "sha_git": "7359b03ba3ecd94e3e8b7faab42b01fb05e14718",
+    "size_kb": 2.731,
+    "ts_validated": "2026-04-13T21:02:46.440963+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/ojo_de_dios_v26.py": {
+    "sha256": "7d599323f769b2e6d670a7484f86dfab05a453a0eb2d8a7995924ae58305d0b1",
+    "sha_git": "59d84bd0f6c7fbe8f98a054047d2899180cbff0d",
+    "size_kb": 31.453,
+    "ts_validated": "2026-04-13T21:02:46.446359+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/sha_detective.py": {
+    "sha256": "ee89d39f9b82e4837480c091b9dd5579afc1554d8d96d3ee647c9e7ff1fec7b3",
+    "sha_git": "0588be41158a89b5b70d8802c093ef99f75a80b3",
+    "size_kb": 7.902,
+    "ts_validated": "2026-04-13T21:02:46.449781+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_asset_registry.py": {
+    "sha256": "bd07d849a1089e95d724ba87dc10632e1dff586078cf16b9cddd0b6898033d49",
+    "sha_git": "41ca74c8d8360fc65f396ef24803611db3f59a5a",
+    "size_kb": 0.339,
+    "ts_validated": "2026-04-13T21:02:46.453178+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_backbone_engine.py": {
+    "sha256": "b7a9f03cc64b591df4cb1b9fc67697fdf85f6005aa3a586c49bb46b19c4ac24b",
+    "sha_git": "c8efd6edeaa6a85d3f688e2d903fe143754191d9",
+    "size_kb": 44.526,
+    "ts_validated": "2026-04-13T21:02:46.456875+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_bayesian_core.py": {
+    "sha256": "edc0b57e2a608792c7f179ad09a333982cf292e6e92af863b146358785eecc2d",
+    "sha_git": "b8ee4c8b37b67e48ed3b645da368e88e0d5661a6",
+    "size_kb": 22.29,
+    "ts_validated": "2026-04-13T21:02:46.460634+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_cloud_inference.py": {
+    "sha256": "a8c8bcc994b7d22d85daa9f762052e2699fde12d10133fe0ff08cce22897211c",
+    "sha_git": "5ff7d25ca9e29fa68bafc5b72de93f38288c029f",
+    "size_kb": 14.54,
+    "ts_validated": "2026-04-13T21:02:46.464579+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_commons.py": {
+    "sha256": "d235416420d036a7f60344fdb25090b3a6b7de9b88837ee303335891abe35a55",
+    "sha_git": "28924c2faec41d1aee2c8e5082998196a9e87054",
+    "size_kb": 4.781,
+    "ts_validated": "2026-04-13T21:02:46.467772+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_cost_model.py": {
+    "sha256": "1a30bb6be8c7e984d47d6091084701b50db0444b6de912d6507b20d2ccc6d480",
+    "sha_git": "b764305a80ffcf7e48c30e36609c237169d15558",
+    "size_kb": 2.086,
+    "ts_validated": "2026-04-13T21:02:46.472065+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_daily_runner.py": {
+    "sha256": "ee1d4d29c0be3e14215eb596ac00fe7a829186e9d29197a209cf844e3a04add7",
+    "sha_git": "66a48a41c43c57f9c7fedbe2e11d18af934d694d",
+    "size_kb": 7.556,
+    "ts_validated": "2026-04-13T21:02:46.476577+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_daily_check.py": {
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "sha_git": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+    "size_kb": 0.0,
+    "ts_validated": "2026-04-13T21:02:46.479585+00:00",
+    "status": "synced",
+    "action": "already_synced"
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_dashboard.py": {
+    "sha256": "7f8fbe0c07377ac649f7e7e68eb8113551e107972d70b117580025df37bbb0c9",
+    "sha_git": "6922bef8ef345a83ca7e3e4b69e62b7d088ddeb6",
+    "size_kb": 30.1,
+    "ts_validated": "2026-04-13T21:02:46.484319+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_drive_cleanup.py": {
+    "sha256": "eb7a0bf0e3096db3bfa635fb48ad150262a6e631101ffbe0174dcd1e34ef60ce",
+    "sha_git": "5c02a1b18f7a9e38a948e375dbd53e265b5eed99",
+    "size_kb": 9.446,
+    "ts_validated": "2026-04-13T21:02:46.487711+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_export_feature_cache.py": {
+    "sha256": "3e9d0d032cc45bdb890aa572d82541445c2b084d26fcb1d719f17826285e2b0b",
+    "sha_git": "511cc9ba3f5a4a8e815b516df1a9bf6af180118b",
+    "size_kb": 15.038,
+    "ts_validated": "2026-04-13T21:02:46.491329+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_forex_bridge.py": {
+    "sha256": "c9888393166c0b26f6dde0bebcbedaa521fc7664eb3f639141971a8551dc794c",
+    "sha_git": "d91c70ea00924c6f2c5bc13a7709a9bd8b6651e5",
+    "size_kb": 5.493,
+    "ts_validated": "2026-04-13T21:02:46.493678+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_forex_iq.py": {
+    "sha256": "0737ce4add8b9a255cda4fddfba4d8c31fe2583d5ec42ddf23706916ff569d00",
+    "sha_git": "6daf2c69416f668f5144ca54475f99bcf3e9191f",
+    "size_kb": 25.347,
+    "ts_validated": "2026-04-13T21:02:46.497345+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_forex_iq_runner.py": {
+    "sha256": "a34c9564816df71ac26cba41e23e37f1668d99627b87b44347726bc9adbfef8b",
+    "sha_git": "b0da42b0c9e9493f271328a13fedb13beb8ed49c",
+    "size_kb": 2.336,
+    "ts_validated": "2026-04-13T21:02:46.500946+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_github_setup.py": {
+    "sha256": "ded782d13f8b8e60a80032e200806cc03a5175807a68879414049229938d1fad",
+    "sha_git": "ed5f26051773ee527be8d974906aba5783112df1",
+    "size_kb": 14.88,
+    "ts_validated": "2026-04-13T21:02:46.503987+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_graph_tab.py": {
+    "sha256": "8247c989fcb8edaa139f8b91fce02cc51df4cc18172d32de5e25d698c0680e88",
+    "sha_git": "9684941e1888ab48af67cc2b4a4ab78f500f8ba8",
+    "size_kb": 30.549,
+    "ts_validated": "2026-04-13T21:02:46.507713+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_hud.py": {
+    "sha256": "2eb4e89b4bf7c81258e1d319f2fd9b1ce022035e55abd7e01d4ec4f756d82eaa",
+    "sha_git": "9bfa5f682461384da48f91653617f28b9ef1f62d",
+    "size_kb": 36.299,
+    "ts_validated": "2026-04-13T21:02:46.510878+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_inventory_dashboard.py": {
+    "sha256": "8f16ba59f05e48c43a1846e2f0d77e611d51e5c7b7e79e7a78d3b373dff5fee7",
+    "sha_git": "9a3c8c10155d75ac58e4561c48adf4703ee16512",
+    "size_kb": 40.187,
+    "ts_validated": "2026-04-13T21:02:46.514955+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_logger.py": {
+    "sha256": "6a245a895d3daa41e9b75ad7839585ee10573bc361ee403214fa5ee0c9c5e926",
+    "sha_git": "f1a24c1638e6df2941a9629ab04a423dc608468e",
+    "size_kb": 6.439,
+    "ts_validated": "2026-04-13T21:02:46.518693+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_ml_master.py": {
+    "sha256": "5f735041edd92e0fa112814cfc037aa1ef96aaf23ea6d6af397e235b602ea1ad",
+    "sha_git": "bd759e99b9a83895c6e64131d2c471e7bf5c1358",
+    "size_kb": 3.813,
+    "ts_validated": "2026-04-13T21:02:46.522662+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_math_engine.py": {
+    "sha256": "d7cb04346cc517006a2bbe4d226ced07d82dab134eb5306d834cec3fe7add4bf",
+    "sha_git": "16ad07f80d6517e675fad1410d9a187cc65f948b",
+    "size_kb": 53.38,
+    "ts_validated": "2026-04-13T21:02:46.528698+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_modules.py": {
+    "sha256": "301d5ea4c769584159d252134545773b3bb0af891c8d8a85d558b8cf57313973",
+    "sha_git": "5eede8332d0d38b44d8595ed296807a9c3e7fc70",
+    "size_kb": 28.165,
+    "ts_validated": "2026-04-13T21:02:46.533057+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_orchestrator_v10.py": {
+    "sha256": "561aed9672da3703ff5c98e88b9efc172e681d9804a326a6e7a7a3a57ab7e8c1",
+    "sha_git": "2b11085c0e9c801a0ab470c71b9253601b597dd5",
+    "size_kb": 29.309,
+    "ts_validated": "2026-04-13T21:02:46.536427+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_p90_recalibrate.py": {
+    "sha256": "98d74bfa002460543c472cb390ecd2b7c7ac2caac41cf2736060cecae6cc4b5b",
+    "sha_git": "efdf4024d4da33aa2298ed8f2ca34e06825daa63",
+    "size_kb": 10.007,
+    "ts_validated": "2026-04-13T21:02:46.539649+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_orchestrator_v9.py": {
+    "sha256": "e8771f164ef44119279808df27ec52ede59259c9ddf77c443ead2c6c83b54ace",
+    "sha_git": "7054a9de47a5d402da7f87c2b366a2676f45a326",
+    "size_kb": 31.194,
+    "ts_validated": "2026-04-13T21:02:46.542854+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_patch_coordinated.py": {
+    "sha256": "4aafabfba4f2e019ef844a8eaed3b10907e825d08c51d2643afa65b917180ae3",
+    "sha_git": "7ac413d0106b44c71fd8a8ec01dbea590f203dd2",
+    "size_kb": 20.802,
+    "ts_validated": "2026-04-13T21:02:46.563347+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_preflight_s24.py": {
+    "sha256": "1237a03f3252b97975cf65241bb0677e2cef768904efe053fc8433584fe7dad6",
+    "sha_git": "075d737d0c3eedb7c6faea755ca1a0eb2668d945",
+    "size_kb": 17.555,
+    "ts_validated": "2026-04-13T21:02:46.567379+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_purger_v3.py": {
+    "sha256": "800ec1d691d2dee3bf18ce630dd3f105bb15e8a2f84144143e298cddb9927447",
+    "sha_git": "62d9e29124a13b3fbb6c7de40b61a66d5710e99e",
+    "size_kb": 11.836,
+    "ts_validated": "2026-04-13T21:02:46.571640+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_scalping_tab.py": {
+    "sha256": "8c61050a3f8b1faaa530eed7299a19759ecdc41d4933d5f77bab65de3003fe3c",
+    "sha_git": "250bde836da0d61e9c7fa09b67b0ba6657e48bc8",
+    "size_kb": 23.597,
+    "ts_validated": "2026-04-13T21:02:46.574724+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/spel_colab_sync_s49.py": {
+    "sha256": "b6691475ab2690856685ec9cdb21292270f716e293db7cf79f84f857eab1d12b",
+    "sha_git": "a1b1230f24473e66c56d11cbbf0040676a8c072d",
+    "size_kb": 16.712,
+    "ts_validated": "2026-04-13T21:02:46.579890+00:00",
+    "status": "synced",
+    "action": "pushed_to_github"
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_snapshot_updater.py": {
+    "sha256": "dba501e41bc8f69fefb3853eae0e77d77c43e3d01e4156403acdd31f02131e30",
+    "sha_git": "9d294fd5f7c05c3996f41ab89ddeec5138bc3955",
+    "size_kb": 9.353,
+    "ts_validated": "2026-04-13T21:02:46.582836+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_telegram_setup.py": {
+    "sha256": "35dd89bf0cf050d2ed85349d9d16a7f9b0987680a818f738d6500532d6ad57af",
+    "sha_git": "857d6d27ff5bb754baaaf5ad5130a364617a1676",
+    "size_kb": 4.206,
+    "ts_validated": "2026-04-13T21:02:46.587388+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_session_start.py": {
+    "sha256": "dd6b06918ee66eb66687a98b2d855ab7855e2bd841d2030e9d2134a7b0be7c56",
+    "sha_git": "1fe78e27eec1b77f15ea3e7875433c7472bdfebe",
+    "size_kb": 14.059,
+    "ts_validated": "2026-04-13T21:02:46.591432+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_web3_adapter.py": {
+    "sha256": "002cfd43798b7ae7679691f1734a7200861ac146bd63294f84f619a82934d83a",
+    "sha_git": "be61a80eb58f75fa01ddf5b95f854053b08de0d0",
+    "size_kb": 11.186,
+    "ts_validated": "2026-04-13T21:02:46.595896+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/04_GOLD_MODULES/spel_trading_router.py": {
+    "sha256": "cf05410fa2172da4030dbc438e9cf37221d2090c88b936850a9bddfd4d2f5a18",
+    "sha_git": "1b34be09b23454d9e73928c70eff224bbe3d4b34",
+    "size_kb": 12.964,
+    "ts_validated": "2026-04-13T21:02:46.600951+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/meta/last_signal.json": {
+    "sha256": "0eac412f70a98c645fd3bc26c61a2b119bc270ff1536e0d12d3d99bfff7ec2a5",
+    "sha_git": "22e7042da8df48bb277f2203a01aae6afcfacfa2",
+    "size_kb": 0.479,
+    "ts_validated": "2026-04-13T21:02:46.604178+00:00",
+    "status": "synced",
+    "action": "pulled_from_github"
+  },
+  "ORDEN/SPEL 3.0/meta/system_pulse.json": {
+    "sha256": "f54db70d0817db64488a3a3970c0e626a55ba9f34c3d417f9e5b85b11ee205c6",
+    "sha_git": "42a463b09ce1d357acc7fe44346c8ea2bb834e38",
+    "size_kb": 0.095,
+    "ts_validated": "2026-04-13T21:02:46.607104+00:00",
+    "status": "synced",
+    "action": "pulled_from_github"
+  },
+  "ORDEN/SPEL 3.0/spel_commons.py": {
+    "sha256": "a80b9bf12ed80ce1ebbecbd725b8eebdeec740e61901cab3d14e850fb9686e79",
+    "sha_git": "6c2ff7be5da9bacbc081a44915ec8705a18b8c91",
+    "size_kb": 6.581,
+    "ts_validated": "2026-04-13T21:02:46.610998+00:00",
+    "status": "synced",
+    "action": ""
+  },
+  "ORDEN/SPEL 3.0/spel_memory_patch.py": {
+    "sha256": "e72aef66f47a4dfc9a70e6615819c6a97be51974c6427a9fe3e0efa802e536b0",
+    "sha_git": "fa49ada2d2b332646c20172de971898bde951f43",
+    "size_kb": 9.907,
+    "ts_validated": "2026-04-13T21:02:46.615117+00:00",
+    "status": "synced",
+    "action": ""
+  }
 }
