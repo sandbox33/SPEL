@@ -1,0 +1,170 @@
+{
+  "_protocol": "SPEL_ROADMAP_S48",
+  "_version": "1.0.0",
+  "_ts": "2026-04-12T00:00:00Z",
+  "_motto": "Hinc Omnia Cerno",
+  "_author": "Holmes OS V4.0 — Guardian Central",
+
+  "executive_summary": {
+    "current_state": {
+      "nodes_operational": 103,
+      "modules_live": 71,
+      "audit_files": 112,
+      "sha_divergence_root_cause": "RESOLVED_S47 — comparación sha256 raw vs sha_git era metodológicamente inválida",
+      "gate_r30_status": "IN_PROGRESS — 63-day paper trading",
+      "critical_blocker": "BUG-YAML-001 — condición C7 GH Actions requiere fix manual en UI"
+    },
+    "target_state": "Autonomous sovereign trading system con mando centralizado, narrativa IA, auto-reentrenamiento y visualización 3D de 103 nodos en tiempo real.",
+    "phases_count": 4,
+    "estimated_sessions": "S48 → S52"
+  },
+
+  "phases": [
+    {
+      "id": "PHASE_1",
+      "name": "Sovereign Command Dashboard",
+      "session": "S48",
+      "priority": "CRÍTICA",
+      "deliverables": [
+        {
+          "file": "main_ui_vFinal.py",
+          "desc": "Dashboard Streamlit — Ojo de Dios vFinal con 3D node map, trade tracker, score display",
+          "status": "ENTREGADO_S48"
+        },
+        {
+          "file": "spel_narrative.py",
+          "desc": "Motor narrativo Gemini — post-mortems en lenguaje natural, routing SEÑALES/CAOS",
+          "status": "ENTREGADO_S48"
+        },
+        {
+          "file": "holmes_state.json",
+          "desc": "Estado unificado del sistema — única fuente de verdad para el dashboard",
+          "schema": {
+            "nodes": "array[{id, module, status, sha_git, last_seen, category}]",
+            "scores": "{core: {gt_score, vitality, kl_div, regime}, forex: {gt_score, entropy, threshold}}",
+            "trade": "{asset, direction, entry_ts, entry_price, status, win_loss}",
+            "guardian": "{health_ok, files_validated, missing_secrets, cb_states}",
+            "montecarlo": "{running, paths_computed, current_var, breach_probability}",
+            "telegram": "{sistema_ok, senales_ok, backup_ok, caos_ok}",
+            "harvester_queue": "array[{asset, type, priority, status}]",
+            "training_queue": "array[{asset, trigger, epochs, status}]"
+          }
+        }
+      ],
+      "constraints": [
+        "RAM footprint < 400MB en runtime del dashboard",
+        "Plotly 3D para node map — sin Three.js ni WebGL custom",
+        "Escritura atómica de trade_resolution.json con lock (race condition safe)",
+        "Streamlit cache para evitar re-lectura del JSON en cada rerun"
+      ]
+    },
+    {
+      "id": "PHASE_2",
+      "name": "Autonomía & Auto-Train Loop",
+      "session": "S49",
+      "priority": "ALTA",
+      "deliverables": [
+        {
+          "file": "messenger_v2.py",
+          "desc": "TelegramRouter refactorizado con 4 canales aislados — ya parcialmente implementado en spel_guardian.py S47"
+        },
+        {
+          "file": ".github/workflows/auto_train_trigger.yml",
+          "desc": "Workflow GHA que lee trade_resolution.json y dispara webhook Ngrok→Colab si LOSS"
+        },
+        {
+          "file": "isolator_v2.py",
+          "desc": "Cuarentena SHA-aware — notifica a SISTEMA con SHA del archivo antes de mover a FENIX"
+        },
+        {
+          "file": ".github/workflows/watchdog_dms.yml",
+          "desc": "Dead Man Switch workflow — SOS a CAOS si pulso > 15min"
+        }
+      ],
+      "key_decision": "Ngrok URL dinámica por sesión Colab → solución: publicar URL en holmes_state.json al inicio de cada sesión Colab, leída por GHA en runtime"
+    },
+    {
+      "id": "PHASE_3",
+      "name": "Motor Matemático Hardening",
+      "session": "S50",
+      "priority": "MEDIA_ALTA",
+      "deliverables": [
+        {
+          "file": "capa_c_inference.py (PATCH)",
+          "desc": "Ley-2/R37: eliminar import torch global → lazy loading en _build_spel_lstm_class() e inferir()"
+        },
+        {
+          "file": "spel_score_engine.py (PATCH EF-22)",
+          "desc": "Aislamiento Forex: detector de asset type → scalers forex_scalers.json [1e-4, 3e-3] vs Core P90 [0.8, 2.8]"
+        },
+        {
+          "file": "spel_bayesian_core.py (PATCH EF-21)",
+          "desc": "LSTM topological lock: input_size=20 inmutable, strict=True en state_dict load"
+        }
+      ],
+      "risk": "EF-22 contaminación forex/core ya activa — priorizar si score_engine muestra signals espurias"
+    },
+    {
+      "id": "PHASE_4",
+      "name": "Intelligence Expansion",
+      "session": "S51-S52",
+      "priority": "MEDIA",
+      "deliverables": [
+        {
+          "feature": "Whale Flow Detector",
+          "desc": "CVD (Cumulative Volume Delta) integration en spel_score_engine — medir agresión institucional",
+          "data_source": "OHLCV + volume imbalance"
+        },
+        {
+          "feature": "Geospatial GDELT Layer",
+          "desc": "Heatmap geopolítico en dashboard — mapear eventos GDELT con coordenadas lat/lon sobre activos afectados",
+          "data_source": "GDELT GKG + BigQuery"
+        },
+        {
+          "feature": "Gödel Bound Monitor",
+          "desc": "Detector de incertidumbre epistémica — flagear cuando el sistema opera fuera de su espacio de conocimiento verificado"
+        },
+        {
+          "feature": "Transfer Entropy Live",
+          "desc": "Cálculo online de TE entre flujo GDELT y precio — confirmar régimen antes de ejecución LSTM"
+        },
+        {
+          "feature": "Walk-Forward Validator",
+          "desc": "Monte Carlo con walk-forward rolling para evaluar adaptabilidad a cambios de régimen"
+        }
+      ]
+    }
+  ],
+
+  "architecture_north_star": {
+    "data_flow": {
+      "ingestion": "BigQuery GDELT + Yahoo/Alpaca OHLCV → data_lake/ (Parquet, Polars lazy)",
+      "processing": "spel_math_engine → entropy + KL_div + GT_Score → holmes_state.json",
+      "inference": "capa_c_inference (LSTM lazy) + spel_bayesian_core (BMA) → signal",
+      "execution": "spel_trading_router → Alpaca API (swing) / spel_forex_bridge (scalping)",
+      "monitoring": "Holmes OS patrol 900s → guardian health → holmes_state.json → Dashboard",
+      "feedback": "Dashboard WIN/LOSS → trade_resolution.json → GHA trigger → Colab retrain → CAOS"
+    },
+    "single_source_of_truth": "holmes_state.json — generado por Guardian, leído por Dashboard",
+    "ram_budget": {
+      "dashboard_idle": "< 150MB",
+      "dashboard_active_3d": "< 400MB",
+      "inference_peak": "< 1.2GB (lazy torch)",
+      "guardian_patrol": "< 80MB"
+    },
+    "telegram_routing": {
+      "SISTEMA": "Guardian health checks, watchdog, SHA alerts",
+      "SEÑALES": "Trade signals en lenguaje natural + narrativa Gemini (WIN)",
+      "BACKUP": "Checkpoints .pt estándar, sync Drive→GH",
+      "CAOS": "LOSS narrativa, reentrenamiento triggers, Circuit Breaker events, errores críticos"
+    }
+  },
+
+  "immediate_actions_s48": [
+    {"priority": 1, "action": "Resolver BUG-YAML-001 manualmente en GH UI (desbloquea Gate R30 C7)"},
+    {"priority": 2, "action": "Deploy main_ui_vFinal.py en Colab/Codespaces — verificar carga de holmes_state.json"},
+    {"priority": 3, "action": "Deploy spel_narrative.py — testear con Gemini API key en os.environ"},
+    {"priority": 4, "action": "Generar holmes_state.json inicial con datos reales desde Guardian"},
+    {"priority": 5, "action": "Validar escritura atómica de trade_resolution.json desde Streamlit"}
+  ]
+}
