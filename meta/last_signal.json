@@ -1,10 +1,10 @@
 {
   "ts": "2026-04-08T04:52:38.566157+00:00",
-  "decision": "RESET_S49",
+  "decision": "HOLD",
   "asset": "EURUSD",
   "session": "S49",
   "vitality_tesla": 6,
-  "entropy_shannon": 1.85,
+  "entropy_shannon": 0.3,
   "transfer_entropy": 0.3,
   "kl_divergence": 0.04,
   "backbone_direction": 0.0,
@@ -12,7 +12,8 @@
   "gold_score": 0.0,
   "regime": "NORMAL",
   "close": 0.0,
-  "_source": "spel_colab_sync_s49.step3_reset",
-  "_warning": "RESET signal \u2014 placeholder until next GH Actions cycle overwrites",
-  "_sha": "d6466661870c"
+  "_source": "spel_s51_surgery",
+  "_warning": "Manual reset S51 \u2014 entropy lowered from 1.85 to 0.30",
+  "_sha": "d6466661870c",
+  "_reset_ts": "2026-05-18T02:05:48.665331+00:00"
 }

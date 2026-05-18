@@ -189,7 +189,7 @@ jobs:
           ALPACA_SECRET_KEY:   ${{ secrets.ALPACA_SECRET_KEY }}
           FOREX_CHAOS_ENDPOINT: ${{ env.FOREX_CHAOS_ENDPOINT }}
         run: |
-          python3 04_GOLD_MODULES/spel_orchestrator_v10.py --mode bma_only \
+          python3 04_GOLD_MODULES/spel_orchestrator_v10.py \
             || echo "BMA_EXIT=$?" >> $GITHUB_ENV
           echo "BMA_RUN=1" >> $GITHUB_ENV
 

@@ -720,6 +720,6 @@ def build_dna_engine_from_env(spel_root: Path, vault_dir: Path) -> DNASovereignE
         vault_dir=vault_dir,
         tg_token=os.environ.get("TELEGRAM_TOKEN", ""),
         tg_sistema=os.environ.get("TELEGRAM_SISTEMA", ""),
-        tg_caos=os.environ.get("TELEGRAM_CAOS", ""),
+        tg_caos=os.environ.get("TELEGRAM_CHAOS", ""),
         dry_run=os.environ.get("DNA_DRY_RUN", "false").lower() == "true",
     )

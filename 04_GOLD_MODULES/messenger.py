@@ -1,7 +1,7 @@
 """
 Holmes/modules/telegram/messenger.py
 TelegramRouter: 4-channel routing with SISTEMA fallback.
-[FIX S41]: TELEGRAM_CHAOS → TELEGRAM_CAOS (nombre unificado con dna_sovereign.py y S41).
+[FIX S41]: TELEGRAM_CHAOS → TELEGRAM_CHAOS (nombre unificado con dna_sovereign.py y S41).
 R34: secret names verified before use.
 """
 from __future__ import annotations
@@ -14,13 +14,13 @@ from typing import Optional
 
 log = logging.getLogger("Holmes.TelegramRouter")
 
-# Canal CAOS: env var unificada como TELEGRAM_CAOS (no TELEGRAM_CHAOS)
-# Todos los módulos del sistema usan TELEGRAM_CAOS. No TELEGRAM_CHAOS.
+# Canal CAOS: env var unificada como TELEGRAM_CHAOS (no TELEGRAM_CHAOS)
+# Todos los módulos del sistema usan TELEGRAM_CHAOS. No TELEGRAM_CHAOS.
 _CHANNELS: dict[str, str] = {
     "SISTEMA": os.environ.get("TELEGRAM_SISTEMA", "-1003712424420"),
     "SIGNALS": os.environ.get("TELEGRAM_SENALES", "-1003733702589"),
     "BACKUP":  os.environ.get("TELEGRAM_BACKUP",  "-1003761735254"),
-    "CAOS":    os.environ.get("TELEGRAM_CAOS",    ""),   # [FIX] era TELEGRAM_CHAOS
+    "CAOS":    os.environ.get("TELEGRAM_CHAOS",    ""),   # [FIX] era TELEGRAM_CHAOS
 }
 _API_BASE = "https://api.telegram.org"
 _TIMEOUT  = 8
