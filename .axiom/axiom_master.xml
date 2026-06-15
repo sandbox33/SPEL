@@ -1,0 +1,708 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  AXIOM — Autonomous XSD-validated Integrity & Operational Matrix
+  XML Maestro v0.3.1 — Caso de validación: SPEL 4.0 / Holmes OS V4.0
+  Autor: Abraham Fuenmayor Hernández (Altair / Arquitecto Sistémico)
+  Filosofía: Hinc Omnia Cerno
+  Generado en Sesión S52 con Claude Opus 4.7, conforme al XSD canónico de la spec v0.2.0.
+  Estructura de 4 capas: Constitution / State / Deviations / Creative Ledger.
+--><axiom_project xmlns="https://axiom.framework/v1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://axiom.framework/v1 axiom_schema.xsd" schema_version="0.2.0" project_version="4.0.0-bloque1-sealed" last_modified="2026-06-14T20:55:00Z" seal_authority="Abraham_Fuenmayor_Hernández" system_integrity_hash="a252f232a3fad844dc76ed51efeb6816da5ec32d6480cf53a591e0e0c2e64c12">
+  <identity>
+    <program_name>SPEL 4.0 / Holmes OS V4.0 Quantitative Engine</program_name>
+    <short_name>SPEL</short_name>
+    <owner_legal_name>Abraham Fuenmayor Hernández</owner_legal_name>
+    <owner_jurisdiction>Ecuador</owner_jurisdiction>
+    <security_classification>PROPRIETARY_TOTAL_PRIVATE</security_classification>
+    <moral_charter>Sistema de trading cuantitativo soberano. Código privado inviolable bajo secreto comercial. Las estrategias, modelos LSTM entrenados, y parámetros de régimen son propiedad exclusiva del autor. Prohibida la replicación, ingeniería inversa, o uso por terceros sin licencia expresa firmada.</moral_charter>
+    <motto>Hinc Omnia Cerno</motto>
+  </identity>
+  <constitution sealed_at="2026-06-09T05:42:37Z" amendment_count="0">
+    <law id="LEY_2" name="Lazy_Imports_Inviolable" classification="IMMUTABLE" audit_status="VERIFIED" immutable="true">
+      <rule>Prohibidos imports top-level de torch, numpy, polars en cualquier módulo.</rule>
+      <rule>Acceso a librerías pesadas exclusivamente vía singletons _get_np(), _get_pl(), _get_torch() dentro del cuerpo de funciones.</rule>
+      <enforcement>El B0 rewriter elimina imports top-level. Cualquier IA debe rechazar reintroducirlos.</enforcement>
+      <rationale>Restricción de RAM ≤8GB en GitHub Actions y entornos móviles Termux.</rationale>
+    </law>
+    <law id="LEY_4" name="Never_OS_Remove" classification="IMMUTABLE" audit_status="VERIFIED" immutable="true">
+      <rule>Prohibido os.remove sobre cualquier archivo del proyecto.</rule>
+      <rule>Eliminación se ejecuta siempre como shutil.move a cuarentena con entrada en quarantine log.</rule>
+      <enforcement>Protocolo Fénix: archivado, nunca destrucción.</enforcement>
+      <rationale>Preservación del audit trail forense (Principio P3).</rationale>
+    </law>
+    <law id="LEY_PRESERVACION_HISTORICA" name="Historical_Preservation" classification="IMMUTABLE" audit_status="VERIFIED" immutable="true">
+      <rule>Prohibida la eliminación de repositorios Git, branches, commits.</rule>
+      <rule>Transición de versión mayor requiere Archive and Migrate.</rule>
+      <enforcement>Cualquier IA debe rechazar directiva de purga total.</enforcement>
+    </law>
+    <law id="LEY_SIMETRIA_LEDGER" name="Ledger_Physical_Symmetry" classification="CRITICAL" audit_status="VERIFIED" immutable="true">
+      <rule>Estado físico en disco debe coincidir 100% con metadatos del XML.</rule>
+      <rule>verify_no_phantom_paths() antes de cualquier gold_map construction.</rule>
+      <enforcement>Divergencia física/lógica detiene la operación con fast-fail.</enforcement>
+      <rationale>Principio P2 — Simetría obligatoria.</rationale>
+    </law>
+    <law id="R_32" name="Atomic_Writes" classification="CRITICAL" audit_status="VERIFIED" immutable="true">
+      <rule>Toda operación de persistencia usa patrón .tmp + os.replace() atómico.</rule>
+      <enforcement>Prohibidas escrituras parciales que dejen estado corrupto.</enforcement>
+    </law>
+    <law id="R_37" name="Lazy_Guard_Runtime" classification="CRITICAL" audit_status="VERIFIED" immutable="false">
+      <rule>Las funciones invocan _get_np()/_get_pl() dentro del cuerpo, nunca a nivel de módulo.</rule>
+      <enforcement>Complementa LEY_2 en tiempo de ejecución.</enforcement>
+    </law>
+    <law id="R_30" name="Paper_Trading_Gate" classification="CRITICAL" audit_status="VERIFIED" immutable="false">
+      <rule>Validación obligatoria de 63 días de paper trading antes de cualquier despliegue de capital real.</rule>
+      <enforcement>Gate de promoción a producción. No omitible.</enforcement>
+    </law>
+    <law id="LEY_TTL_OBLIGATORIO" name="State_TTL_Mandatory" classification="CRITICAL" audit_status="VERIFIED" immutable="true">
+      <rule>Todo archivo de estado producido por cualquier workflow/módulo debe contener los campos: ts (timestamp UTC ISO-8601), producer_id (identificador del productor), validity_seconds (TTL declarado), integrity_sha (SHA-256 del payload).</rule>
+      <rule>Todo consumidor de estado verifica al leer: si (now() - ts) excede validity_seconds, eleva STALE_SIGNAL_ERROR, no propaga la señal, y emite alerta a alert_routing con severity=CRITICAL.</rule>
+      <rule>Workflow axiom_audit_freshness corre cada hora: lista todos los archivos en .axiom/state_files, calcula edad, marca audit_status=STALE en módulos cuyos outputs excedan TTL.</rule>
+      <enforcement>Previene EF-24 (STALE_SIGNAL_LOOP). Cualquier IA debe rechazar generar productor o consumidor de estado que omita estos cuatro campos. Cualquier consumidor que no implemente el TTL check se rechaza en CI.</enforcement>
+      <rationale>Caso forense del bot Telegram congelado 9 días. La ausencia de TTL convirtió un bug menor (orquestador no corriendo) en pérdida activa de confianza operacional.</rationale>
+    </law>
+    <law id="LEY_FIRMA_SOBERANA" name="Sovereign_Signature_Protocol" classification="IMMUTABLE" audit_status="VERIFIED" immutable="true">
+      <rule>Sistema de firma criptográfica del proyecto: minisign (Ed25519) — elegido sobre GPG por ligereza en Termux móvil y sobre age+signify por simplicidad operativa.</rule>
+      <rule>Toda modificación a nodos con classification IMMUTABLE, CRITICAL, o PROPRIETARY_TOTAL_PRIVATE requiere firma minisign válida del seal_authority humano. La IA propone, el humano firma soberanamente.</rule>
+      <rule>La clave privada minisign del seal_authority NUNCA reside en almacenamiento corporativo (Drive, GitHub, Colab). Vive exclusivamente en Termux + backup cifrado en ProtonMail con frase de paso distinta.</rule>
+      <rule>La clave pública minisign vive en sandbox33/AXIOM/keys/seal_authority.pub y se referencia desde sandbox33/SPEL-4.0/.axiom/seal_authority.pub.ref para verificación en CI.</rule>
+      <enforcement>GitHub Actions workflow gate_3_signature_verify rechaza cualquier merge a main sin firma válida. Anthropic, Google, OpenAI, Microsoft no pueden falsificar la firma sin la clave privada que solo el autor posee. Soberanía criptográfica real.</enforcement>
+      <rationale>Human-in-the-Loop verificable matemáticamente. La IA actúa como sugerente; el creador como firmante soberano. Defensa contra captura corporativa, deriva acumulativa y reclamaciones de propiedad intelectual de terceros.</rationale>
+    </law>
+    <fatal_error id="EF-23" name="EF23_Immutable_Modules_Protected">
+      <description>gdelt_foundation.py y critical_loss_optimized.py son inmutables. Pueden contener bugs residuales (CAOS typos, heavy imports) pero NUNCA se parchean sin protocolo formal de consejo.</description>
+      <consequence>Modificación requiere reentrenamiento LSTM completo y rompe la continuidad del modelo entrenado.</consequence>
+    </fatal_error>
+    <fatal_error id="EF-24" name="STALE_SIGNAL_LOOP">
+      <description>Un consumidor de estado (bot Telegram, alerta, dashboard, workflow downstream) lee un archivo de estado cuyo timestamp no se ha actualizado en N segundos pero continúa operando como si la señal fuera vigente. Caso forense documentado: bot Telegram congelado 9 días enviando la misma señal porque last_signal.json no se refrescó y el bot carecía de validación temporal (TTL check) y de dead man switch. Aplica a TODOS los productores y consumidores de archivos JSON/Parquet/XML del sistema, sin excepción.</description>
+      <consequence>Decisiones financieras tomadas sobre datos viejos. Pérdida de capital. Pérdida de confianza forense en el sistema. Cualquier dato derivado de una señal stale queda envenenado en cascada y debe purgarse del audit trail mediante archivado (Ley 4), nunca eliminación.</consequence>
+    </fatal_error>
+    <invariant id="R13" name="LSTM_Architecture_Fixed">
+      <description>Dimensiones canónicas del LSTM inmutables a lo largo de todo el sistema.</description>
+      <constraint>input_size=20, hidden_size=64, num_layers=1, output=self.linear</constraint>
+    </invariant>
+  </constitution>
+  <state current_phase="BLOQUE_1_HOLMES_COMPLETE_PATCHED" last_audit_at="2026-06-13T20:00:00Z">
+    <module name="SPEL_INSTITUTIONAL_AUDITOR_V41.py" cluster="00_INFRAESTRUCTURA" classification="CRITICAL" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/00_INFRAESTRUCTURA/SPEL_INSTITUTIONAL_AUDITOR_V41.py</path>
+      <sha256>cb0e11c5ec140b3c32db5f26a4ecd1afd77d0bad174f536ba77d6d9b8b505edd</sha256>
+      <functions>_get_np,_get_pl,_cred,_gh_get,_gh_raw,_gh_raw_bytes,_tg_send,__init__,_rec,_A_sha_integrity,_B_p90_portability,_C_gdelt_real</functions>
+      <notes>22 broken_np_pl_refs pendientes de cirugía AST</notes>
+    </module>
+    <module name="sha_detective.py" cluster="00_INFRAESTRUCTURA" classification="CRITICAL" audit_status="VERIFIED" immutable="false">
+      <path>SPEL 4.0/00_INFRAESTRUCTURA/sha_detective.py</path>
+      <sha256>ee89d39f9b82e4837480c091b9dd5579afc1554d8d96d3ee647c9e7ff1fec7b3</sha256>
+      <functions>_sha12,scan,_load_registry,_check_parquets,_check_checkpoints</functions>
+    </module>
+    <module name="spel_commons.py" cluster="00_INFRAESTRUCTURA" classification="CRITICAL" audit_status="VERIFIED" immutable="false">
+      <path>SPEL 4.0/00_INFRAESTRUCTURA/spel_commons.py</path>
+      <sha256>d235416420d036a7f60344fdb25090b3a6b7de9b88837ee303335891abe35a55</sha256>
+      <functions>_is_github_actions,_is_colab,detect_root,load_secrets,atomic_write,sha12,tg_direct,_log_warn</functions>
+    </module>
+    <module name="spel_logger.py" cluster="00_INFRAESTRUCTURA" classification="CRITICAL" audit_status="VERIFIED" immutable="false">
+      <path>SPEL 4.0/00_INFRAESTRUCTURA/spel_logger.py</path>
+      <sha256>6a245a895d3daa41e9b75ad7839585ee10573bc361ee403214fa5ee0c9c5e926</sha256>
+      <functions>get_logger,get_logger_guardian,get_logger_orchestrator,get_logger_capa_c,get_logger_score</functions>
+    </module>
+    <module name="base_detective.py" cluster="01_HOLMES_CORE" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="VERIFIED" immutable="false">
+      <path>SPEL 4.0/01_HOLMES_CORE/base_detective.py</path>
+      <sha256>c720f83520c01ee21b8f496f831e3dc3fdcc94eee36a9f1e050046a4e3341b07</sha256>
+      <functions>__init__,scan,_read_json</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="error_detective.py" cluster="01_HOLMES_CORE" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="VERIFIED" immutable="false">
+      <path>SPEL 4.0/01_HOLMES_CORE/error_detective.py</path>
+      <sha256>db093f7eaff7a8d66180490e7fdabbb078b1ba16e17807fa24fc79301dc09342</sha256>
+      <functions>_Anomaly,scan,_scan_gh_actions,_fetch_runs_gh_cli,_fetch_runs_api,_scan_torch_violations,_scan_yaml_condition</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="holmes.py" cluster="01_HOLMES_CORE" classification="CRITICAL" audit_status="VERIFIED" immutable="false">
+      <path>SPEL 4.0/01_HOLMES_CORE/holmes.py</path>
+      <sha256>275abb5843039b134c3b3791160a41f93185462a5f6a68758c07d9a6715399b4</sha256>
+      <functions>_hashchain,_build_signal_packet,_cli,__init__,_load_history,_save_history,_init_modules,patrol,_handle_quarantine,_route_alerts,_write_signal_packet,run_continuous</functions>
+    </module>
+    <module name="isolator.py" cluster="01_HOLMES_CORE" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="VERIFIED" immutable="false">
+      <path>SPEL 4.0/01_HOLMES_CORE/isolator.py</path>
+      <sha256>58437718e8330b99274e1a272853e8c47a75ad5436497551e8a9f82a912f0623</sha256>
+      <functions>__init__,quarantine,_log</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="messenger.py" cluster="01_HOLMES_CORE" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="VERIFIED" immutable="false">
+      <path>SPEL 4.0/01_HOLMES_CORE/messenger.py</path>
+      <sha256>9feae43c6af7d1abd4d562c5425e36293909c09f87266454381f0335cc88bf93</sha256>
+      <functions>__init__,send,send_to_sistema,send_to_backup,send_to_signals,send_to_caos,_post</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_dead_man_switch.py" cluster="01_HOLMES_CORE" classification="CRITICAL" audit_status="VERIFIED" immutable="false">
+      <path>SPEL 4.0/01_HOLMES_CORE/spel_dead_man_switch.py</path>
+      <sha256>8c533f969b09ce068540155248b69b4fbb87d5e58ddbb2e956429f16c9484025</sha256>
+      <functions>_atomic_write,_tg_send,_read_pulse,_write_pulse,cmd_check,cmd_pulse,main</functions>
+    </module>
+    <module name="spel_guardian.py" cluster="01_HOLMES_CORE" classification="CRITICAL" audit_status="VERIFIED" immutable="false">
+      <path>SPEL 4.0/01_HOLMES_CORE/spel_guardian.py</path>
+      <sha256>f9bc61770e01417b9e08ded05bccd6181cca6e7053b0dc5bbe04bef364d76fa9</sha256>
+      <functions>_build_logger,_sha256_file,_sha_git,_sha_git_from_bytes,_archive_path,_utc_now,main,__init__,get_secret,validate_required,_colab_get,_local_vault_get</functions>
+    </module>
+    <module name="spel_meta_guardian.py" cluster="01_HOLMES_CORE" classification="CRITICAL" audit_status="VERIFIED" immutable="false">
+      <path>SPEL 4.0/01_HOLMES_CORE/spel_meta_guardian.py</path>
+      <sha256>c5c77edbb015b51b783c6f87f0874886c487aab47cf8ba872222d5ffb3e83763</sha256>
+      <functions>enforce_lstm_architecture,_sha256_file,verify_checkpoint_integrity,register_checkpoint_hash,cargar_meta_en_memoria,get_z_params,auditar_archivo,auditar_directorio,verificar_estructura_v8</functions>
+    </module>
+    <module name="spel_sentinel_core.py" cluster="01_HOLMES_CORE" classification="CRITICAL" audit_status="VERIFIED" immutable="false">
+      <path>SPEL 4.0/01_HOLMES_CORE/spel_sentinel_core.py</path>
+      <sha256>ed9bc15a6dcbdda6444da17d09523974ca58ecffce6108475ee9af953b4950eb</sha256>
+      <functions>check_r37,check_sha,check_checkpoints,run_patrol,write_signal,to_dict</functions>
+    </module>
+    <module name="critical_loss_optimized.py" cluster="02_MATH_ENTROPY" classification="IMMUTABLE" audit_status="LOG_ONLY" immutable="true">
+      <path>SPEL 4.0/02_MATH_ENTROPY/critical_loss_optimized.py</path>
+      <sha256>a1314e013523a5b1ff4098b487a6eb5cc31914fd6bf91a23975af84b030e0511</sha256>
+      <functions>create_synthetic_contexts,entropy_weight_from_tesla,test_loss_function,__post_init__,__init__,compute_dynamic_lambda,compute_human_factor,forward,forward_with_details</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="gdelt_foundation.py" cluster="02_MATH_ENTROPY" classification="IMMUTABLE" audit_status="LOG_ONLY" immutable="true">
+      <path>SPEL 4.0/02_MATH_ENTROPY/gdelt_foundation.py</path>
+      <sha256>eaba69839142c87b876d9b3045537e2de10b8bd3924390b90cbfa2aaeb386bb1</sha256>
+      <functions>join_entropy_to_price,verify_alignment,raw_path,entropy_path,training_path,ensure_dirs,__init__,_url_for_date,_local_zip_path,_dates_for_year,fetch_day,_parse_zip</functions>
+    </module>
+    <module name="api_sensor.py" cluster="02_MATH_ENTROPY" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/02_MATH_ENTROPY/api_sensor.py</path>
+      <sha256>453fa31b4bfaacbb0220f2dc14f959c82ed6f5de21d5f635bb88ce09e1c5f662</sha256>
+      <functions>__init__,check_newsdata,check_finnhub,check_gdelt,check_all,get_status_string,should_use_api,__init__,fetch_news,fetch_price</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="capa_c_inference.py" cluster="02_MATH_ENTROPY" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/02_MATH_ENTROPY/capa_c_inference.py</path>
+      <sha256>ac0ea9605cc2b280019a284570423c4c48910fd2dd3adaf35c43a045a263c1f4</sha256>
+      <functions>_get_np,_get_pl,_get_nn,_build_spel_lstm_class,_build_godel_head_class,safe_load_checkpoint,diagnostico_activaciones_godel,__init__,cargar_activo,inferir,health,_extraer_features</functions>
+      <notes>17 broken_np_pl_refs pendientes de cirugía AST</notes>
+    </module>
+    <module name="godel_bound.py" cluster="02_MATH_ENTROPY" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/02_MATH_ENTROPY/godel_bound.py</path>
+      <sha256>90ea6e9cbed7ce33fffd18bd646f7364f3088cfcb70611154d15ded81973df80</sha256>
+      <functions>_get_pl,_get_np,calculate_godel_thresholds,godel_interval_activation,compute_interval_coverage,test_covid_crash,run_full_audit,__post_init__</functions>
+      <notes>16 broken_np_pl_refs pendientes de cirugía AST</notes>
+    </module>
+    <module name="spel_backbone_engine.py" cluster="02_MATH_ENTROPY" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/02_MATH_ENTROPY/spel_backbone_engine.py</path>
+      <sha256>b7a9f03cc64b591df4cb1b9fc67697fdf85f6005aa3a586c49bb46b19c4ac24b</sha256>
+      <functions>_get_np,_get_pl,_compute_atr14_vectorized,compute_structural_levels,risk_manager_kelly_micro,backbone_from_config,__str__,__str__,summary,__str__,__init__,_bayesian_update</functions>
+      <notes>39 broken_np_pl_refs pendientes de cirugía AST; layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_bayesian_core.py" cluster="02_MATH_ENTROPY" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/02_MATH_ENTROPY/spel_bayesian_core.py</path>
+      <sha256>edc0b57e2a608792c7f179ad09a333982cf292e6e92af863b146358785eecc2d</sha256>
+      <functions>_detect_root_bma,_atomic_write,_sha24,_load_secrets,_tg_chaos,check_data_staleness,get_rolling_kl,append_bma_history,run_monte_carlo_validation,compute_gold_score_bma,compute_lambda_decay,compute_vitality_tesla</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_cloud_inference.py" cluster="02_MATH_ENTROPY" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/02_MATH_ENTROPY/spel_cloud_inference.py</path>
+      <sha256>a8c8bcc994b7d22d85daa9f762052e2699fde12d10133fe0ff08cce22897211c</sha256>
+      <functions>_get_np,_fetch_json,_fetch_bytes,load_manifest,load_feature_snapshot,load_checkpoint_bytes,_build_lstm,check_freshness,to_dict,__init__,score,score_all</functions>
+      <notes>14 broken_np_pl_refs pendientes de cirugía AST</notes>
+    </module>
+    <module name="spel_cost_model.py" cluster="02_MATH_ENTROPY" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/02_MATH_ENTROPY/spel_cost_model.py</path>
+      <sha256>1a30bb6be8c7e984d47d6091084701b50db0444b6de912d6507b20d2ccc6d480</sha256>
+      <functions>total_pct,get_costo,pnl_neto,resumen,breakeven_trades</functions>
+    </module>
+    <module name="spel_math_engine.py" cluster="02_MATH_ENTROPY" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/02_MATH_ENTROPY/spel_math_engine.py</path>
+      <sha256>d7cb04346cc517006a2bbe4d226ced07d82dab134eb5306d834cec3fe7add4bf</sha256>
+      <functions>_get_np,_get_pl,normalize_transfer_entropy,score_oro,_discretize_series,_shannon_entropy,_transfer_entropy_manual,_transfer_entropy_pyinform,_compute_te,_hurst_rs,_hurst_dfa,_regime_from_hurst</functions>
+      <notes>177 broken_np_pl_refs pendientes de cirugía AST</notes>
+    </module>
+    <module name="spel_score_engine.py" cluster="02_MATH_ENTROPY" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/02_MATH_ENTROPY/spel_score_engine.py</path>
+      <sha256>25d7c58dea1c86d7b2ba8e0dd502a2c9552dc1520b39503db17e288e4c6a77d2</sha256>
+      <functions>_get_np,_get_pl,__init__,compute,_run_inference,_compute_transfer_entropy,_compute_backbone,_compute_vol_factor,_classify_regime,_kelly_fraction,_compute_direction,_get_p90</functions>
+      <notes>25 broken_np_pl_refs pendientes de cirugía AST</notes>
+    </module>
+    <module name="spel_score_fn_wrapper.py" cluster="02_MATH_ENTROPY" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/02_MATH_ENTROPY/spel_score_fn_wrapper.py</path>
+      <sha256>76583103da76d82844f6a6221c8c19c19c61981a719e5dc34d33f58d5f8fc87c</sha256>
+      <functions>_get_pl,_load_parquet,make_score_fn,_score_fn</functions>
+      <notes>7 broken_np_pl_refs pendientes de cirugía AST</notes>
+    </module>
+    <module name="spel_bulk_harvester.py" cluster="03_INGESTION" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/03_INGESTION/spel_bulk_harvester.py</path>
+      <sha256>58f5597d3dcc6fec9f4703633b9383d694f7b1de046c09ee269502fe272bddbd</sha256>
+      <functions>_get_pl,bulk_harvester_from_env,__str__,__init__,bootstrap_ohlcv,bootstrap_gdelt,_fetch_stooq,_fetch_binance,_normalize_ohlcv,_fetch_gdelt_bulk,_parse_master_export_urls,_process_gdelt_day</functions>
+      <notes>100 broken_np_pl_refs pendientes de cirugía AST; layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_forex_bridge.py" cluster="03_INGESTION" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/03_INGESTION/spel_forex_bridge.py</path>
+      <sha256>6d4ad9d299a5093107012e4dded857d5ee8909ab94b51a06981ffc73b552bc53</sha256>
+      <functions>_resolve_endpoint,_call_chaos_endpoint,_tg_chaos_alert</functions>
+    </module>
+    <module name="spel_forex_iq.py" cluster="03_INGESTION" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/03_INGESTION/spel_forex_iq.py</path>
+      <sha256>0737ce4add8b9a255cda4fddfba4d8c31fe2583d5ec42ddf23706916ff569d00</sha256>
+      <functions>_get_np,_get_pl,get_gdelt_macro,get_structure_daily,get_vwap_signal,get_session_score,get_forex_signal,_print_signal,run_forex_dashboard,show_schedule,ema</functions>
+      <notes>13 broken_np_pl_refs pendientes de cirugía AST</notes>
+    </module>
+    <module name="spel_forex_iq_runner.py" cluster="03_INGESTION" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/03_INGESTION/spel_forex_iq_runner.py</path>
+      <sha256>a34c9564816df71ac26cba41e23e37f1668d99627b87b44347726bc9adbfef8b</sha256>
+      <functions>get_gdelt_macro_patched</functions>
+    </module>
+    <module name="spel_ingest_incremental.py" cluster="03_INGESTION" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/03_INGESTION/spel_ingest_incremental.py</path>
+      <sha256>94cfcd88242c15da929319b8e4652bfd874d9b96f953888f93cb761534dc6bb0</sha256>
+      <functions>_get_np,_get_pl,sha12,update_sha_registry,fetch_ohlcv_new,fetch_gdelt_day,compute_entropy_features,add_fibonacci_lags,ingest_asset,ingest_all</functions>
+      <notes>35 broken_np_pl_refs pendientes de cirugía AST</notes>
+    </module>
+    <module name="base_adapter.py" cluster="04_ROUTING_ORCHESTRATOR" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/04_ROUTING_ORCHESTRATOR/base_adapter.py</path>
+      <sha256>24d67aadfcd172b8871aee0e38224bf5e58d0a0b199412d51db9ad9cd3703662</sha256>
+      <functions>_get_np,_get_pl,log_summary,__init__,name,_fetch_raw,fetch,is_available,_dataframe_degradado,_escribir_log_auditoria,__init__,name</functions>
+      <notes>24 broken_np_pl_refs pendientes de cirugía AST; layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_adapter_bridge.py" cluster="04_ROUTING_ORCHESTRATOR" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/04_ROUTING_ORCHESTRATOR/spel_adapter_bridge.py</path>
+      <sha256>c604f3ec0ece183d8a1add78d49dcc7a83880477d9e58fa2ba2a16321811006f</sha256>
+      <functions>_crear_placeholder,adaptar_gdelt_para_score_engine,verificar_no_hay_anomalias_en_runtime,to_streamlit_widget,to_score_engine_dict,__init__,inicializar,get_z_params_cached,fetch_gdelt,fetch_ohlcv,get_z_params</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_daily_check.py" cluster="04_ROUTING_ORCHESTRATOR" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/04_ROUTING_ORCHESTRATOR/spel_daily_check.py</path>
+      <sha256>e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</sha256>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_daily_runner.py" cluster="04_ROUTING_ORCHESTRATOR" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/04_ROUTING_ORCHESTRATOR/spel_daily_runner.py</path>
+      <sha256>ee1d4d29c0be3e14215eb596ac00fe7a829186e9d29197a209cf844e3a04add7</sha256>
+      <functions>_tg,run_daily,run_forex_alert,setup_telegram,run_forex_dashboard</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_orchestrator_v10.py" cluster="04_ROUTING_ORCHESTRATOR" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/04_ROUTING_ORCHESTRATOR/spel_orchestrator_v10.py</path>
+      <sha256>561aed9672da3703ff5c98e88b9efc172e681d9804a326a6e7a7a3a57ab7e8c1</sha256>
+      <functions>_detect_root,_atomic_write,_sha12,_sha24,_load_secrets,_tg,_log_event,step_force_unlock,step_update_pulse,step_sha_registry_intraday,step_run_bma,step_run_web3</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_orchestrator_v9.py" cluster="04_ROUTING_ORCHESTRATOR" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/04_ROUTING_ORCHESTRATOR/spel_orchestrator_v9.py</path>
+      <sha256>e8771f164ef44119279808df27ec52ede59259c9ddf77c443ead2c6c83b54ace</sha256>
+      <functions>_get_pl,_atomic_write,_append_metrics,_serialize_ranking,_inject_actor_type_synthetic,_data_loop,_compute_loop,_ui_loop,_git_loop,run_orchestrator,__init__,mark_harvest</functions>
+      <notes>10 broken_np_pl_refs pendientes de cirugía AST; layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_paper_adapter_v2.py" cluster="04_ROUTING_ORCHESTRATOR" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/04_ROUTING_ORCHESTRATOR/spel_paper_adapter_v2.py</path>
+      <sha256>0f32136256c545d5a6273b4d199295517dd9bd9fea21b12a5e477855756e468d</sha256>
+      <functions>_get_np,_get_pl,_ram_gb,_ram_guard,__init__,record_evaluation,gate_status,_persist,__init__,get_bars,get_account,to_csv_row</functions>
+      <notes>8 broken_np_pl_refs pendientes de cirugía AST; layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_patch_coordinated.py" cluster="04_ROUTING_ORCHESTRATOR" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/04_ROUTING_ORCHESTRATOR/spel_patch_coordinated.py</path>
+      <sha256>4aafabfba4f2e019ef844a8eaed3b10907e825d08c51d2643afa65b917180ae3</sha256>
+      <functions>_get_np,_get_nn,_get_pl,_get_sklearn,sha12,update_meta_registry,patch_cargar_activo,patch_extraer_features,collate,make_sequences_godel,build_contexts,godel_accuracy</functions>
+      <notes>20 broken_np_pl_refs pendientes de cirugía AST; layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_session_start.py" cluster="04_ROUTING_ORCHESTRATOR" classification="CRITICAL" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/04_ROUTING_ORCHESTRATOR/spel_session_start.py</path>
+      <sha256>dd6b06918ee66eb66687a98b2d855ab7855e2bd841d2030e9d2134a7b0be7c56</sha256>
+      <functions>_get_np,_get_torch,_get_pl,sha12,_patch_cargar_activo,_patch_extraer_features,get_signal,reload_scripts,save_session_log,show_map,cargar_activo_patched,extraer_features_zscore</functions>
+      <notes>4 broken_np_pl_refs pendientes de cirugía AST</notes>
+    </module>
+    <module name="spel_trading_router.py" cluster="04_ROUTING_ORCHESTRATOR" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/04_ROUTING_ORCHESTRATOR/spel_trading_router.py</path>
+      <sha256>cf05410fa2172da4030dbc438e9cf37221d2090c88b936850a9bddfd4d2f5a18</sha256>
+      <functions>_get_np,_get_pl,_calcular_intraday_score,resumen,__init__,route,_flat,ema</functions>
+      <notes>4 broken_np_pl_refs pendientes de cirugía AST; layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_web3_adapter.py" cluster="04_ROUTING_ORCHESTRATOR" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/04_ROUTING_ORCHESTRATOR/spel_web3_adapter.py</path>
+      <sha256>002cfd43798b7ae7679691f1734a7200861ac146bd63294f84f619a82934d83a</sha256>
+      <functions>_atomic_write,_sha24,_load_secrets,_tg_chaos,_simulate_near_tx,dry_run_trade,append_trade_log,run_web3_cycle,main</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="SPEL_v37_MASTER_AUDITOR_v2.py" cluster="05_AUDIT_OBSERVABILITY" classification="CRITICAL" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/05_AUDIT_OBSERVABILITY/SPEL_v37_MASTER_AUDITOR_v2.py</path>
+      <sha256>bbe531b6a7aae09ecbc3986dd5833ad3530fb960327e0cd87168d862a9956bc5</sha256>
+      <functions>_get_np,sha12,tg_send,gh_get,gh_decode,sync_snapshot,load_registry,run_master_audit,check</functions>
+      <notes>11 broken_np_pl_refs pendientes de cirugía AST</notes>
+    </module>
+    <module name="dashboard_fx.py" cluster="05_AUDIT_OBSERVABILITY" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/05_AUDIT_OBSERVABILITY/dashboard_fx.py</path>
+      <sha256>ed1bc4568922f9b70ed064e87f53557fbcb07f71e1724ef99b08b3e6af7d2363</sha256>
+      <functions>_get_pd,_get_np,load_last_signal,load_forex_scalers,list_available_pairs,load_features_parquet,load_trade_log,check_pipeline_status,create_candlestick_with_entropy,get_recent_signals,simulate_order,main</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_auditoria_total.py" cluster="05_AUDIT_OBSERVABILITY" classification="CRITICAL" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/05_AUDIT_OBSERVABILITY/spel_auditoria_total.py</path>
+      <sha256>510c72fabd57f7a8b6a88ab4b5f40da497877f2aca5c6d4cea444fbd8655d10a</sha256>
+      <functions>_get_pl,_get_np,sha12,hline,section,ok,warn,err,info,finding,audit_sha,detect_global_norm</functions>
+      <notes>29 broken_np_pl_refs pendientes de cirugía AST</notes>
+    </module>
+    <module name="spel_dashboard.py" cluster="05_AUDIT_OBSERVABILITY" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/05_AUDIT_OBSERVABILITY/spel_dashboard.py</path>
+      <sha256>7f8fbe0c07377ac649f7e7e68eb8113551e107972d70b117580025df37bbb0c9</sha256>
+      <functions>_detect_root,_jload,_load_all_vault,_load_sha_registry,_ram_mb,_ram_check_and_gc,_ts_age,_score_color,_bar,_tag,_dot,_render_gt_score</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_narrative.py" cluster="05_AUDIT_OBSERVABILITY" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/05_AUDIT_OBSERVABILITY/spel_narrative.py</path>
+      <sha256>1d3b7c27ba57ae6802c2d82276170e5b6f028f8b44ba14e7603f0ce8830d3df2</sha256>
+      <functions>_get_secret,load_trade_context_from_resolution,main,is_forex,pnl_pct,to_dict,build,sha256,__init__,generate,_on_failure,send</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_posttraining_audit.py" cluster="05_AUDIT_OBSERVABILITY" classification="CRITICAL" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/05_AUDIT_OBSERVABILITY/spel_posttraining_audit.py</path>
+      <sha256>255e8de02a9ceb920523e149301d8664212c33506cd4cc0a5f1a9756008788b0</sha256>
+      <functions>sha12,ok,warn,fail,info,head,find_checkpoint,audit_checkpoint,main</functions>
+    </module>
+    <module name="spel_trainer_audit.py" cluster="05_AUDIT_OBSERVABILITY" classification="CRITICAL" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/05_AUDIT_OBSERVABILITY/spel_trainer_audit.py</path>
+      <sha256>c3eb2a30f51757c0417de70a0b658623254794a0804483de2d13cfcbaa3b28b6</sha256>
+      <functions>ok,warn,fail,info,head,add,find_trainer,audit_trainer,main,__init__</functions>
+    </module>
+    <module name="dna_sovereign.py" cluster="06_PERSISTENCE_JSON" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/06_PERSISTENCE_JSON/dna_sovereign.py</path>
+      <sha256>6cf155e240f27f5472e0c03641e96b2540d15c4261d0db45b6bd9a07de2bbfc2</sha256>
+      <functions>_sha256_file,_sha256_bytes,build_dna_engine_from_env,to_dict,to_dict,__init__,full_cycle,scan_only,get_module_status,register_new_file,_scan_drive,_load_github_state</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_asset_registry.py" cluster="06_PERSISTENCE_JSON" classification="CRITICAL" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/06_PERSISTENCE_JSON/spel_asset_registry.py</path>
+      <sha256>bd07d849a1089e95d724ba87dc10632e1dff586078cf16b9cddd0b6898033d49</sha256>
+    </module>
+    <module name="spel_colab_sync_s49.py" cluster="06_PERSISTENCE_JSON" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/06_PERSISTENCE_JSON/spel_colab_sync_s49.py</path>
+      <sha256>b6691475ab2690856685ec9cdb21292270f716e293db7cf79f84f857eab1d12b</sha256>
+      <functions>_log,_gh_api,_tg,_sha12,_git,step1_clean_workflows,_ast_has_colab,step2_push_gold_modules,step3_reset_last_signal,step4_trigger_workflow,main</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_drive_cleanup.py" cluster="06_PERSISTENCE_JSON" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/06_PERSISTENCE_JSON/spel_drive_cleanup.py</path>
+      <sha256>eb7a0bf0e3096db3bfa635fb48ad150262a6e631101ffbe0174dcd1e34ef60ce</sha256>
+      <functions>sha12,size_mb,ok,warn,fail,info,verify_before_delete,cleanup,main</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_github_setup.py" cluster="06_PERSISTENCE_JSON" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/06_PERSISTENCE_JSON/spel_github_setup.py</path>
+      <sha256>ded782d13f8b8e60a80032e200806cc03a5175807a68879414049229938d1fad</sha256>
+      <functions>run</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_memory_patch.py" cluster="06_PERSISTENCE_JSON" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/06_PERSISTENCE_JSON/spel_memory_patch.py</path>
+      <sha256>e72aef66f47a4dfc9a70e6615819c6a97be51974c6427a9fe3e0efa802e536b0</sha256>
+      <functions>refresh_signal_timestamp,append_bma_history_robust,check_data_staleness_v2,emergency_seed</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_purger_v3.py" cluster="06_PERSISTENCE_JSON" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/06_PERSISTENCE_JSON/spel_purger_v3.py</path>
+      <sha256>800ec1d691d2dee3bf18ce630dd3f105bb15e8a2f84144143e298cddb9927447</sha256>
+      <functions>_sha12,_ts,_is_zombie,_resolve_duplicate_dest,scan,print_scan_results,execute_purge,write_report,main</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_registry_repair.py" cluster="06_PERSISTENCE_JSON" classification="CRITICAL" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/06_PERSISTENCE_JSON/spel_registry_repair.py</path>
+      <sha256>2149909898463ddca4a52856142ee99a980d66682d637cb50ab440658c10eed1</sha256>
+      <functions>_sha256_file,_sha_git,main,to_dict,to_dict,__init__,load_registry,scan_tree,_audit_file,build_action_plan,execute_plan,_save_registry</functions>
+    </module>
+    <module name="spel_telegram_setup.py" cluster="06_PERSISTENCE_JSON" classification="CRITICAL" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/06_PERSISTENCE_JSON/spel_telegram_setup.py</path>
+      <sha256>35dd89bf0cf050d2ed85349d9d16a7f9b0987680a818f738d6500532d6ad57af</sha256>
+      <functions>setup,obtener_id_canal</functions>
+    </module>
+    <module name="SPEL_S31_LAUNCHER.py" cluster="99_SIN_CLASIFICAR" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/99_SIN_CLASIFICAR/SPEL_S31_LAUNCHER.py</path>
+      <sha256>a7bfbc54dd4a247b2f20e328e8c5bbe301d8f6b4ac9748b5bc6b8b0378a85744</sha256>
+      <functions>tg,gh_get,gh_decode,gh_push,_start_dash</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="__init__.py" cluster="99_SIN_CLASIFICAR" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/99_SIN_CLASIFICAR/__init__.py</path>
+      <sha256>0690b456d4a2e2c76dff62f71266fcc68945d35ceaaf6ded00d4dfaf03ad59fb</sha256>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_export_feature_cache.py" cluster="99_SIN_CLASIFICAR" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/99_SIN_CLASIFICAR/spel_export_feature_cache.py</path>
+      <sha256>3e9d0d032cc45bdb890aa572d82541445c2b084d26fcb1d719f17826285e2b0b</sha256>
+      <functions>_get_np,_get_pl,_gh_get_sha,_gh_put,export_feature_snapshots,export_checkpoints,export_manifest,run_export</functions>
+      <notes>14 broken_np_pl_refs pendientes de cirugía AST; layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_ml_master.py" cluster="99_SIN_CLASIFICAR" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/99_SIN_CLASIFICAR/spel_ml_master.py</path>
+      <sha256>5f735041edd92e0fa112814cfc037aa1ef96aaf23ea6d6af397e235b602ea1ad</sha256>
+      <functions>_load_module,run_entropy_cycle,run_liquidity_cycle,run_inference_cycle,orchestrate</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_modules.py" cluster="99_SIN_CLASIFICAR" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/99_SIN_CLASIFICAR/spel_modules.py</path>
+      <sha256>301d5ea4c769584159d252134545773b3bb0af891c8d8a85d558b8cf57313973</sha256>
+      <functions>_get_np,_get_pl,calcular_volume_profile,detectar_fakeout,crear_grafico_velas_intencion,crear_grafico_volume_profile,extraer_metricas_gdelt,calcular_score_de_oro,ejecutar_auto_auditoria_spel,detectar_correlacion_sistemica,emitir_alerta_trade_de_oro,actualizar_parquet_diario</functions>
+      <notes>15 broken_np_pl_refs pendientes de cirugía AST; layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_p90_recalibrate.py" cluster="99_SIN_CLASIFICAR" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="CONFLICT" immutable="false">
+      <path>SPEL 4.0/99_SIN_CLASIFICAR/spel_p90_recalibrate.py</path>
+      <sha256>98d74bfa002460543c472cb390ecd2b7c7ac2caac41cf2736060cecae6cc4b5b</sha256>
+      <functions>_get_pl,_get_np,sha12,verificar_sha,percentil</functions>
+      <notes>22 broken_np_pl_refs pendientes de cirugía AST; layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_preflight_s24.py" cluster="99_SIN_CLASIFICAR" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/99_SIN_CLASIFICAR/spel_preflight_s24.py</path>
+      <sha256>1237a03f3252b97975cf65241bb0677e2cef768904efe053fc8433584fe7dad6</sha256>
+      <functions>sha12,ok,warn,fail,head,check,c_registry_exists,c_sha_parquets,c_schema,c_date_dtype,c_nulls_tensor,c_p90_range</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <module name="spel_snapshot_updater.py" cluster="99_SIN_CLASIFICAR" classification="PROPRIETARY_TOTAL_PRIVATE" audit_status="UNVERIFIED" immutable="false">
+      <path>SPEL 4.0/99_SIN_CLASIFICAR/spel_snapshot_updater.py</path>
+      <sha256>dba501e41bc8f69fefb3853eae0e77d77c43e3d01e4156403acdd31f02131e30</sha256>
+      <functions>_load_proxy_p90_map,fetch_gdelt_entropy,fetch_vitality,compute_fear_momentum,run_update</functions>
+      <notes>layer sin clasificar (deuda declarada)</notes>
+    </module>
+    <block id="BLOQUE_0_DEDUP" status="SEALED" audit_status="VERIFIED">
+      <description>Deduplicación y Ley 2 rewrite. 65 GOLD, 0 quarantine, 23 patched.</description>
+      <modules>ALL_CLUSTERS</modules>
+    </block>
+    <block id="BLOQUE_1_HOLMES" status="SEALED" audit_status="VERIFIED">
+      <description>Kernel Holmes sellado con simetría 12/12. spel_commons SHA verificado.</description>
+      <modules>01_HOLMES_CORE</modules>
+    </block>
+    <block id="BLOQUE_2_MATEMATICA_ENTROPIA" status="PENDING" audit_status="CONFLICT">
+      <description>Núcleo matemático. spel_math_engine (177 broken_refs) es el blocker crítico.</description>
+      <modules>02_MATH_ENTROPY</modules>
+    </block>
+    <block id="BLOQUE_3_INGESTION" status="PENDING" audit_status="CONFLICT">
+      <description>Ingestión de datos. spel_bulk_harvester (100 broken_refs) bloquea.</description>
+      <modules>03_INGESTION</modules>
+    </block>
+    <block id="BLOQUE_4_ROUTING" status="PENDING" audit_status="CONFLICT">
+      <description>Orquestación. base_adapter (24) y spel_patch_coordinated (20).</description>
+      <modules>04_ROUTING_ORCHESTRATOR</modules>
+    </block>
+    <block id="BLOQUE_5_AUDIT" status="PENDING" audit_status="CONFLICT">
+      <description>Auditoría institucional. spel_auditoria_total (29 broken_refs).</description>
+      <modules>05_AUDIT_OBSERVABILITY</modules>
+    </block>
+    <block id="BLOQUE_6_PERSISTENCE" status="PENDING" audit_status="UNVERIFIED">
+      <description>Schemas JSON/YAML, registries, DNA sovereign.</description>
+      <modules>06_PERSISTENCE_JSON</modules>
+    </block>
+    <parameter id="PARAM_P90" name="p90_window_days" type="int" tunable="true">
+      <description>Ventana rolling para el cálculo del umbral de entropía Shannon p90 del Gödel kill gate.</description>
+      <current_value>252</current_value>
+      <default_value>252</default_value>
+      <valid_range>60-500</valid_range>
+      <quantitative_impact>Ventana más corta = más sensible a regímenes recientes; más larga = más estable pero lenta a cambios de mercado.</quantitative_impact>
+    </parameter>
+    <parameter id="PARAM_KL" name="kl_threshold_bits" type="float" tunable="true">
+      <description>Umbral de divergencia KL que dispara el chaos-bridge-healer.</description>
+      <current_value>0.2</current_value>
+      <default_value>0.2</default_value>
+      <valid_range>0.05-1.0</valid_range>
+      <quantitative_impact>Umbral bajo = más activaciones (posibles falsos positivos por spikes GDELT); alto = menos sensible a degradación real de datos.</quantitative_impact>
+    </parameter>
+    <parameter id="PARAM_ISO" name="isolation_forest_threshold" type="float" tunable="true">
+      <description>Score de Isolation Forest sobre features OHLCV para detección de anomalías.</description>
+      <current_value>0.6</current_value>
+      <default_value>0.6</default_value>
+      <valid_range>0.3-0.95</valid_range>
+    </parameter>
+    <parameter id="PARAM_LSTM_INPUT" name="lstm_input_size" type="int" tunable="false">
+      <description>Dimensión de entrada del LSTM. BLOQUEADO por invariante R13.</description>
+      <current_value>20</current_value>
+      <default_value>20</default_value>
+    </parameter>
+    <parameter id="PARAM_LSTM_HIDDEN" name="lstm_hidden_size" type="int" tunable="false">
+      <description>Dimensión oculta del LSTM. BLOQUEADO por invariante R13.</description>
+      <current_value>64</current_value>
+      <default_value>64</default_value>
+    </parameter>
+    <parameter id="PARAM_PAPER_GATE" name="paper_gate_days" type="int" tunable="false">
+      <description>Días de paper trading obligatorios. BLOQUEADO por LEY R_30.</description>
+      <current_value>63</current_value>
+      <default_value>63</default_value>
+    </parameter>
+  </state>
+  <deviations>
+    <deviation id="DEV-S52-001" proposed_at="2026-06-13T20:00:00Z" status="ACCEPTED">
+      <proposed_by>Claude Opus 4.7 (Anthropic) — Sesión S52</proposed_by>
+      <optimization_metric>Estructura de repositorios para máxima soberanía y desacoplamiento</optimization_metric>
+      <expected_gain>AXIOM publicable independientemente; SPEL propietario protegido; comunicación unidireccional segura.</expected_gain>
+      <risk>Doble mantenimiento de repos. Necesidad de diseñar XSD genérico no solo para SPEL.</risk>
+      <reversibility>Media. Extraer AXIOM de monorepo posterior sería doloroso pero posible.</reversibility>
+      <human_decision decided_at="2026-06-13T20:00:00Z" decided_by="Abraham_Fuenmayor_Hernández">
+        <decision>Repos separados: sandbox33/AXIOM (privado→AGPLv3) consumido por sandbox33/SPEL-4.0 (privado) vía Deploy Keys unidireccionales.</decision>
+        <rationale>Aislamiento del core. El repo público jamás accede a código propietario. Cero exposición algorítmica en logs.</rationale>
+        <signature>SEAL_ABRAHAM_FUENMAYOR_2026-06-13</signature>
+      </human_decision>
+    </deviation>
+    <deviation id="DEV-S52-002" proposed_at="2026-06-13T20:00:00Z" status="ACCEPTED">
+      <proposed_by>Claude Opus 4.7 (Anthropic) — Sesión S52</proposed_by>
+      <optimization_metric>Timing de migración a infraestructura soberana</optimization_metric>
+      <expected_gain>Producir AXIOM v0.3.1+ inmediatamente sin esperar 3-5 días de configuración kDrive/Proton.</expected_gain>
+      <risk>El sistema nace con sovereignty_residue activo (Drive/Colab corporativo).</risk>
+      <reversibility>Alta. Migración planificada como fase independiente.</reversibility>
+      <human_decision decided_at="2026-06-13T20:00:00Z" decided_by="Abraham_Fuenmayor_Hernández">
+        <decision>Sellar AXIOM en Google Drive como staging ahora; migrar a kDrive/Proton post-sellado, con análisis previo en Colab.</decision>
+        <rationale>Velocidad de iteración sobre pureza filosófica en esta fase. Residuo declarado honestamente per P8.</rationale>
+        <signature>SEAL_ABRAHAM_FUENMAYOR_2026-06-13</signature>
+      </human_decision>
+    </deviation>
+    <deviation id="DEV-S53-001" proposed_at="2026-06-14T20:55:00Z" status="ACCEPTED">
+      <proposed_by>Claude Opus 4.7 Extra (Anthropic) — Sesión S53 hotfix</proposed_by>
+      <optimization_metric>Cierre de la brecha de gobernanza expuesta por el incidente Telegram-9-días</optimization_metric>
+      <expected_gain>Declaración formal del anti-patrón STALE_SIGNAL_LOOP (EF-24) + ley operativa de TTL obligatorio (LEY_TTL_OBLIGATORIO) + protocolo soberano de firma (LEY_FIRMA_SOBERANA con minisign Ed25519). Cualquier IA futura que opere sobre AXIOM lee estas leyes y no puede generar productores/consumidores de estado sin TTL ni cambios críticos sin firma.</expected_gain>
+      <risk>Riesgo bajo: hotfix de gobernanza compatible hacia atrás. XSD no cambia. Workflows que implementen la verificación TTL están pendientes de Fase B; durante la ventana entre v0.3.2 y la implementación, el sistema declara la ley pero aún no la enforza automáticamente.</risk>
+      <reversibility>Alta. Las leyes pueden derogarse vía enmienda formal con amendment_count incrementado en constitution.</reversibility>
+      <human_decision decided_at="2026-06-14T20:55:00Z" decided_by="Abraham_Fuenmayor_Hernández">
+        <decision>Aprobado v0.3.2 con EF-24 + LEY_TTL_OBLIGATORIO + LEY_FIRMA_SOBERANA(minisign). Firma soberana con minisign Ed25519 sobre GPG y age+signify por justificación técnica del autor: ligereza en Termux, claves públicas de una línea, integración limpia con GitHub Actions sin dependencias complejas.</decision>
+        <rationale>El bot Telegram congelado 9 días no es bug aislado; es síntoma de ausencia estructural de TTL en toda la capa de persistencia. Declarar la ley primero, enforzarla en Fase B. Minisign cierra el vector de captura corporativa al mantener la clave privada exclusivamente en Termux + ProtonMail.</rationale>
+        <signature>SEAL_ABRAHAM_FUENMAYOR_2026-06-14_PENDING_MINISIGN</signature>
+      </human_decision>
+    </deviation>
+  </deviations>
+  <creative_ledger>
+    <artifact id="ART-2026-06-09-001" timestamp="2026-06-09T05:42:37Z" classification="PROPRIETARY_TOTAL_PRIVATE">
+      <artifact_type>Quantitative Migration Script (Bloque 1 Patch)</artifact_type>
+      <file_path>SPEL 4.0/SPEL4_B1_PATCH_SYMMETRY.py</file_path>
+      <sha256>computed_at_seal_time</sha256>
+      <ai_assistant>Claude Sonnet 4.6 (Anthropic)</ai_assistant>
+      <human_input_summary>Diagnóstico de incidente INC-B1-001 (spel_commons NOT_FOUND). Solicitud de script atómico que corrija el desfase ledger-disco bajo Ley de Simetría con backup Ley 4 y validación AST post-modificación.</human_input_summary>
+      <human_decision_signature>SEAL_ABRAHAM_FUENMAYOR_2026-06-09</human_decision_signature>
+      <mathematical_output_summary>Localización GOLD por score funcional (4 req + 2 critical = 42). Deploy R32 atómico. Ledger reparado: 1 dedup blocks, 1 module fixed. Verificación final: 12/12 simetría perfecta.</mathematical_output_summary>
+    </artifact>
+    <artifact id="ART-2026-06-13-S52" timestamp="2026-06-13T20:00:00Z" classification="INTERNAL">
+      <artifact_type>AXIOM Governance Framework — XSD canónico + XML maestro v0.3.1</artifact_type>
+      <file_path>SPEL 4.0/AXIOM/axiom_master.xml</file_path>
+      <sha256>computed_at_seal_time</sha256>
+      <ai_assistant>Claude Opus 4.7 (Anthropic)</ai_assistant>
+      <human_input_summary>Sesión S52. Solicitud de nacimiento del framework AXIOM como gobernanza de SPEL 4.0. Auditoría forense de cluster_map (65 módulos), ledger, y reportes de simetría. Cuatro decisiones arquitectónicas selladas: repos separados, migración diferida, memoria cross-sesión α+γ, módulos sin clasificar como UNVERIFIED.</human_input_summary>
+      <human_decision_signature>SEAL_ABRAHAM_FUENMAYOR_2026-06-13</human_decision_signature>
+      <mathematical_output_summary>XML de 4 capas conforme al XSD canónico de la spec v0.2.0. 65 módulos poblados con SHA real cruzado del ledger. Distribución: 12 VERIFIED, 22 CONFLICT, 29 UNVERIFIED, 2 LOG_ONLY. 626 broken_refs catalogados. 7 leyes + EF-23 + R13 en constitución sellada.</mathematical_output_summary>
+      <precedence_anchor>Genesis de AXIOM como proyecto independiente. Precedencia temporal anclada vía hashchain SHA-256.</precedence_anchor>
+    </artifact>
+    <artifact id="ART-2026-06-14-S53" timestamp="2026-06-14T20:55:00Z" classification="INTERNAL">
+      <artifact_type>AXIOM Governance Hotfix v0.3.2 — EF-24 + LEY_TTL_OBLIGATORIO + LEY_FIRMA_SOBERANA</artifact_type>
+      <file_path>SPEL 4.0/AXIOM/axiom_master.xml</file_path>
+      <sha256>computed_at_seal_time</sha256>
+      <ai_assistant>Claude Opus 4.7 Extra (Anthropic)</ai_assistant>
+      <human_input_summary>Sesión S53. Directiva de redirección estratégica: rol de Auditor de Seguridad. Tres preguntas formales sobre estructura de directorios, diagnóstico forense del bot Telegram congelado 9 días, y estrategia de blindaje IP con firmas + Human-in-the-Loop. Respuestas selladas: 2 repositorios separados, minisign sobre GPG/age+signify, declaración formal de EF-24 STALE_SIGNAL_LOOP.</human_input_summary>
+      <human_decision_signature>SEAL_ABRAHAM_FUENMAYOR_2026-06-14_PENDING_MINISIGN</human_decision_signature>
+      <mathematical_output_summary>Hotfix de gobernanza compatible hacia atrás. XSD canónico v0.2.0 sin cambios. Constitución incrementada con 2 leyes nuevas (TTL, Firma Soberana) + 1 fatal_error nuevo (EF-24). Patrón forense del bot Telegram congelado declarado y modelado estructuralmente. Sistema de firma minisign Ed25519 sellado como protocolo soberano del proyecto.</mathematical_output_summary>
+      <precedence_anchor>Sesión S53 hotfix. Hashchain bloque 3 ancla este cambio criptográficamente al bloque 2 (v0.3.1) y al bloque 1 (génesis B1).</precedence_anchor>
+    </artifact>
+  </creative_ledger>
+  <infrastructure sync_status="VERIFIED_HYBRID">
+    <compute_environment id="TERMUX_LOCAL" name="Termux Móvil">
+      <purpose>Desarrollo primario, edición de XML, gobernanza</purpose>
+      <ram_bytes_max>4294967296</ram_bytes_max>
+      <cpu_cores_max>4</cpu_cores_max>
+      <gpu_available>false</gpu_available>
+      <trust_level>FULL_SOVEREIGN</trust_level>
+      <data_handling>Cleartext permitido. Filesystem propio.</data_handling>
+    </compute_environment>
+    <compute_environment id="GITHUB_ACTIONS" name="GitHub CI/CD">
+      <purpose>Pipeline J0-J4: auditoría, GDELT, signals, deadman, purge</purpose>
+      <ram_bytes_max>7516192768</ram_bytes_max>
+      <cpu_cores_max>2</cpu_cores_max>
+      <gpu_available>false</gpu_available>
+      <trust_level>CORPORATE_DELEGATED</trust_level>
+      <data_handling>Sin torch. Secrets vía GH Actions Secrets. Logs ephemeral.</data_handling>
+    </compute_environment>
+    <compute_environment id="COLAB_FREE" name="Google Colab">
+      <purpose>Entrenamiento LSTM con GPU. Inferencia pesada.</purpose>
+      <ram_bytes_max>12884901888</ram_bytes_max>
+      <cpu_cores_max>2</cpu_cores_max>
+      <gpu_available>true</gpu_available>
+      <trust_level>CORPORATE_BLIND_BINARY</trust_level>
+      <data_handling>Datos cifrados en tránsito y en reposo. Descifrado solo en RAM por tiempo mínimo. gc.collect() post-cómputo obligatorio. Cero artefactos sensibles persistidos en Drive corporativo.</data_handling>
+    </compute_environment>
+    <storage_backend id="DRIVE_LEGACY_STAGING" backend="GOOGLE_DRIVE_LEGACY">
+      <endpoint>https://drive.google.com/drive/folders/ORDEN/SPEL_4.0</endpoint>
+      <encryption_at_rest>false</encryption_at_rest>
+      <jurisdiction>USA</jurisdiction>
+      <purpose>Staging ground actual y cache caliente para parquets de entrenamiento. Migración planeada a kDrive.</purpose>
+    </storage_backend>
+    <storage_backend id="KDRIVE_VAULT_TARGET" backend="INFOMANIAK_KDRIVE">
+      <endpoint>https://kdrive.infomaniak.com/app/vault/spel_sovereign</endpoint>
+      <encryption_at_rest>true</encryption_at_rest>
+      <jurisdiction>Switzerland</jurisdiction>
+      <purpose>Backup soberano de checkpoints, modelos entrenados, parámetros. Núcleo del framework.</purpose>
+    </storage_backend>
+    <storage_backend id="GITHUB_PRIVATE_CORE" backend="LOCAL_FILESYSTEM">
+      <encryption_at_rest>true</encryption_at_rest>
+      <jurisdiction>USA</jurisdiction>
+      <purpose>Repo privado sandbox33/SPEL-4.0. Núcleo de código fuente versionado. Consume sandbox33/AXIOM vía Deploy Keys unidireccionales.</purpose>
+    </storage_backend>
+    <alert_routing id="TG_CHAOS" name="Telegram Chaos Channel">
+      <endpoint>-1003712424420</endpoint>
+      <protocol>Telegram Bot API</protocol>
+      <severity_filter>CRITICAL_ONLY</severity_filter>
+    </alert_routing>
+    <alert_routing id="PROTON_BACKUP" name="ProtonMail Notifications">
+      <endpoint>secure-notifications@proton.me</endpoint>
+      <protocol>SMTP+TLS</protocol>
+      <severity_filter>HIGH_AND_ABOVE</severity_filter>
+    </alert_routing>
+    <sovereignty_residue>Riesgo residual documentado honestamente (Principio P8): cómputo LSTM ocurre en Colab/Google; staging en Drive/Google. Mitigación: cifrado en reposo donde aplica, RAM purge, cero persistencia sensible en corporativo. El núcleo del framework (XML, hashchain, código) vive en GitHub privado. Eliminación total del riesgo requiere migración a kDrive/Proton/self-hosted GPU. Planificado para Fase 7-8 del roadmap, post v1.0.0.</sovereignty_residue>
+  </infrastructure>
+  <checklist>
+    <item id="CHK-AXIOM-INTEGRATION-01" target="SPEL_4.0" status="VERIFIED">
+      <description>SPEL 4.0 adopta AXIOM como sistema de gobernanza</description>
+      <verified_by>Abraham_Fuenmayor</verified_by>
+      <verified_at>2026-06-13T20:00:00Z</verified_at>
+    </item>
+    <item id="CHK-XSD-CANONICAL-01" target="AXIOM_SCHEMA" status="VERIFIED">
+      <description>XSD canónico de la spec v0.2.0 implementado con namespace https://axiom.framework/v1</description>
+      <verified_by>Abraham_Fuenmayor</verified_by>
+      <verified_at>2026-06-13T20:00:00Z</verified_at>
+      <evidence>Validación lxml exitosa. XML maestro valida contra XSD.</evidence>
+    </item>
+    <item id="CHK-MODULES-SEALED-01" target="STATE_LAYER" status="VERIFIED">
+      <description>65 módulos reales poblados con SHA real del ledger</description>
+      <verified_by>Abraham_Fuenmayor</verified_by>
+      <verified_at>2026-06-13T20:00:00Z</verified_at>
+      <evidence>SHA coverage 65/65 desde spel4_state_ledger.json</evidence>
+    </item>
+    <item id="CHK-CONSTITUTION-01" target="CONSTITUTION_LAYER" status="VERIFIED">
+      <description>7 leyes + EF-23 + invariante R13 selladas en constitución</description>
+      <verified_by>Abraham_Fuenmayor</verified_by>
+      <verified_at>2026-06-09T05:42:37Z</verified_at>
+    </item>
+    <item id="CHK-EF24-DECLARED-01" target="CONSTITUTION_LAYER" status="VERIFIED">
+      <description>EF-24 STALE_SIGNAL_LOOP declarado formalmente en constitución como fatal_error documentado</description>
+      <verified_by>Abraham_Fuenmayor</verified_by>
+      <verified_at>2026-06-14T20:55:00Z</verified_at>
+      <evidence>Caso forense del bot Telegram congelado 9 días sirve como precedente documentado del patrón.</evidence>
+    </item>
+    <item id="CHK-TTL-LAW-01" target="CONSTITUTION_LAYER" status="VERIFIED">
+      <description>LEY_TTL_OBLIGATORIO sellada con enforcement vía workflow axiom_audit_freshness</description>
+      <verified_by>Abraham_Fuenmayor</verified_by>
+      <verified_at>2026-06-14T20:55:00Z</verified_at>
+      <evidence>Ley declarada en v0.3.2; implementación de workflow CI pendiente para Fase B.</evidence>
+    </item>
+    <item id="CHK-MINISIGN-LAW-01" target="CONSTITUTION_LAYER" status="VERIFIED">
+      <description>LEY_FIRMA_SOBERANA con minisign Ed25519 sellada como protocolo soberano de firma del proyecto</description>
+      <verified_by>Abraham_Fuenmayor</verified_by>
+      <verified_at>2026-06-14T20:55:00Z</verified_at>
+      <evidence>Decisión razonada: minisign sobre GPG (ligereza Termux) y sobre age+signify (simplicidad operativa).</evidence>
+    </item>
+  </checklist>
+  <hashchain>
+    <entry seq="1" timestamp="2026-06-09T05:42:37Z">
+      <prev_hash>0000000000000000000000000000000000000000000000000000000000000000</prev_hash>
+      <curr_hash>e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</curr_hash>
+      <content_hash>e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</content_hash>
+      <actor>Abraham_Fuenmayor</actor>
+      <action>GENESIS_BLOCK_AXIOM_ADOPTED_BY_SPEL_4.0</action>
+      <rationale>Migración inicial de SPEL Governance a AXIOM framework (Bloque 1).</rationale>
+    </entry>
+    <entry seq="2" timestamp="2026-06-13T20:00:00Z">
+      <prev_hash>e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</prev_hash>
+      <curr_hash>cf445104ca5a97482511aeef0cb7999eb1a6fe628396d92841337fa813a16a7d</curr_hash>
+      <content_hash>cf445104ca5a97482511aeef0cb7999eb1a6fe628396d92841337fa813a16a7d</content_hash>
+      <actor>Abraham_Fuenmayor</actor>
+      <action>AXIOM_v0.3.1_FULL_4LAYER_STRUCTURE_SEALED</action>
+      <rationale>Sesión S52. Regeneración del XML conforme al XSD canónico de la spec. 65 módulos, constitución completa, infraestructura, notariado IA, protocolo de desviación.</rationale>
+    </entry>
+  <entry seq="3" timestamp="2026-06-14T20:55:00Z">
+      <prev_hash>cf445104ca5a97482511aeef0cb7999eb1a6fe628396d92841337fa813a16a7d</prev_hash>
+      <curr_hash>f3f08adcd66270f23520bab40a2e6a8f6e05a319d5ef2886cf11fca4e10e31a1</curr_hash>
+      <content_hash>f3f08adcd66270f23520bab40a2e6a8f6e05a319d5ef2886cf11fca4e10e31a1</content_hash>
+      <actor>Abraham_Fuenmayor</actor>
+      <action>AXIOM_v0.3.2_HOTFIX_EF24_TTL_MINISIGN</action>
+      <rationale>Sesión S53. Declaración formal de EF-24 STALE_SIGNAL_LOOP + LEY_TTL_OBLIGATORIO + LEY_FIRMA_SOBERANA (minisign Ed25519). Compatible hacia atrás con XSD canónico v0.2.0. Caso forense documentado: bot Telegram congelado 9 días.</rationale>
+    </entry></hashchain>
+</axiom_project>
