@@ -1,0 +1,103 @@
+{
+  "schema_version": "handoff/0.2.0",
+  "session_id": "S52",
+  "session_closed_at": "2026-06-13T20:00:00Z",
+  "next_session_id": "S53",
+  "actor": "Abraham Fuenmayor Hernández (Altair)",
+  "ai_witness": "Claude Opus 4.7 → migrar a Opus 4.8 Max para S53",
+  "session_summary": {
+    "title": "AXIOM v0.3.1 — XML de 4 capas alineado con XSD canónico de la spec",
+    "outcome": "SUCCESS",
+    "critical_correction": "v0.3.0 era divergente del XSD oficial de la spec. v0.3.1 regenerado desde la fuente de verdad (AXIOM_MASTER_SPECIFICATION_v0_2_0.md sección 8). Valida estrictamente."
+  },
+  "artifacts_produced": [
+    {
+      "file": "axiom_master.xml",
+      "version": "0.3.1",
+      "sha256": "454af95b2cef220bd8ffc38c0c0f74e9a42520b5ec3c48ed88e7f34674601bc4",
+      "system_integrity_hash": "cf445104ca5a97482511aeef0cb7999eb1a6fe628396d92841337fa813a16a7d",
+      "destination": "SPEL 4.0/AXIOM/axiom_master.xml",
+      "structure": "4 capas: Constitution(7 leyes+EF23+R13) / State(65 módulos+7 bloques+6 params) / Deviations(2 selladas) / CreativeLedger(2 artefactos)"
+    },
+    {
+      "file": "axiom_schema.xsd",
+      "version": "0.2.0-canonical",
+      "sha256": "34530dcf8b04073c3cf5afb37bcfb448d732fb1968092edd6eb76c79158a9310",
+      "destination": "SPEL 4.0/AXIOM/axiom_schema.xsd",
+      "namespace": "https://axiom.framework/v1"
+    },
+    {
+      "file": "axiom_hashchain.jsonl",
+      "blocks": 2,
+      "sha256": "3cec29c1395b8343d0fe17c41394211ef67b2d70c0c99628e4862b257bc9efb3",
+      "last_curr_hash": "cf445104ca5a97482511aeef0cb7999eb1a6fe628396d92841337fa813a16a7d",
+      "destination": "SPEL 4.0/AXIOM/axiom_hashchain.jsonl"
+    },
+    {
+      "file": "AXIOM_v0.3.1_DIFF.md",
+      "destination": "SPEL 4.0/AXIOM/AXIOM_v0.3.1_DIFF.md"
+    }
+  ],
+  "modules_distribution": {
+    "VERIFIED": 12,
+    "CONFLICT": 22,
+    "UNVERIFIED": 29,
+    "LOG_ONLY": 2,
+    "total": 65,
+    "total_broken_refs": 626
+  },
+  "decisions_sealed_this_session": [
+    "D1: Repos separados sandbox33/AXIOM (privado→AGPLv3) + sandbox33/SPEL-4.0 (privado), Deploy Keys unidireccionales",
+    "D2: Migración kDrive/Proton diferida post-sellado, análisis previo en Colab",
+    "D3: Memoria cross-sesión α+γ (XML inyectable + hashchain handoff)",
+    "D4: 8 módulos sin clasificar → UNVERIFIED (no auto-clasificar, respeta P6)",
+    "D5: Cifrado de secretos con age (no GPG)",
+    "D6: Claude Projects con XML FULL + diseñar generador PUBLIC en v0.4.0"
+  ],
+  "next_session_priority_queue": [
+    {
+      "priority": 1,
+      "task": "Crear repo privado github.com/sandbox33/AXIOM, subir los 4 artefactos, activar 2FA con app (no SMS)",
+      "minutes": 15
+    },
+    {
+      "priority": 2,
+      "task": "Generar workflows .yml: AXIOM (validación XSD en CI) + SPEL-4.0 (consume AXIOM vía Deploy Key read-only)",
+      "minutes": 30
+    },
+    {
+      "priority": 3,
+      "task": "FASE B: AST parsing de los 8 dumps de código. Extraer imports y callers reales. Enriquecer State layer del XML. Usar Colab para el parsing pesado.",
+      "minutes": 90,
+      "model": "Opus 4.8"
+    },
+    {
+      "priority": 4,
+      "task": "Cirugía broken_refs: empezar por spel_math_engine (177), spel_bulk_harvester (100), spel_backbone_engine (39). Script AST replace np.X→_get_np().X con validación post-fix.",
+      "minutes": 60
+    },
+    {
+      "priority": 5,
+      "task": "FASE C: modelar data flow parquet→ingestion→math→routing→audit como grafo. Declarar fuentes (Tiingo/AlphaVantage/NewsData/GDELT/IQ). Modelar degradación temporal.",
+      "minutes": 75,
+      "model": "Opus 4.8 (Fable 5 no disponible por directiva US)"
+    }
+  ],
+  "onboarding_for_next_ai_session": {
+    "instructions": "S53: Abraham sube estos 3 archivos al inicio: session_handoff_S52.json + axiom_master.xml + axiom_hashchain.jsonl. La IA valida el hashchain (prev_hash de cada bloque == curr_hash del anterior) ANTES de aceptar comandos. Luego retoma desde priority queue.",
+    "required_files": [
+      "session_handoff_S52.json",
+      "axiom_master.xml",
+      "axiom_hashchain.jsonl"
+    ],
+    "first_ai_action": "Verificar integridad de la cadena. Si falla → abortar y pedir reconstrucción.",
+    "model_recommendation": "Opus 4.8 Max para Fases B y C (trabajo técnico pesado). Fable 5 NO disponible por directiva de control de exportación del gobierno US del 12-jun-2026."
+  },
+  "carried_over_audit_items": [
+    "BACKTEST-LA lookahead audit en fibonacci_lag features",
+    "BTC checkpoint retrain (val_loss drift)",
+    "KL divergence rolling window para prevenir GDELT spikes → false Kill_Signal",
+    "Análisis Colab pre-migración kDrive: volumen real de parquets",
+    "Configurar cuenta Infomaniak kDrive + ProtonMail (decisiones pendientes #4 y #5 de la spec)"
+  ]
+}

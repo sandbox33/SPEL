@@ -1,0 +1,127 @@
+{
+  "schema_version": "handoff/0.2.0",
+  "session_id": "S53",
+  "session_closed_at": "2026-06-14T20:55:00Z",
+  "next_session_id": "S54",
+  "actor": "Abraham Fuenmayor Hernández (Altair)",
+  "ai_witness": "Claude Opus 4.7 Extra → migrar a Opus 4.8 Max para S54 (Fase B)",
+  "session_summary": {
+    "title": "AXIOM v0.3.2 — Hotfix de gobernanza: EF-24 + LEY_TTL_OBLIGATORIO + LEY_FIRMA_SOBERANA(minisign)",
+    "type": "PATCH compatible hacia atrás",
+    "outcome": "SUCCESS",
+    "critical_decision": "Sistema de firma del proyecto sellado: minisign Ed25519 (sobre GPG por ligereza, sobre age+signify por simplicidad)"
+  },
+  "artifacts_produced": [
+    {
+      "file": "axiom_master.xml",
+      "version": "0.3.2",
+      "sha256": "523bcdccbdca3fc47c88920a96cf939a62ca6720e8ad955fdae21244e5178005",
+      "system_integrity_hash": "a252f232a3fad844dc76ed51efeb6816da5ec32d6480cf53a591e0e0c2e64c12",
+      "destination": "sandbox33/SPEL-4.0/.axiom/axiom_master.xml"
+    },
+    {
+      "file": "axiom_schema.xsd",
+      "version": "0.2.0-canonical (sin cambios)",
+      "sha256": "34530dcf8b04073c3cf5afb37bcfb448d732fb1968092edd6eb76c79158a9310",
+      "destination": "sandbox33/AXIOM/schema/axiom_schema.xsd",
+      "note": "XSD no se modificó. v0.3.2 es backward-compatible con v0.3.1."
+    },
+    {
+      "file": "axiom_hashchain.jsonl",
+      "blocks": 3,
+      "sha256": "fe402aa3eeba144af0d93de842d176f805a2d2351d4e61e2ebf638eae6b6dec3",
+      "last_curr_hash": "a252f232a3fad844dc76ed51efeb6816da5ec32d6480cf53a591e0e0c2e64c12",
+      "destination": "sandbox33/SPEL-4.0/.axiom/axiom_hashchain.jsonl"
+    },
+    {
+      "file": "AXIOM_v0.3.2_DIFF.md",
+      "sha256": "e2abd07e1d5898dd9485916103f2544ec03ff0d8825780368e3b923a3fcb1e3f",
+      "destination": "sandbox33/SPEL-4.0/.axiom/reports/AXIOM_v0.3.2_DIFF.md"
+    }
+  ],
+  "hashchain_state": {
+    "total_blocks": 3,
+    "integrity": "VERIFIED",
+    "blocks": [
+      {
+        "seq": 1,
+        "action": "GENESIS_BLOCK_AXIOM_ADOPTED_BY_SPEL_4.0"
+      },
+      {
+        "seq": 2,
+        "action": "AXIOM_v0.3.1_FULL_4LAYER_STRUCTURE_SEALED"
+      },
+      {
+        "seq": 3,
+        "action": "AXIOM_v0.3.2_HOTFIX_EF24_TTL_MINISIGN"
+      }
+    ]
+  },
+  "constitutional_state": {
+    "total_laws": 9,
+    "new_in_this_session": [
+      "EF-24 STALE_SIGNAL_LOOP"
+    ],
+    "total_fatal_errors": 2,
+    "amendment_count": 0
+  },
+  "decisions_sealed_this_session": [
+    "D7: Separación de 2 repositorios ratificada: sandbox33/AXIOM (público al madurar) + sandbox33/SPEL-4.0 (privado permanente)",
+    "D8: Sistema de firma criptográfica del proyecto = minisign Ed25519 (descartados GPG y age+signify por razones técnicas documentadas)",
+    "D9: Anti-patrón STALE_SIGNAL_LOOP declarado como EF-24, con LEY_TTL_OBLIGATORIO como contramedida operativa",
+    "D10: Hotfix v0.3.2 es PATCH semver — XSD no cambia, backward-compatible con v0.3.1"
+  ],
+  "next_session_priority_queue": [
+    {
+      "priority": 1,
+      "task": "Validar hashchain íntegra (3 bloques) ANTES de cualquier comando",
+      "minutes": 2,
+      "critical": true
+    },
+    {
+      "priority": 2,
+      "task": "Generar par de claves minisign en Termux: minisign -G -p seal_authority.pub -s seal_authority.key. Backup de seal_authority.key cifrado en ProtonMail con frase de paso distinta.",
+      "minutes": 15
+    },
+    {
+      "priority": 3,
+      "task": "Subir seal_authority.pub a sandbox33/AXIOM/keys/. Re-firmar DEV-S53-001 con firma minisign real (eliminar el sufijo PENDING_MINISIGN).",
+      "minutes": 10
+    },
+    {
+      "priority": 4,
+      "task": "Crear los 2 repositorios privados en GitHub: sandbox33/AXIOM y sandbox33/SPEL-4.0. Activar 2FA con app (Aegis/Authy), NO SMS.",
+      "minutes": 20
+    },
+    {
+      "priority": 5,
+      "task": "Subir todos los artefactos sellados a sus destinos correctos según la estructura del DIFF v0.3.2.",
+      "minutes": 15
+    },
+    {
+      "priority": 6,
+      "task": "FASE B: AST parsing de los 8 dumps de código en Colab. Extraer imports y callers reales. Enriquecer State layer con datos de AST. Output esperado: v0.4.0.",
+      "minutes": 120,
+      "model": "Opus 4.8 Max"
+    }
+  ],
+  "onboarding_for_next_ai_session": {
+    "instructions": "S54: Abraham sube estos 3 archivos al inicio del chat: session_handoff_S53.json + axiom_master.xml v0.3.2 + axiom_hashchain.jsonl. La IA valida hashchain (3 bloques con linkage íntegro) ANTES de aceptar comandos.",
+    "first_ai_action": "Verificar integridad cadena: bloque 2 prev_hash == bloque 1 curr_hash AND bloque 3 prev_hash == bloque 2 curr_hash. Si falla → abortar.",
+    "required_files": [
+      "session_handoff_S53.json",
+      "axiom_master.xml",
+      "axiom_hashchain.jsonl"
+    ],
+    "model_recommendation": "Opus 4.8 Max para Fase B (AST parsing es trabajo verificable pesado, 26K líneas)."
+  },
+  "open_audit_items_carried_over": [
+    "BACKTEST-LA lookahead audit en fibonacci_lag features",
+    "BTC checkpoint retrain (val_loss drift)",
+    "KL divergence rolling window para prevenir GDELT spikes → false Kill_Signal",
+    "Implementar workflow axiom_audit_freshness.yml que enforza LEY_TTL_OBLIGATORIO (Fase B)",
+    "Implementar workflow gate_3_signature_verify.yml que enforza LEY_FIRMA_SOBERANA (Fase B)",
+    "Refactorizar bot Telegram para implementar TTL check (cierra EF-24 en runtime)",
+    "Configurar cuenta Infomaniak kDrive + ProtonMail (decisiones pendientes #4 y #5 de la spec)"
+  ]
+}
