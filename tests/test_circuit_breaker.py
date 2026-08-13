@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from execution_circuit_breaker import (
+from execution.circuit_breaker import (
     CircuitBreaker,
     CircuitState,
     TradeResult,
@@ -121,7 +121,7 @@ def test_reset_automatico_al_cruzar_dia_utc():
     assert cb.can_execute() is False
 
     manana = datetime.now(timezone.utc) + timedelta(days=1)
-    with patch("execution_circuit_breaker.datetime") as mock_dt:
+    with patch("execution.circuit_breaker.datetime") as mock_dt:
         mock_dt.now.return_value = manana
         mock_dt.strftime = datetime.strftime
         assert cb.can_execute() is True  # nuevo día, breaker se resetea solo
