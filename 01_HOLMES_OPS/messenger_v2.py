@@ -1,8 +1,15 @@
 """
 Holmes/modules/telegram/messenger.py
 TelegramRouter: 4-channel routing with SISTEMA fallback.
-[FIX S41]: TELEGRAM_CHAOS → TELEGRAM_CAOS (nombre unificado con dna_sovereign.py y S41).
 R34: secret names verified before use.
+
+[Corrección — limpieza de legado, revisada]: primero cambié esto de
+TELEGRAM_CAOS a TELEGRAM_CHAOS creyendo que spel_forex_bridge.py usaba
+CHAOS — relectura directa del archivo real confirmó que usa CAOS. Estaba
+mal. En vez de adivinar una tercera vez: el repo tiene AMBOS nombres en uso
+real y no puedo ver qué configuraste en Secrets/userdata, así que este
+archivo ahora acepta cualquiera de los dos (spel_commons.load_secrets()
+ya deja ambos poblados si cualquiera está seteado).
 """
 from __future__ import annotations
 
@@ -14,13 +21,11 @@ from typing import Optional
 
 log = logging.getLogger("Holmes.TelegramRouter")
 
-# Canal CAOS: env var unificada como TELEGRAM_CAOS (no TELEGRAM_CHAOS)
-# Todos los módulos del sistema usan TELEGRAM_CAOS. No TELEGRAM_CHAOS.
 _CHANNELS: dict[str, str] = {
     "SISTEMA": os.environ.get("TELEGRAM_SISTEMA", "-1003712424420"),
     "SIGNALS": os.environ.get("TELEGRAM_SENALES", "-1003733702589"),
     "BACKUP":  os.environ.get("TELEGRAM_BACKUP",  "-1003761735254"),
-    "CAOS":    os.environ.get("TELEGRAM_CAOS",    ""),   # [FIX] era TELEGRAM_CHAOS
+    "CAOS":    os.environ.get("TELEGRAM_CHAOS", "") or os.environ.get("TELEGRAM_CAOS", ""),
 }
 _API_BASE = "https://api.telegram.org"
 _TIMEOUT  = 8

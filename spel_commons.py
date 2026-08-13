@@ -75,10 +75,14 @@ _OPTIONAL_KEYS = [
     "TELEGRAM_SISTEMA",
     "TELEGRAM_SENALES",
     "TELEGRAM_BACKUP",
-    "TELEGRAM_CHAOS",     # FIX: era "TELEGRAM_CAOS" en esta copia — spel_forex_bridge.py
-                          # ya lee os.getenv("TELEGRAM_CHAOS"); con "CAOS" ese env var
-                          # nunca se encontraba. Necesario para que la integración del
-                          # parche FOREX_CHAOS_ENDPOINT (paso 3) funcione de verdad.
+    "TELEGRAM_CHAOS",     # Ver TELEGRAM_CAOS abajo — nombre en disputa real en
+                          # el repo (8 archivos usan CHAOS, 3 usan CAOS,
+                          # incluido spel_forex_bridge.py que verifiqué mal
+                          # hace dos sesiones). No elijo un ganador sin poder
+                          # ver qué nombre configuraron de verdad en GH Secrets
+                          # / Colab userdata — load_secrets() de abajo revisa
+                          # AMBOS y usa el que esté seteado.
+    "TELEGRAM_CAOS",
     "FOREX_CHAOS_ENDPOINT",
     "NGROK_TOKEN",
     "DERIV_API_TOKEN",    # Paso 1 — consolidación de credenciales Deriv
@@ -133,6 +137,18 @@ def load_secrets(required: Optional[list[str]] = None) -> dict[str, str]:
         secrets.setdefault(k, v)
         os.environ.setdefault(k, v)
 
+    # Alias TELEGRAM_CHAOS <-> TELEGRAM_CAOS: el repo tiene ambos nombres en
+    # uso real (verificado con grep, no asumido — 8 archivos vs 3). En vez
+    # de forzar un ganador sin poder ver qué configuraste de verdad en
+    # GH Secrets / Colab userdata, cualquiera que esté seteado alimenta
+    # también al otro nombre. Así ambas familias de código funcionan.
+    _chaos_val = secrets.get("TELEGRAM_CHAOS") or secrets.get("TELEGRAM_CAOS")
+    if _chaos_val:
+        secrets["TELEGRAM_CHAOS"] = _chaos_val
+        secrets["TELEGRAM_CAOS"]  = _chaos_val
+        os.environ["TELEGRAM_CHAOS"] = _chaos_val
+        os.environ["TELEGRAM_CAOS"]  = _chaos_val
+
     missing = [k for k in (required or _REQUIRED_KEYS) if not secrets.get(k)]
     if missing:
         _log_warn(f"load_secrets: missing keys {missing}")
@@ -150,11 +166,52 @@ def atomic_write(path: Path, data: Any, indent: int = 2) -> str:
     with open(tmp, "rb") as fh:
         os.fsync(fh.fileno())
     tmp.rename(path)
-    return sha12(content)
+    return _content_sha12(content)
 
 # ─── sha12() ─────────────────────────────────────────────────────────────────
+# FUSIÓN (limpieza de legado): existían DOS spel_commons.py en el repo con
+# sha12() de firma distinta — no era duplicación simple, eran dos funciones
+# para dos casos de uso reales:
+#   - hashear contenido YA en memoria (lo que atomic_write necesitaba)
+#   - hashear un ARCHIVO en disco, con chunking header+footer para archivos
+#     grandes (lo que sha_detective.py necesita — verificado contra su
+#     código real, no asumido)
+# Se resuelve el choque de nombre quedándose con sha12(path) para el caso
+# CRÍTICO (debe coincidir con sha_detective.py o el SHA_REGISTRY genera
+# falsos SHA_MISMATCH en parquets grandes), y renombrando el otro caso a
+# _content_sha12(). 04_GOLD_MODULES/spel_commons.py (la copia con esta
+# versión correcta de sha12) se archivó a 99_LEGACY/.
 
-def sha12(content: str | bytes) -> str:
+def sha12(path) -> str:
+    """
+    SHA-256 truncado a 12 caracteres, de un ARCHIVO EN DISCO.
+    Convención (CRÍTICA — debe coincidir con sha_detective.py):
+      Archivos > 128KB: hash de header(64KB) + footer(64KB) solamente.
+      Archivos <= 128KB: hash del contenido completo.
+    Todo lo que escriba en SHA_REGISTRY debe usar esta función — un hash de
+    archivo completo en un parquet grande da un valor DISTINTO y genera
+    falsas alertas SHA_MISMATCH.
+    """
+    path = Path(path)
+    h = hashlib.sha256()
+    size = path.stat().st_size
+    CHUNK = 64 * 1024
+    if size > 2 * CHUNK:
+        with open(path, "rb") as f:
+            h.update(f.read(CHUNK))
+            f.seek(-CHUNK, os.SEEK_END)
+            h.update(f.read(CHUNK))
+    else:
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                h.update(chunk)
+    return h.hexdigest()[:12]
+
+
+def _content_sha12(content: str | bytes) -> str:
+    """SHA-256 truncado a 12 caracteres de CONTENIDO ya en memoria — no de
+    un archivo en disco (para eso, sha12(path) arriba). Uso interno de
+    atomic_write() para reportar el hash de lo que acaba de escribir."""
     if isinstance(content, str):
         content = content.encode("utf-8")
     return hashlib.sha256(content).hexdigest()[:12]

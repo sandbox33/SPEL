@@ -3,3 +3,5 @@
 *.parquet
 05_DATA_LAKE/
 00_VAULT/secrets.json
+__pycache__/
+*.pyc
