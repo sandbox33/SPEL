@@ -1,6 +1,9 @@
 """
-SPEL — Forex Confluence Dashboard para IQ Option
+SPEL — Forex Confluence Dashboard
 Score de confluencia 0-100 para operar forex en 15M y 30M.
+Datos OHLCV vía Deriv (API oficial WebSocket) — antes yfinance.
+Genera señales; la ejecución sigue siendo manual (ver AUDITORIA_INGESTA_SPEL.md
+§4.3 — ni IQ Option ni Deriv tienen ejecución automática conectada aquí).
 
 4 capas de confirmación:
   CAPA 1 (40pts): GDELT macro — ¿hay régimen y en qué dirección?
@@ -24,10 +27,43 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 warnings.filterwarnings('ignore')
-import yfinance as yf
 import polars as pl
 
+# yfinance retirado (auditoría de ingesta): no traía todas las columnas OHLCV
+# necesarias y era justo lo que base_adapter.py fue construido para
+# reemplazar. get_structure_daily() y get_vwap_signal() ahora usan
+# SPELAdapterChain.build_forex_chain() → DerivAdapter (API oficial WebSocket).
+#
+# Import resiliente: NO VERIFICADO si el layout real en Drive (codigo/core,
+# scripts/) coincide con 04_GOLD_MODULES/executors/ del repo GitHub — probar
+# las 3 rutas más probables antes de asumir sys.path ya configurado.
+try:
+    from base_adapter import SPELAdapterChain
+except ImportError:
+    try:
+        _here = Path(__file__).resolve().parent          # import normal
+    except NameError:
+        _here = Path.cwd()                                # exec(open(...).read()) en Colab
+    for _candidate in (_here / "executors", _here,
+                       _here.parent / "04_GOLD_MODULES" / "executors"):
+        if _candidate.exists() and str(_candidate) not in sys.path:
+            sys.path.insert(0, str(_candidate))
+    from base_adapter import SPELAdapterChain
+
 ROOT = Path('/content/drive/MyDrive/ORDEN/SPEL 3.0')
+
+# ── Integración del parche huérfano FOREX_CHAOS_ENDPOINT (paso 3) ───────────
+# spel_forex_bridge.py YA contiene _tg_chaos_alert() funcional, pero antes de
+# hoy nada en el proyecto lo importaba (verificado con grep, no asumido —
+# ver AUDITORIA_INGESTA_SPEL.md §6). Lo conecto acá: cuando una capa falla
+# de verdad (excepción, no solo "pocas filas"), se notifica en vez de quedar
+# silenciosa dentro de un dict que nadie lee. Import resiliente + no-op si
+# falla — una alerta rota nunca debe tumbar el cálculo de la señal.
+try:
+    from spel_forex_bridge import _tg_chaos_alert as _forex_chaos_alert
+except Exception:
+    def _forex_chaos_alert(msg: str) -> None:
+        print(f"[FOREX_CHAOS fallback — import de spel_forex_bridge falló] {msg}")
 
 # ── CONFIGURACIÓN DE PARES ────────────────────────────────────
 FOREX_PAIRS = {
@@ -188,23 +224,22 @@ def get_structure_daily(pair: str) -> dict:
     Analiza la estructura diaria del par forex.
     Tendencia: EMA20 vs EMA50 + Higher Highs/Lows o Lower Highs/Lows
     """
-    cfg    = FOREX_PAIRS[pair]
-    ticker = cfg['ticker']
-
     try:
-        raw = yf.download(ticker, period='60d', interval='1d',
-                          auto_adjust=True, progress=False)
+        chain = SPELAdapterChain.build_forex_chain(timeframe="1d")
+        resultado = chain.fetch(
+            pair,
+            desde=datetime.now(timezone.utc) - timedelta(days=90),
+            hasta=datetime.now(timezone.utc),
+        )
 
-        if raw.empty or len(raw) < 20:
+        if resultado.is_degraded or resultado.rows_fetched < 20:
             return {'score': 5, 'bias': 'NEUTRAL', 'trend': 'UNCLEAR',
                     'ema20': 0, 'ema50': 0, 'last_close': 0}
 
-        if hasattr(raw.columns, 'levels'):
-            raw.columns = raw.columns.get_level_values(0)
-
-        closes = raw['Close'].values.astype(float)
-        highs  = raw['High'].values.astype(float)
-        lows   = raw['Low'].values.astype(float)
+        df = resultado.data  # polars — ya no hace falta aplanar MultiIndex (eso era cosa de yfinance)
+        closes = df['close'].to_numpy().astype(float)
+        highs  = df['high'].to_numpy().astype(float)
+        lows   = df['low'].to_numpy().astype(float)
 
         # EMAs
         def ema(data, n):
@@ -269,6 +304,7 @@ def get_structure_daily(pair: str) -> dict:
         }
 
     except Exception as e:
+        _forex_chaos_alert(f"get_structure_daily({pair}) excepción: {type(e).__name__}: {e}")
         return {'score': 5, 'bias': 'NEUTRAL', 'trend': 'ERROR',
                 'ema20': 0, 'ema50': 0, 'last_close': 0,
                 'atr_daily': 0, 'error': str(e)}
@@ -283,24 +319,31 @@ def get_vwap_signal(pair: str, tf_minutes: int = 15) -> dict:
     Descarga velas 15M o 30M de hoy y calcula VWAP de sesión.
     Evalúa si el precio está en zona favorable de entrada.
     """
-    cfg      = FOREX_PAIRS[pair]
-    interval = '15m' if tf_minutes == 15 else '30m'
+    timeframe_str = '15m' if tf_minutes == 15 else '30m'
+    hoy_utc = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
     try:
-        raw = yf.download(cfg['ticker'], period='1d',
-                          interval=interval, auto_adjust=True, progress=False)
+        chain = SPELAdapterChain.build_forex_chain(timeframe=timeframe_str)
+        resultado = chain.fetch(pair, desde=hoy_utc, hasta=datetime.now(timezone.utc))
 
-        if raw.empty or len(raw) < 5:
+        if resultado.is_degraded or resultado.rows_fetched < 5:
             return {'score': 5, 'bias': 'NEUTRAL', 'vwap': 0,
                     'last': 0, 'position': 'UNKNOWN', 'atr_15m': 0}
 
-        if hasattr(raw.columns, 'levels'):
-            raw.columns = raw.columns.get_level_values(0)
-
-        closes  = raw['Close'].values.astype(float)
-        highs   = raw['High'].values.astype(float)
-        lows    = raw['Low'].values.astype(float)
-        volumes = raw['Volume'].values.astype(float)
+        df = resultado.data  # polars
+        closes  = df['close'].to_numpy().astype(float)
+        highs   = df['high'].to_numpy().astype(float)
+        lows    = df['low'].to_numpy().astype(float)
+        volumes = df['volume'].to_numpy().astype(float)
+        # ⚠️ Deriv (CFD/synthetics) no reporta volumen real por vela — vuelve
+        # siempre 0.0 (ver DerivAdapter). El guard de abajo (vol=1 si volumes=0)
+        # ya existía en el código original, pero antes cubría un caso raro de
+        # yfinance; con Deriv es el caso NORMAL — VWAP se degrada a promedio
+        # simple de precio típico, no ponderado por volumen real. No lo
+        # escondo: si el peso por volumen importa de verdad, la vía a futuro
+        # es pedir style="ticks" en vez de "candles" y usar densidad de ticks
+        # como proxy — no lo hice acá porque es una integración nueva, fuera
+        # de alcance de hoy.
 
         # VWAP = sum(typical_price * volume) / sum(volume)
         typical = (highs + lows + closes) / 3
@@ -359,6 +402,7 @@ def get_vwap_signal(pair: str, tf_minutes: int = 15) -> dict:
         }
 
     except Exception as e:
+        _forex_chaos_alert(f"get_vwap_signal({pair}, {tf_minutes}m) excepción: {type(e).__name__}: {e}")
         return {'score': 5, 'bias': 'NEUTRAL', 'vwap': 0,
                 'last': 0, 'position': 'ERROR', 'atr_15m': 0,
                 'error': str(e)}

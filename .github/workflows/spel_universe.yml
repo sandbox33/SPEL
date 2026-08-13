@@ -274,10 +274,37 @@ jobs:
           git config user.email "holmes@spel.ai"
           git config user.name  "Holmes OS V4.0"
 
+          # RC-04 fix (S48) — AMPLIADO tras verificarlo por simulación real:
+          # el mecanismo no es exclusivo de live_graph_data.json (como decía
+          # el parche original) — reproduje el mismo conflicto en
+          # last_signal.json también. Los 9 archivos de esta lista se
+          # regeneran completos cada ciclo (no se editan incrementalmente),
+          # así que TODOS comparten el mismo riesgo si dos runs se solapan.
+          # "git stash pop" puede dejar marcadores <<<<<<</=======/>>>>>>>
+          # literales DENTRO del JSON, que luego se comitean tal cual —
+          # confirmado con un JSON corrupto real llegando al remote en la
+          # prueba. Fix: snapshot de cada archivo ANTES del stash/rebase/pop,
+          # restaurar la versión fresca de ESTE run al final sin importar
+          # cómo terminó el pop. "Última generación gana" es la semántica
+          # correcta acá — no es código fuente para mergear, es telemetría.
+          MEMORY_FILES="last_signal.json live_bma_result.json live_bma_history.json gate_metrics.json SHA_REGISTRY.json system_pulse.json live_graph_data.json live_dashboard_stats.json live_forex_signal.json"
+          SNAP_DIR=$(mktemp -d)
+          for f in $MEMORY_FILES; do
+            [ -f "meta/$f" ] && cp "meta/$f" "$SNAP_DIR/$f"
+          done
+
           # CI-01 fix: stash before rebase to avoid "unstaged changes" noise
           git stash --include-untracked 2>/dev/null || true
           git pull --rebase origin main 2>/dev/null || true
           git stash pop 2>/dev/null || true
+          # Si el pop dejó un stash sin aplicar del todo (conflicto), no lo
+          # dejamos acumulándose ciclo tras ciclo.
+          git stash list | grep -q . && git stash drop 2>/dev/null || true
+
+          for f in $MEMORY_FILES; do
+            [ -f "$SNAP_DIR/$f" ] && cp "$SNAP_DIR/$f" "meta/$f"
+          done
+          rm -rf "$SNAP_DIR"
 
           # Stage all memory files — this is what kills DATA_STALE permanently
           git add meta/last_signal.json          2>/dev/null || true

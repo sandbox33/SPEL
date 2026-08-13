@@ -29,6 +29,30 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional
 
+# ── Integración del parche huérfano spel_memory_patch.py (S48 — "Bucle de
+#    Amnesia" RC-01/RC-02, paso 3). Verificado con grep antes de tocar nada:
+#    ninguna de estas 3 funciones estaba siendo importada por nadie — el
+#    fix existía por escrito desde S48 pero nunca corrió. Import resiliente
+#    porque spel_memory_patch.py vive en la raíz del repo, no en 04_GOLD_MODULES.
+try:
+    from spel_memory_patch import (
+        refresh_signal_timestamp,
+        append_bma_history_robust,
+        check_data_staleness_v2,
+    )
+except ImportError:
+    try:
+        _here = Path(__file__).resolve().parent.parent  # 04_GOLD_MODULES/.. = raíz
+    except NameError:
+        _here = Path.cwd()
+    if str(_here) not in sys.path:
+        sys.path.insert(0, str(_here))
+    from spel_memory_patch import (
+        refresh_signal_timestamp,
+        append_bma_history_robust,
+        check_data_staleness_v2,
+    )
+
 # ─── Constants ────────────────────────────────────────────────────────────────
 # ─── 3-way ROOT (S46) ────────────────────────────────────────────────────────
 _IS_GH_BMA = os.environ.get('GITHUB_ACTIONS') == 'true'
@@ -457,8 +481,12 @@ def run_bma_cycle(root: Path = ROOT, verbose: bool = False) -> dict:
 
     lambda_decay = compute_lambda_decay(signal_age)
     # V-04 S46: Staleness guard — si dato OHLCV > 13min, vitality forzada a 0
+    # RC-02 FIX (S48): check_data_staleness_v2 prioriza ohlcv_fresh_ts (lo pone
+    # el harvester al llegar dato nuevo) sobre 'timestamp'/'ts' genéricos —
+    # esto es lo que realmente ataca la causa raíz del Bucle de Amnesia, no
+    # solo un timestamp más nuevo.
     _ohlcv_ts = signal.get('timestamp') or signal.get('ts') or ''
-    if not check_data_staleness(_ohlcv_ts):
+    if not check_data_staleness_v2(_ohlcv_ts, signal_path=signal_path):
         vitality_tesla = 0
         print('  V-04: vitality_tesla=0 (DATA_STALE)')
 
@@ -529,6 +557,34 @@ def run_bma_cycle(root: Path = ROOT, verbose: bool = False) -> dict:
             "kl_drift":     KL_DIVERGENCE_THRESHOLD,
         },
     }
+
+    # RC-01 FIX (S48): append_bma_history_robust() estaba definida pero JAMÁS
+    # llamada — verificado con grep, no asumido. Consecuencia real: get_rolling_kl()
+    # (línea ~470) lee de live_bma_history.json esperando un rolling window de
+    # 5 ciclos, pero nada escribía ahí — la protección anti-spike GDELT (V-03
+    # S46) corría en la práctica sobre un historial vacío o congelado. Se
+    # registra un record por ciclo a nivel global (kl_divergence y
+    # shannon_entropy ya son valores globales acá, no por-activo).
+    append_bma_history_robust({
+        "ts":         output["generated_at"],
+        "asset":      "GLOBAL",
+        "kl":         kl_divergence,
+        "shannon":    shannon_entropy,
+        "gold_score": gt_score,
+        "action":     "HOLD" if output["global"]["kill_active"] else "EVALUATE",
+        "vitality_tesla": vitality,
+    }, vault)
+
+    # RC-02 FIX (S48), FIX A: refresh_signal_timestamp() — instrucción explícita
+    # del propio parche ("before writing output"). Nota honesta: esto marca
+    # last_signal.json como "consumido y no-stale" en el momento en que ESTE
+    # ciclo lo procesó, no en el momento en que llegó OHLCV nuevo de verdad.
+    # No es lo mismo que "los datos son frescos" — es "este ciclo ya actuó
+    # sobre esta señal, no la vuelvas a penalizar por vieja hasta que llegue
+    # la próxima". Si el harvester real se atasca, esto puede enmascarar esa
+    # falla en vez de exponerla. Lo integro tal como lo pediste (paso 3), pero
+    # queda marcado para revisión — no lo doy por "resuelto sin más".
+    refresh_signal_timestamp(vault)
 
     payload = json.dumps(output, indent=2, ensure_ascii=False).encode("utf-8")
     output["_sha"] = _sha24(payload)

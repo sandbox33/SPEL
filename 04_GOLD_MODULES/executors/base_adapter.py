@@ -19,10 +19,13 @@
 #    BigQueryGDELTAdapter → Entropía geopolítica GDELT (Bug #44 resuelto)
 #    TiingoAdapter        → OHLCV alternativo (fallback de AlphaVantage)
 #    ParquetCacheAdapter  → Último valor conocido del data lake (último recurso)
+#    DerivAdapter         → OHLCV FX vía WebSocket oficial (reemplaza yfinance
+#                           en spel_forex_iq.py — auditoría de ingesta)
 #
 #  JERARQUÍA DE FALLBACK POR ACTIVO:
 #    OHLCV:  AlphaVantage → Tiingo → ParquetCache → DataFrame vacío
 #    GDELT:  BigQuery     → ParquetCache → 0.0
+#    FX:     Deriv        → ParquetCache → DataFrame vacío
 # ══════════════════════════════════════════════════════════════════════════════
 
 from __future__ import annotations
@@ -607,6 +610,141 @@ class ParquetCacheAdapter(BaseSensorAdapter):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  ADAPTER CONCRETO 5: DERIV (OHLCV FX — API oficial WebSocket)
+#  Ingesta de velas/candles vía ticks_history. Reemplaza yfinance en la
+#  superficie Micro/FX. NO incluye ejecución de órdenes (buy/sell) — eso es
+#  una capacidad separada, fuera de alcance de este adapter a propósito.
+#
+#  Endpoint verificado: wss://ws.derivws.com/websockets/v3?app_id={app_id}
+#  Símbolos forex verificados: prefijo "frx" (frxEURUSD, frxGBPUSD, ...).
+#  XAU/sintéticos: NO incluidos en SYMBOL_MAP — confirmar con
+#  DerivAdapter.fetch_active_symbols() antes de operar, no adivinar.
+# ══════════════════════════════════════════════════════════════════════════════
+
+DERIV_WS_ENDPOINT = "wss://ws.derivws.com/websockets/v3?app_id={app_id}"
+
+DERIV_SYMBOL_MAP: dict[str, str] = {
+    "EURUSD": "frxEURUSD",
+    "GBPUSD": "frxGBPUSD",
+    "USDJPY": "frxUSDJPY",
+    "USDCHF": "frxUSDCHF",
+    "AUDUSD": "frxAUDUSD",
+}
+
+DERIV_GRANULARITY_SECONDS: dict[str, int] = {
+    "1m": 60, "5m": 300, "15m": 900, "30m": 1800,
+    "1h": 3600, "2h": 7200, "4h": 14400, "1d": 86400,
+}
+
+
+class DerivAdapter(BaseSensorAdapter):
+    """
+    Adapter OHLCV usando la API oficial de Deriv (WebSocket, ticks_history).
+
+    A diferencia de los otros adapters, `timeframe` se fija en el
+    constructor, no por llamada — BaseSensorAdapter.fetch() invoca
+    self._fetch_raw(activo, desde, hasta) con exactamente 3 posicionales,
+    así que un parámetro extra por llamada nunca llegaría. Por eso
+    build_forex_chain(timeframe=...) crea una cadena por timeframe.
+    """
+
+    def __init__(
+        self,
+        api_token: Optional[str] = None,
+        app_id: Optional[str] = None,
+        timeframe: str = "15m",
+        logs_dir: Optional[Path] = None,
+    ):
+        super().__init__(logs_dir)
+        self.api_token = api_token or os.environ.get("DERIV_API_TOKEN", "")
+        self.app_id = app_id or os.environ.get("DERIV_APP_ID", "")
+        self.timeframe = timeframe
+        if not self.api_token or not self.app_id:
+            logger.warning(
+                "[deriv] DERIV_API_TOKEN / DERIV_APP_ID no configurados — "
+                "adapter marcado como no disponible"
+            )
+
+    @property
+    def name(self) -> str:
+        return "deriv"
+
+    def is_available(self) -> bool:
+        return bool(self.api_token and self.app_id)
+
+    def _fetch_raw(self, activo: str, desde: datetime, hasta: datetime) -> pl.DataFrame:
+        import asyncio
+        return asyncio.run(self._fetch_raw_async(activo, desde, hasta))
+
+    async def _fetch_raw_async(self, activo: str, desde: datetime, hasta: datetime) -> pl.DataFrame:
+        import websockets
+
+        if activo not in DERIV_SYMBOL_MAP:
+            raise ValueError(
+                f"Activo '{activo}' no está en DERIV_SYMBOL_MAP — verificar símbolo "
+                f"real con fetch_active_symbols() antes de agregarlo."
+            )
+        symbol = DERIV_SYMBOL_MAP[activo]
+        granularity = DERIV_GRANULARITY_SECONDS.get(self.timeframe, 900)
+        uri = DERIV_WS_ENDPOINT.format(app_id=self.app_id)
+
+        async with websockets.connect(uri, open_timeout=self.TIMEOUT_S) as ws:
+            await ws.send(json.dumps({"authorize": self.api_token}))
+            auth_resp = json.loads(await asyncio.wait_for(ws.recv(), timeout=self.TIMEOUT_S))
+            if auth_resp.get("error"):
+                raise RuntimeError(f"Deriv authorize falló: {auth_resp['error'].get('message')}")
+
+            request = {
+                "ticks_history": symbol,
+                "adjust_start_time": 1,
+                "start": int(desde.timestamp()),
+                "end": int(hasta.timestamp()),
+                "style": "candles",
+                "granularity": granularity,
+                "count": 5000,
+            }
+            await ws.send(json.dumps(request))
+            resp = json.loads(await asyncio.wait_for(ws.recv(), timeout=self.TIMEOUT_S))
+
+            if resp.get("error"):
+                raise RuntimeError(f"Deriv ticks_history falló: {resp['error'].get('message')}")
+
+            candles = resp.get("candles", [])
+            if not candles:
+                raise ValueError(f"Deriv: sin velas para {symbol} en el rango dado")
+
+            rows = [
+                {
+                    "date":   datetime.utcfromtimestamp(c["epoch"]).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "open":   float(c["open"]),
+                    "high":   float(c["high"]),
+                    "low":    float(c["low"]),
+                    "close":  float(c["close"]),
+                    "volume": 0.0,  # Deriv (CFD/synthetics) no reporta volumen real
+                }
+                for c in candles
+            ]
+            return pl.DataFrame(rows).sort("date")
+
+    def _dataframe_degradado(self, activo: str) -> pl.DataFrame:
+        hoy = datetime.utcnow().strftime("%Y-%m-%d")
+        return pl.DataFrame({
+            "date": [hoy], "open": [0.0], "high": [0.0],
+            "low": [0.0], "close": [0.0], "volume": [0.0],
+        })
+
+    async def fetch_active_symbols(self) -> list[dict]:
+        """Consulta símbolos reales en vivo — usar antes de asumir un mapeo."""
+        import asyncio
+        import websockets
+        uri = DERIV_WS_ENDPOINT.format(app_id=self.app_id)
+        async with websockets.connect(uri) as ws:
+            await ws.send(json.dumps({"active_symbols": "brief", "product_type": "basic"}))
+            resp = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
+            return resp.get("active_symbols", [])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  ORQUESTADOR DE ADAPTERS — SPELAdapterChain
 #  Implementa la jerarquía de fallback: Primario → Secundario → ParquetCache
 # ══════════════════════════════════════════════════════════════════════════════
@@ -706,6 +844,31 @@ class SPELAdapterChain:
                 gcp_project_id=gcp_project_id,
                 bq_client=bq_client,
                 logs_dir=logs_dir,
+            ),
+            ParquetCacheAdapter(data_lake_path=data_lake_path, logs_dir=logs_dir),
+        ])
+
+    @classmethod
+    def build_forex_chain(
+        cls,
+        timeframe: str = "15m",
+        api_token: Optional[str] = None,
+        app_id: Optional[str] = None,
+        data_lake_path: Optional[Path] = None,
+        logs_dir: Optional[Path] = None,
+    ) -> "SPELAdapterChain":
+        """
+        Cadena canónica para FX/Micro:
+        Deriv → ParquetCache
+
+        Un `timeframe` distinto ("1d" para estructura diaria, "15m"/"30m"
+        para VWAP intradía) requiere una cadena distinta — no reutilizar la
+        misma instancia entre timeframes.
+        """
+        return cls([
+            DerivAdapter(
+                api_token=api_token, app_id=app_id,
+                timeframe=timeframe, logs_dir=logs_dir,
             ),
             ParquetCacheAdapter(data_lake_path=data_lake_path, logs_dir=logs_dir),
         ])

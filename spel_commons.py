@@ -75,9 +75,14 @@ _OPTIONAL_KEYS = [
     "TELEGRAM_SISTEMA",
     "TELEGRAM_SENALES",
     "TELEGRAM_BACKUP",
-    "TELEGRAM_CAOS",
+    "TELEGRAM_CHAOS",     # FIX: era "TELEGRAM_CAOS" en esta copia — spel_forex_bridge.py
+                          # ya lee os.getenv("TELEGRAM_CHAOS"); con "CAOS" ese env var
+                          # nunca se encontraba. Necesario para que la integración del
+                          # parche FOREX_CHAOS_ENDPOINT (paso 3) funcione de verdad.
     "FOREX_CHAOS_ENDPOINT",
     "NGROK_TOKEN",
+    "DERIV_API_TOKEN",    # Paso 1 — consolidación de credenciales Deriv
+    "DERIV_APP_ID",       # Paso 1 — consolidación de credenciales Deriv
 ]
 
 _HARDCODED_CHANNELS = {
