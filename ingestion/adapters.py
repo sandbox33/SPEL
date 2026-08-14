@@ -15,14 +15,32 @@ garantiza es que, sin importar el protocolo de abajo, quien llama nunca ve:
 
 Diseño async desde el arranque — Deriv es WebSocket nativo, y el resto del
 proyecto ya trabaja con httpx/aiohttp/websockets (ver PRINCIPLES.md).
+
+Nota de procedencia (auditoría explícita, 13-14 ago 2026):
+  BaseAdapter, DerivAdapter y las excepciones tipadas de este archivo NO
+  cambiaron en esta sesión — ya estaban en main, ya probados. Lo que se
+  agrega acá es AdapterResult y AdapterChain (al final del archivo):
+  portados y adaptados desde infrastructure/adapters/base_adapter.py
+  (linaje "SPEL v8"), tomando el patrón de degradación elegante
+  (is_degraded, fallback en cadena, log de auditoría) y dejando afuera
+  todo lo que pertenecía a ese linaje pero no a esta capa — polars en vez
+  de pandas, columnas con features ya calculadas (fibonacci_lag_*,
+  goldstein_geo), logging.basicConfig a nivel de módulo, y las factories
+  que hardcodeaban fuentes (AlphaVantage/Tiingo/BigQuery) fuera del
+  alcance de Fase 1. Diff completo de qué entró/quedó afuera: discutido y
+  aprobado en el chat de refactorización del 13-14 ago 2026.
 """
 
 from __future__ import annotations
 
 import abc
+import asyncio
 import json
 import logging
+import time
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Awaitable, Callable, Optional
 
 import pandas as pd
@@ -415,3 +433,200 @@ class DerivAdapter(BaseAdapter):
         except Exception as exc:
             logger.warning("[%s] health_check falló: %s", self.source_name, exc)
             return False
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  AdapterResult / AdapterChain — degradación elegante con fallback en cadena
+#
+#  Portado y adaptado desde infrastructure/adapters/base_adapter.py (linaje
+#  "SPEL v8"). Ver nota de procedencia en el docstring del módulo para el
+#  detalle completo de qué se descartó y por qué. Los cambios respecto al
+#  original, resumidos:
+#    - pl.DataFrame -> pd.DataFrame (no se introduce una segunda librería
+#      de datos en la misma capa que ya está en pandas).
+#    - "except Exception" genérico -> "except AdapterException" al capturar
+#      fallas de un adapter dentro del retry: un BaseAdapter conforme a
+#      este contrato SIEMPRE traduce sus fallas a AdapterException (ver
+#      BaseAdapter.fetch_ohlcv arriba). Atrapar Exception a secas
+#      convertiría también un bug de programación (TypeError, AttributeError)
+#      en un "degradado silencioso" indistinguible de una falla de red real
+#      — exactamente el tipo de fallo silencioso que este módulo existe
+#      para prevenir (ver docstring del módulo, primer párrafo).
+#    - Sin las factories build_ohlcv_chain/build_gdelt_chain: hardcodeaban
+#      fuentes (AlphaVantage, Tiingo, BigQuery) fuera del alcance de
+#      Fase 1. Quien arme una cadena la arma explícito en el call site,
+#      con los adapters que correspondan a esta fase.
+# ══════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class AdapterResult:
+    """
+    Contenedor canónico del resultado de pasar por un AdapterChain.
+    A diferencia de BaseAdapter.fetch_ohlcv() (que lanza AdapterException),
+    AdapterChain.fetch() NUNCA lanza — el pipeline aguas abajo siempre
+    recibe un AdapterResult y decide qué hacer con is_degraded.
+    """
+    data: pd.DataFrame
+    adapter_name: str
+    symbol: str
+    is_degraded: bool = False
+    error_msg: Optional[str] = None
+    rows_fetched: int = 0
+    latency_ms: float = 0.0
+    timestamp_utc: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+
+    def log_summary(self) -> None:
+        estado = "DEGRADADO" if self.is_degraded else "OK"
+        logger.info(
+            "[%s] %s -> %s | filas=%d | latencia=%.0fms%s",
+            estado, self.adapter_name, self.symbol,
+            self.rows_fetched, self.latency_ms,
+            f" | error: {self.error_msg}" if self.error_msg else "",
+        )
+
+
+class AdapterChain:
+    """
+    Orquesta una lista de BaseAdapter con fallback automático y reintentos.
+
+    IMPORTANTE — reentrancia de asyncio.run():
+      fetch() es SÍNCRONA a propósito (decisión explícita del 13-14 ago
+      2026: portar la interfaz síncrona del original en vez de reescribir
+      la cadena entera como async). Por dentro, cada intento contra un
+      adapter async se resuelve con asyncio.run(). asyncio.run() NO es
+      reentrante: llamar a este método desde código que ya está corriendo
+      dentro de un event loop (por ejemplo, desde dentro de otro `async def`
+      ya en ejecución) lanza RuntimeError.
+      Hoy (Fase 1) esto no es un problema — nada en ingestion/ ni en
+      core/scoring.py llama fetch() desde un contexto ya-async. Si en
+      Fase 4 execution/ necesita invocar esta cadena desde dentro de un
+      loop async existente (por ejemplo, un orquestador async que también
+      llama a Deriv para ejecución de órdenes), este wrapper hay que
+      revisarlo entonces — no se resuelve por adelantado acá.
+    """
+
+    MAX_RETRIES: int = 3
+    RETRY_DELAY_S: float = 2.0
+
+    def __init__(self, adapters: list[BaseAdapter], *, logs_dir: Optional[Path] = None):
+        if not adapters:
+            raise ValueError("AdapterChain requiere al menos un adapter")
+        self.adapters = adapters
+        self.logs_dir = logs_dir
+
+    def fetch(
+        self,
+        symbol: str,
+        *,
+        timeframe: str = "1h",
+        limit: int = 100,
+    ) -> AdapterResult:
+        """
+        Prueba cada adapter en orden. Devuelve el primer resultado no
+        degradado. Si todos fallan, devuelve el resultado degradado del
+        último adapter probado (nunca lanza).
+        """
+        ultimo_resultado: Optional[AdapterResult] = None
+
+        for adapter in self.adapters:
+            resultado = self._fetch_con_reintentos(adapter, symbol, timeframe, limit)
+            ultimo_resultado = resultado
+
+            if not resultado.is_degraded:
+                if self.logs_dir:
+                    self._escribir_log_auditoria(resultado)
+                return resultado
+
+            logger.warning(
+                "[chain] '%s' degradado para %s — probando siguiente fuente",
+                adapter.source_name, symbol,
+            )
+
+        if self.logs_dir and ultimo_resultado:
+            self._escribir_log_auditoria(ultimo_resultado)
+
+        if ultimo_resultado is not None:
+            return ultimo_resultado
+
+        # Caso extremo: self.adapters no puede estar vacío (validado en
+        # __init__), así que esta rama es inalcanzable en la práctica —
+        # se deja como red de seguridad explícita, no silenciosa.
+        return AdapterResult(
+            data=pd.DataFrame(),
+            adapter_name="chain_empty",
+            symbol=symbol,
+            is_degraded=True,
+            error_msg="AdapterChain sin adapters ejecutables",
+        )
+
+    def _fetch_con_reintentos(
+        self, adapter: BaseAdapter, symbol: str, timeframe: str, limit: int,
+    ) -> AdapterResult:
+        last_error: Optional[str] = None
+        t0 = time.monotonic()
+
+        for intento in range(1, self.MAX_RETRIES + 1):
+            try:
+                df = asyncio.run(adapter.fetch_ohlcv(symbol, timeframe, limit))
+                latencia_ms = (time.monotonic() - t0) * 1000
+                resultado = AdapterResult(
+                    data=df,
+                    adapter_name=adapter.source_name,
+                    symbol=symbol,
+                    is_degraded=False,
+                    rows_fetched=len(df),
+                    latency_ms=latencia_ms,
+                )
+                resultado.log_summary()
+                return resultado
+
+            except AdapterException as exc:
+                last_error = f"[intento {intento}/{self.MAX_RETRIES}] {type(exc).__name__}: {exc}"
+                logger.warning("[%s] %s | symbol=%s", adapter.source_name, last_error, symbol)
+                if isinstance(exc, AdapterAuthError):
+                    # Reintentar con las mismas credenciales no arregla un
+                    # 403/InvalidToken — cortar los reintentos ahora mismo
+                    # y pasar directo a degradado, en vez de esperar y
+                    # repetir la misma falla dos veces más.
+                    break
+                if intento < self.MAX_RETRIES:
+                    time.sleep(self.RETRY_DELAY_S * intento)
+
+        latencia_ms = (time.monotonic() - t0) * 1000
+        resultado = AdapterResult(
+            data=pd.DataFrame(),
+            adapter_name=adapter.source_name,
+            symbol=symbol,
+            is_degraded=True,
+            error_msg=last_error,
+            rows_fetched=0,
+            latency_ms=latencia_ms,
+        )
+        resultado.log_summary()
+        return resultado
+
+    def _escribir_log_auditoria(self, resultado: AdapterResult) -> None:
+        """Persiste el resultado en {logs_dir}/adapters_audit.json
+        (últimas 200 entradas). Mismo formato que el original."""
+        log_path = self.logs_dir / "adapters_audit.json"
+        entrada = {
+            "timestamp_utc": resultado.timestamp_utc,
+            "adapter": resultado.adapter_name,
+            "symbol": resultado.symbol,
+            "is_degraded": resultado.is_degraded,
+            "rows_fetched": resultado.rows_fetched,
+            "latency_ms": round(resultado.latency_ms, 1),
+            "error": resultado.error_msg,
+        }
+        historial: list = []
+        if log_path.exists():
+            try:
+                historial = json.loads(log_path.read_text())
+            except (json.JSONDecodeError, OSError):
+                historial = []
+        historial.append(entrada)
+        historial = historial[-200:]
+        self.logs_dir.mkdir(parents=True, exist_ok=True)
+        log_path.write_text(json.dumps(historial, indent=2, ensure_ascii=False))

@@ -16,8 +16,11 @@ import pytest
 
 from ingestion.adapters import (
     AdapterAuthError,
+    AdapterChain,
     AdapterConnectionError,
     AdapterDataError,
+    AdapterException,
+    AdapterResult,
     BaseAdapter,
     DerivAdapter,
     REQUIRED_COLUMNS,
@@ -350,3 +353,138 @@ async def test_health_check_ante_respuesta_inesperada_devuelve_false():
     connector = make_connector(responses=[{"algo": "inesperado"}])
     adapter = DerivAdapter(api_token="tok", app_id="1089", connector=connector)
     assert await adapter.health_check() is False
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  AdapterChain — incorporación de la sesión del 13-14 ago 2026. Ver
+#  docstring de AdapterChain en ingestion/adapters.py para la nota de
+#  procedencia completa (portado y adaptado desde base_adapter.py v8).
+#
+#  Doble de prueba propio (FakeAdapter) en vez de reusar FakeWebSocket:
+#  estos tests ejercitan AdapterChain, no DerivAdapter -- lo que hace
+#  falta es un BaseAdapter cuyo fetch_ohlcv() se pueda hacer fallar o
+#  responder a voluntad en cada llamada sucesiva, sin pasar por
+#  WebSocket/JSON en absoluto.
+# ══════════════════════════════════════════════════════════════════════════
+
+def _ohlcv_valido(n: int = 3) -> pd.DataFrame:
+    ts = pd.date_range("2026-08-01", periods=n, freq="1h", tz="UTC")
+    return pd.DataFrame({
+        "timestamp": ts,
+        "open": [1.1] * n,
+        "high": [1.2] * n,
+        "low": [1.0] * n,
+        "close": [1.15] * n,
+        "volume": [0.0] * n,
+    })
+
+
+class FakeAdapter(BaseAdapter):
+    """Doble mínimo de BaseAdapter. `behavior` controla qué hace
+    fetch_ohlcv en cada llamada sucesiva -- permite simular "falla las
+    primeras N veces, después funciona" sin mockear nada de transporte."""
+
+    def __init__(self, source_name: str, behavior: list):
+        self.source_name = source_name
+        self._behavior = list(behavior)
+        self.calls = 0
+
+    async def fetch_ohlcv(self, symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
+        self.calls += 1
+        idx = min(self.calls - 1, len(self._behavior) - 1)
+        outcome = self._behavior[idx]
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    async def health_check(self) -> bool:
+        return True
+
+
+class TestAdapterChain:
+    def test_requiere_al_menos_un_adapter(self):
+        with pytest.raises(ValueError, match="al menos un adapter"):
+            AdapterChain([])
+
+    def test_primer_adapter_ok_no_prueba_el_segundo(self):
+        primero = FakeAdapter("fuente_a", [_ohlcv_valido()])
+        segundo = FakeAdapter("fuente_b", [_ohlcv_valido()])
+        chain = AdapterChain([primero, segundo])
+
+        resultado = chain.fetch("EURUSD")
+
+        assert not resultado.is_degraded
+        assert resultado.adapter_name == "fuente_a"
+        assert segundo.calls == 0  # nunca se llegó a probar
+
+    def test_primero_falla_todos_los_reintentos_cae_al_segundo(self):
+        primero = FakeAdapter("fuente_a", [
+            AdapterConnectionError("timeout 1"),
+            AdapterConnectionError("timeout 2"),
+            AdapterConnectionError("timeout 3"),
+        ])
+        segundo = FakeAdapter("fuente_b", [_ohlcv_valido()])
+        chain = AdapterChain([primero, segundo])
+        chain.RETRY_DELAY_S = 0  # no dormir de verdad en el test
+
+        resultado = chain.fetch("EURUSD")
+
+        assert not resultado.is_degraded
+        assert resultado.adapter_name == "fuente_b"
+        assert primero.calls == 3  # agotó MAX_RETRIES antes de pasar al siguiente
+
+    def test_todos_fallan_devuelve_degradado_sin_lanzar(self):
+        primero = FakeAdapter("fuente_a", [AdapterConnectionError("caído")])
+        segundo = FakeAdapter("fuente_b", [AdapterDataError("esquema roto")])
+        chain = AdapterChain([primero, segundo])
+        chain.RETRY_DELAY_S = 0
+
+        resultado = chain.fetch("EURUSD")  # no debe lanzar
+
+        assert resultado.is_degraded
+        assert resultado.adapter_name == "fuente_b"  # el último probado
+        assert resultado.data.empty
+
+    def test_auth_error_corta_reintentos_de_inmediato(self):
+        adapter = FakeAdapter("fuente_a", [AdapterAuthError("InvalidToken")])
+        chain = AdapterChain([adapter])
+        chain.RETRY_DELAY_S = 0
+
+        resultado = chain.fetch("EURUSD")
+
+        assert resultado.is_degraded
+        # Un solo intento -- no tiene sentido reintentar un token inválido
+        # tres veces (ver comentario en AdapterChain._fetch_con_reintentos).
+        assert adapter.calls == 1
+
+    def test_escribe_log_de_auditoria_cuando_logs_dir_provisto(self, tmp_path):
+        adapter = FakeAdapter("fuente_a", [_ohlcv_valido()])
+        chain = AdapterChain([adapter], logs_dir=tmp_path)
+
+        chain.fetch("EURUSD")
+
+        log_path = tmp_path / "adapters_audit.json"
+        assert log_path.exists()
+        entradas = json.loads(log_path.read_text())
+        assert len(entradas) == 1
+        assert entradas[0]["adapter"] == "fuente_a"
+        assert entradas[0]["is_degraded"] is False
+
+    def test_log_de_auditoria_conserva_ultimas_200(self, tmp_path):
+        adapter = FakeAdapter("fuente_a", [_ohlcv_valido()])
+        chain = AdapterChain([adapter], logs_dir=tmp_path)
+
+        for _ in range(205):
+            chain.fetch("EURUSD")
+
+        entradas = json.loads((tmp_path / "adapters_audit.json").read_text())
+        assert len(entradas) == 200
+
+    def test_result_log_summary_no_lanza(self):
+        # log_summary() solo loguea -- confirmar que no explota con
+        # is_degraded=True y error_msg presente.
+        resultado = AdapterResult(
+            data=pd.DataFrame(), adapter_name="x", symbol="EURUSD",
+            is_degraded=True, error_msg="algo falló",
+        )
+        resultado.log_summary()
