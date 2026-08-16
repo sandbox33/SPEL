@@ -333,6 +333,19 @@ def compute_nash_frozen_7d(
     activos del proyecto, o hace falta calibrar por activo? ¿Cuánta
     referencia (días) es "suficiente" en la práctica, más allá del
     múltiplo mínimo acá elegido sin backtest?
+
+    HALLAZGO de integración real (ingestion/gdelt_series.py + este
+    módulo, no un supuesto): insufficient_reference mide CANTIDAD de
+    días, no si esos días tienen RANGO suficiente para normalizar de
+    forma estable. Con 30 días reales de entropía casi constante
+    (rango total ~0.04), insufficient_reference=False (30 ≥ 21) mientras
+    std_normalized dio 0.31 -- muy por encima del umbral -- porque
+    normalizar contra un rango chico estira hasta el ruido normal.
+    No es un bug de esta función (la fórmula hace exactamente lo que
+    el legacy define); es un límite real del criterio de "suficiente"
+    que MIN_REFERENCE_MULTIPLIER no captura. Pendiente para F2 junto
+    con la calibración del threshold: ¿agregar un piso de rango mínimo
+    (e_max - e_min) además del piso de cantidad de días?
     """
     if entropy_window is None or len(entropy_window) == 0:
         logger.warning("nash_frozen_7d: entropy_window vacía o None -- insufficient_data.")
