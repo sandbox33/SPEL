@@ -857,3 +857,106 @@ def test_gold_legacy_threshold_respeta_valor_personalizado():
     )
     assert result.kill_signal is True
     assert result.kill_reason == GoldScoreKillReason.LEGACY_ENTROPY_THRESHOLD
+
+
+# ─── Benchmark A/B/C: legacy fijo vs. godel_active vs. producción ──────────
+#
+# Compara 3 lógicas de kill signal en 5 escenarios operacionales:
+#   Caso A: umbral legacy fijo puro -- entropy_shannon > 0.42, sin nada más.
+#   Caso B: godel_active() puro -- entropy >= p90 OR vitality == 9.
+#   Caso C: el sistema real en producción -- compute_gold_score_bma(),
+#           que ya combina los 3 mecanismos (godel_active OR legacy_threshold
+#           OR drift) con la prioridad confirmada en la sesión del fix.
+#
+# Objetivo: encontrar los casos límite donde A, B y C DIVERGEN -- ninguno
+# de los 3 es simplemente "más estricto" en general, cada uno queda
+# ciego a un tipo distinto de riesgo, y C existe precisamente para
+# cubrir los puntos ciegos de A y B por separado.
+#
+# CORRECCIÓN sobre una matriz de escenarios que circuló antes de este
+# patch: el Escenario 4 (Drift Severo) traía KL=0.18 -- por DEBAJO de
+# KL_DIVERGENCE_THRESHOLD=0.20 (constante real del módulo). Con ese
+# valor, ningún caso dispara -- no demuestra nada sobre drift. Se
+# corrigió a KL=0.25 (sí supera el umbral real) para que el escenario
+# efectivamente muestre lo que dice mostrar: que solo C detecta el
+# desvío de distribución.
+
+def _caso_a_legacy_fijo(entropy: float, threshold: float = 0.42) -> bool:
+    """Caso A -- réplica standalone del umbral legacy, sin pasar por
+    compute_gold_score_bma() (que ya combina los 3 casos vía OR)."""
+    return entropy > threshold
+
+
+def _caso_b_godel_puro(entropy: float, p90: float, vitality: int) -> bool:
+    """Caso B -- llama a godel_active() real del módulo, sin wrapping."""
+    return godel_active(entropy, p90, vitality)
+
+
+@pytest.mark.parametrize(
+    "nombre, entropy, p90, vitality, kl, esperado_a, esperado_b, esperado_c, razon_c_esperada",
+    [
+        # 1: entropía alta en términos absolutos, pero el régimen reciente
+        # fue tan volátil (p90=0.70) que 0.55 no llega a cruzarlo -- B
+        # (adaptativo puro) queda ciego acá. Solo A y C, vía la red de
+        # seguridad legacy, lo detienen.
+        ("Ruido moderado alto", 0.55, 0.70, 3, 0.02, True, False, True, "legacy_entropy_threshold"),
+        # 2: entropía baja en términos absolutos (0.35 < 0.42, A no lo ve),
+        # pero el régimen reciente fue MUY estable (p90=0.30) -- 0.35 sí
+        # rompe ese percentil. B y C lo detectan, A no.
+        ("Micro-ruptura de percentil local", 0.35, 0.30, 3, 0.02, False, True, True, "godel_active"),
+        ("Vitality Tesla 9 fuerza kill pese a entropía muy baja", 0.20, 0.50, 9, 0.01, False, True, True, "godel_active"),
+        # 4: corregido -- ver nota arriba. KL=0.25 sí supera el umbral real.
+        ("Drift severo, KL sobre el umbral real", 0.30, 0.50, 2, 0.25, False, False, True, "drift_control"),
+        ("Régimen nominal, ningún caso dispara", 0.25, 0.60, 4, 0.01, False, False, False, "none"),
+    ],
+)
+def test_benchmark_abc_casos_limite_donde_las_3_logicas_divergen(
+    nombre, entropy, p90, vitality, kl, esperado_a, esperado_b, esperado_c, razon_c_esperada,
+):
+    a = _caso_a_legacy_fijo(entropy)
+    b = _caso_b_godel_puro(entropy, p90, vitality)
+    resultado_c = compute_gold_score_bma(
+        godel_score=0.8, te_score=0.8, backbone_score=0.8, asset="XAU",
+        entropy_shannon=entropy, p90_entropy=p90, vitality_tesla=vitality,
+        kl_divergence=kl,
+    )
+
+    assert a == esperado_a, f"{nombre}: Caso A esperaba {esperado_a}, dio {a}"
+    assert b == esperado_b, f"{nombre}: Caso B esperaba {esperado_b}, dio {b}"
+    assert resultado_c.kill_signal == esperado_c, f"{nombre}: Caso C esperaba {esperado_c}, dio {resultado_c.kill_signal}"
+    assert resultado_c.kill_reason.value == razon_c_esperada, (
+        f"{nombre}: razón de C esperaba '{razon_c_esperada}', dio '{resultado_c.kill_reason.value}'"
+    )
+
+
+def test_benchmark_abc_al_menos_un_escenario_donde_a_ve_y_b_no():
+    # Confirma que existe divergencia real A>B, no solo B>=A siempre --
+    # si este test fallara, "Caso A" sería estrictamente redundante.
+    assert _caso_a_legacy_fijo(0.55) is True
+    assert _caso_b_godel_puro(0.55, p90=0.70, vitality=3) is False
+
+
+def test_benchmark_abc_al_menos_un_escenario_donde_b_ve_y_a_no():
+    # Confirma la divergencia inversa -- ninguno de los 2 domina al otro.
+    assert _caso_a_legacy_fijo(0.35) is False
+    assert _caso_b_godel_puro(0.35, p90=0.30, vitality=3) is True
+
+
+def test_benchmark_abc_c_nunca_dispara_menos_que_a_o_b_por_separado():
+    # C es el OR de los 3 mecanismos -- por construcción, en cualquier
+    # escenario donde A o B disparan, C también debe disparar. Si esto
+    # fallara, la síntesis de kill_signal tendría un caso donde perdió
+    # cobertura respecto a sus propios componentes.
+    escenarios = [
+        (0.55, 0.70, 3, 0.02), (0.35, 0.30, 3, 0.02), (0.20, 0.50, 9, 0.01),
+        (0.30, 0.50, 2, 0.25), (0.25, 0.60, 4, 0.01),
+    ]
+    for entropy, p90, vitality, kl in escenarios:
+        a = _caso_a_legacy_fijo(entropy)
+        b = _caso_b_godel_puro(entropy, p90, vitality)
+        c = compute_gold_score_bma(
+            0.8, 0.8, 0.8, "XAU", entropy_shannon=entropy, p90_entropy=p90,
+            vitality_tesla=vitality, kl_divergence=kl,
+        ).kill_signal
+        if a or b:
+            assert c is True, f"entropy={entropy} p90={p90} vit={vitality}: A={a} B={b} pero C=False"
