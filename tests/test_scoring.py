@@ -33,6 +33,7 @@ from core.scoring import (
     VitalityTier,
     classify_gdelt_event,
     compute_adaptive_percentile,
+    compute_entropy_delta_lags,
     compute_entropy_fibonacci_lags,
     compute_gold_score_bma,
     compute_mass_panic_index,
@@ -489,6 +490,54 @@ def test_fib_respeta_lag_days_personalizado():
     result = compute_entropy_fibonacci_lags(history, lag_days=(1, 2))
     assert set(result.lags.keys()) == {1, 2}
     assert result.available_lags == (1, 2)
+
+
+# ─── entropy_delta_lags ─────────────────────────────────────────────────────
+
+def test_delta_historia_none_devuelve_todos_en_none():
+    result = compute_entropy_delta_lags(None)
+    assert result.available_lags == ()
+    assert all(v is None for v in result.deltas.values())
+
+
+def test_delta_valores_exactos_con_historia_completa():
+    # history[i]=i, 22 puntos, hoy=21 -> delta_N = 21 - (21-N) = N
+    history = [float(x) for x in range(22)]
+    result = compute_entropy_delta_lags(history)
+    assert result.deltas[1] == 1.0
+    assert result.deltas[5] == 5.0
+    assert result.deltas[21] == 21.0
+
+
+def test_delta_es_negativo_cuando_entropia_bajo():
+    # entropía decreciente: hoy es MENOR que hace N días -> delta negativo
+    history = [float(21 - x) for x in range(22)]  # [21,20,...,0], hoy=0
+    result = compute_entropy_delta_lags(history)
+    assert result.deltas[1] == -1.0  # 0 - 1
+    assert result.deltas[21] == -21.0  # 0 - 21
+
+
+def test_delta_resultado_parcial_no_invalida_los_demas():
+    history = [float(x) for x in range(3)]
+    result = compute_entropy_delta_lags(history)
+    assert result.deltas[1] is not None
+    assert result.deltas[21] is None
+
+
+def test_delta_respeta_lag_days_personalizado():
+    history = [float(x) for x in range(5)]
+    result = compute_entropy_delta_lags(history, lag_days=(1, 2))
+    assert set(result.deltas.keys()) == {1, 2}
+
+
+def test_delta_no_reemplaza_ni_altera_fibonacci_lags_niveles():
+    # ambas funciones coexisten -- delta no es un drop-in replacement
+    history = [float(x) for x in range(22)]
+    niveles = compute_entropy_fibonacci_lags(history)
+    deltas = compute_entropy_delta_lags(history)
+    assert niveles.lags[1] == 20.0  # nivel: el valor de hace 1 día
+    assert deltas.deltas[1] == 1.0   # delta: cuánto cambió en 1 día
+    assert niveles.lags[1] != deltas.deltas[1]
 
 
 # ─── gold_score_bma ─────────────────────────────────────────────────────────

@@ -577,6 +577,68 @@ def compute_entropy_fibonacci_lags(
     return FibonacciLagResult(lags=lags, available_lags=tuple(available), cadence_days=1)
 
 
+@dataclass(frozen=True)
+class DeltaLagResult:
+    deltas: dict[int, float | None]
+    available_lags: tuple[int, ...]
+
+
+def compute_entropy_delta_lags(
+    entropy_history: Sequence[float] | None,
+    *,
+    lag_days: tuple[int, ...] = FIBONACCI_LAG_DAYS,
+) -> DeltaLagResult:
+    """
+    ΔE_k = E_t - E_{t-k} -- diferencias, no niveles. Formulación
+    ADICIONAL a compute_entropy_fibonacci_lags(), no un reemplazo.
+
+    Por qué no se redujo a un subconjunto {1,5,21} ni se reemplazaron
+    los niveles por deltas en la función existente: la colinealidad
+    entre lags cercanos (Validación pendiente F2 ya documentada en
+    compute_entropy_fibonacci_lags) es una hipótesis razonable, pero
+    confirmarla necesita una matriz de correlación sobre ENTROPÍA REAL
+    -- que no existe todavía (no hay ingestion GDELT corriendo, ver
+    docstring del módulo). Elegir {1,5,21} ahora sería exactamente el
+    tipo de número sin evidencia que este proyecto evita en cada
+    decisión anterior. Niveles y deltas son objetos matemáticos
+    distintos (nivel = dónde está la entropía; delta = cuánto cambió) --
+    tener ambos disponibles deja que la auditoría de F2 compare cuál
+    aporta más, en vez de que esta sesión lo decida a ciegas.
+
+    Un lag_days ya personalizable (compute_entropy_fibonacci_lags(...,
+    lag_days=(1,5,21))) cubre la parte de "reducir el subconjunto" sin
+    código nuevo -- ver ese parámetro si lo que hace falta es menos
+    columnas, no una fórmula distinta.
+
+    Args:
+        entropy_history: igual semántica que compute_entropy_fibonacci_lags
+            (último elemento = hoy).
+        lag_days: qué lags calcular (default: Fibonacci 1..21).
+
+    Validación pendiente (F2): comparar poder predictivo de niveles vs.
+    deltas con datos reales, antes de elegir uno como default del
+    pipeline de features.
+    """
+    if not entropy_history:
+        return DeltaLagResult(deltas={n: None for n in lag_days}, available_lags=())
+
+    history = list(entropy_history)
+    n_points = len(history)
+    current = history[-1]
+
+    deltas: dict[int, float | None] = {}
+    available: list[int] = []
+    for n in lag_days:
+        idx = -1 - n
+        if -idx <= n_points:
+            deltas[n] = float(current - history[idx])
+            available.append(n)
+        else:
+            deltas[n] = None
+
+    return DeltaLagResult(deltas=deltas, available_lags=tuple(available))
+
+
 # ─── gold_score_bma ─────────────────────────────────────────────────────────
 
 #: spel_bayesian_core.py::NATIVE_ASSETS -- activos con backbone LSTM real.
