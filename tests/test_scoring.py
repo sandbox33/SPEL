@@ -308,6 +308,41 @@ def test_nash_source_es_gdelt_foundation():
     assert result.source == NashFrozenSource.GDELT_FOUNDATION_NORMALIZED_STD
 
 
+def test_nash_bug_micro_ruido_con_referencia_corta_infla_std():
+    # Reproduce el bug confirmado con números en esta sesión: con SOLO 7
+    # puntos, min/max de referencia == min/max de la cola -> el rango
+    # normalizado se estira a [0,1] sin importar la magnitud real.
+    micro_ruido = [0.500, 0.501, 0.4995, 0.5005, 0.500, 0.4998, 0.5002]
+    result = compute_nash_frozen_7d(micro_ruido)
+    assert result.insufficient_reference is True
+    assert result.std_normalized > NASH_FROZEN_THRESHOLD  # falso "no congelado"
+
+
+def test_nash_referencia_larga_corrige_el_mismo_micro_ruido():
+    micro_ruido = [0.500, 0.501, 0.4995, 0.5005, 0.500, 0.4998, 0.5002]
+    referencia_larga = [0.3 + 0.4 * (i / 300) for i in range(53)] + micro_ruido
+    result = compute_nash_frozen_7d(referencia_larga)
+    assert result.insufficient_reference is False
+    assert result.std_normalized < NASH_FROZEN_THRESHOLD  # ahora sí "congelado"
+
+
+def test_nash_insufficient_reference_es_false_con_referencia_suficiente():
+    # 21 puntos = 3x window_days (7) -> exactamente en el límite, no insuficiente
+    result = compute_nash_frozen_7d([0.5] * 21)
+    assert result.insufficient_reference is False
+
+
+def test_nash_insufficient_reference_es_true_justo_debajo_del_limite():
+    result = compute_nash_frozen_7d([0.5] * 20)  # 20 < 21 (3x7)
+    assert result.insufficient_reference is True
+
+
+def test_nash_insufficient_reference_tambien_marcado_cuando_insufficient_data():
+    result = compute_nash_frozen_7d([0.5])
+    assert result.insufficient_data is True
+    assert result.insufficient_reference is True  # 1 punto, muy por debajo de 21
+
+
 # ─── mass_panic_index ────────────────────────────────────────────────────────
 
 def test_panic_insufficient_data_sin_ninguna_ventana():
@@ -325,6 +360,11 @@ def test_panic_no_dispara_con_entropia_normal_y_sin_goldstein():
     assert result.flag is False
     assert result.component == MassPanicComponent.NONE
     assert result.insufficient_data is False
+
+
+def test_panic_is_experimental_es_siempre_true():
+    result = compute_mass_panic_index(entropy_window=[0.5, 0.5], current_entropy=0.5)
+    assert result.is_experimental is True
 
 
 def test_panic_dispara_por_entropia_cuando_z_supera_el_umbral():
@@ -616,7 +656,6 @@ def test_gdelt_gobierno_por_deu_sin_matchear_core():
 
 
 def test_gdelt_usa_prioriza_core_sobre_gobierno_si_matchea_ambos():
-    # USA está en NVDA (core) Y en GOBIERNO -- core gana
     result = classify_gdelt_event(["USA"], asset="NVDA")
     assert result.pipeline == GdeltPipeline.CORE
 
@@ -682,7 +721,7 @@ def test_adaptive_pct_puro_rolling_con_historia_suficiente():
 
 
 def test_adaptive_pct_hibrido_en_zona_intermedia():
-    history = list(np.linspace(0.0, 1.0, 50))  # 10 <= 50 < 100
+    history = list(np.linspace(0.0, 1.0, 50))
     result = compute_adaptive_percentile(history=history, percentile=90.0, global_default=0.42)
     assert result.source == PercentileSource.HYBRID
     rolling_expected = np.percentile(history, 90.0)
@@ -691,13 +730,13 @@ def test_adaptive_pct_hibrido_en_zona_intermedia():
 
 
 def test_adaptive_pct_borde_exacto_diez_obs_es_hibrido():
-    history = [float(x) for x in range(10)]  # exactamente 10 -> zona híbrida, no global
+    history = [float(x) for x in range(10)]
     result = compute_adaptive_percentile(history=history, percentile=50.0, global_default=0.5)
     assert result.source == PercentileSource.HYBRID
 
 
 def test_adaptive_pct_borde_exacto_cien_obs_es_rolling():
-    history = [float(x) for x in range(100)]  # exactamente 100 -> rolling puro
+    history = [float(x) for x in range(100)]
     result = compute_adaptive_percentile(history=history, percentile=50.0, global_default=0.5)
     assert result.source == PercentileSource.ROLLING
 
@@ -717,3 +756,55 @@ def test_adaptive_pct_respeta_umbrales_personalizados():
         min_obs_for_hybrid=25,  # 20 < 25 -> fuerza GLOBAL aunque normalmente sería HYBRID
     )
     assert result.source == PercentileSource.GLOBAL
+
+
+def test_gold_legacy_threshold_mata_entropia_moderada_que_godel_active_dejaria_pasar():
+    # El caso motivador: entropy=0.5 > 0.42 (legacy mata), pero p90=1.2
+    # (godel_active NO se activa, 0.5 < 1.2) y vitality != 9. Sin la red
+    # de seguridad, esto pasaría con gold_score > 0 -- exactamente el
+    # riesgo de un p90 mal calibrado en frío.
+    result = compute_gold_score_bma(
+        godel_score=0.8, te_score=0.8, backbone_score=0.8, asset="XAU",
+        entropy_shannon=0.5, p90_entropy=1.2, vitality_tesla=6,
+    )
+    assert godel_active(entropy_shannon=0.5, p90_entropy=1.2, vitality_tesla=6) is False  # confirma la premisa
+    assert result.kill_signal is True
+    assert result.kill_reason == GoldScoreKillReason.LEGACY_ENTROPY_THRESHOLD
+    assert result.regime == GoldScoreRegime.HIGH_ENTROPY_LEGACY_KILL
+    assert result.gold_score == 0.0
+
+
+def test_gold_legacy_threshold_none_desactiva_la_red_de_seguridad():
+    result = compute_gold_score_bma(
+        godel_score=0.8, te_score=0.8, backbone_score=0.8, asset="XAU",
+        entropy_shannon=0.5, p90_entropy=1.2, vitality_tesla=6,
+        legacy_entropy_threshold=None,
+    )
+    assert result.kill_signal is False  # vuelve al comportamiento anterior
+
+
+def test_gold_legacy_threshold_en_el_borde_no_dispara_es_estricto():
+    result = compute_gold_score_bma(
+        godel_score=0.5, te_score=0.5, backbone_score=0.5, asset="XAU",
+        entropy_shannon=0.42, p90_entropy=1.2, vitality_tesla=6,  # == umbral, no >
+    )
+    assert result.kill_signal is False
+
+
+def test_gold_godel_active_tiene_prioridad_sobre_legacy_threshold():
+    # entropy=1.5 dispara AMBOS (godel_active por >=p90, y legacy por >0.42)
+    result = compute_gold_score_bma(
+        godel_score=0.8, te_score=0.8, backbone_score=0.8, asset="XAU",
+        entropy_shannon=1.5, p90_entropy=1.2, vitality_tesla=6,
+    )
+    assert result.kill_reason == GoldScoreKillReason.GODEL_ACTIVE  # no LEGACY_ENTROPY_THRESHOLD
+
+
+def test_gold_legacy_threshold_respeta_valor_personalizado():
+    result = compute_gold_score_bma(
+        godel_score=0.5, te_score=0.5, backbone_score=0.5, asset="XAU",
+        entropy_shannon=0.35, p90_entropy=1.2, vitality_tesla=6,
+        legacy_entropy_threshold=0.30,  # umbral más estricto que el default
+    )
+    assert result.kill_signal is True
+    assert result.kill_reason == GoldScoreKillReason.LEGACY_ENTROPY_THRESHOLD

@@ -249,6 +249,13 @@ MIN_WINDOW_FOR_NASH = 2
 #: de esto es "congelado" (Equilibrio de Nash, sin movimiento informacional).
 NASH_FROZEN_THRESHOLD = 0.15
 
+#: Fix de bug de esta sesión: `entropy_window` debe ser al menos esto
+#: veces `window_days` para que la referencia de normalización no
+#: colapse con la cola del std (ver docstring de compute_nash_frozen_7d
+#: para el caso numérico que confirmó el bug). Sin backtest -- punto de
+#: partida razonable, no calibrado.
+MIN_REFERENCE_MULTIPLIER = 3
+
 
 class NashFrozenSource(str, Enum):
     """Única fuente implementada -- ver docstring del módulo, hallazgo #2,
@@ -265,6 +272,7 @@ class NashFrozenResult:
     std_normalized: float | None
     frozen: bool
     insufficient_data: bool
+    insufficient_reference: bool
     source: NashFrozenSource
 
 
@@ -289,31 +297,61 @@ def compute_nash_frozen_7d(
     Valor BAJO -> entropía estable (Nash: sin movimiento). Valor ALTO ->
     entropía transitando (oportunidad o caos).
 
-    ADAPTACIÓN respecto al legacy (documentada): el legacy normaliza con
-    min/max del AÑO COMPLETO (batch, offline, todo el dataset por
-    adelantado). Acá se normaliza con el min/max de la ventana provista
-    -- es la versión online-computable de la misma fórmula. Si
-    min==max (entropía constante), se usa rango=1.0 para evitar
-    división por cero, igual que el legacy.
+    BUG CORREGIDO EN ESTA SESIÓN (confirmado con números, no solo
+    argumentado): la primera versión de esta función normalizaba con el
+    min/max de la MISMA ventana de 7 días usada para el std -- eso
+    fuerza el rango normalizado a [0,1] SIEMPRE, sin importar la
+    magnitud real de la variación. Micro-ruido de rango real 0.0015
+    producía std_normalized=0.33 (falso "no congelado"); con una
+    referencia de 60 días el mismo ruido da 0.0024 (correcto,
+    "congelado"). Fix: `entropy_window` es ahora la ventana de
+    REFERENCIA (tan larga como haya historia -- ideal: todo lo
+    disponible, acercándose al "año completo" del legacy), separada de
+    `window_days` (7, fijo) que solo define la cola sobre la que se
+    calcula el std. Si `entropy_window` no trae bastante historia MÁS
+    ALLÁ de esos 7 días, el bug se puede reproducir igual -- por eso
+    `insufficient_reference=True` cuando la referencia no es al menos
+    MIN_REFERENCE_MULTIPLIER veces más larga que window_days.
+
+    Se descartó coeficiente de variación (alternativa mencionada): el
+    umbral NASH_FROZEN_THRESHOLD=0.15 fue calibrado en el legacy sobre
+    la escala normalizada [0,1] -- aplicar el mismo 0.15 a un CV (escala
+    distinta) sería un número sin sentido, no una migración válida.
 
     Args:
-        entropy_window: entropy_shannon en orden cronológico, el ÚLTIMO
-            elemento es el punto actual (ventana auto-referencial, igual
-            que la Primaria B de vitality_tesla).
-        window_days: tamaño del rolling std (legacy: 7).
+        entropy_window: TODA la historia disponible de entropy_shannon,
+            orden cronológico, el ÚLTIMO elemento es el punto actual.
+            Se usa para normalizar (min/max de acá) Y para tomar la cola
+            de `window_days` puntos sobre la que se calcula el std.
+            Cuantos más puntos más allá de `window_days`, mejor la
+            referencia -- ver insufficient_reference.
+        window_days: tamaño de la cola para el std (legacy: 7). NO
+            afecta la referencia de normalización.
         threshold: por debajo de esto, frozen=True (legacy: 0.15).
 
     Validación pendiente (F2): ¿0.15 es el umbral correcto para los 4
-    activos del proyecto, o hace falta calibrar por activo?
+    activos del proyecto, o hace falta calibrar por activo? ¿Cuánta
+    referencia (días) es "suficiente" en la práctica, más allá del
+    múltiplo mínimo acá elegido sin backtest?
     """
     if entropy_window is None or len(entropy_window) == 0:
         logger.warning("nash_frozen_7d: entropy_window vacía o None -- insufficient_data.")
         return NashFrozenResult(
             std_normalized=None, frozen=False, insufficient_data=True,
+            insufficient_reference=False,
             source=NashFrozenSource.GDELT_FOUNDATION_NORMALIZED_STD,
         )
 
     window = list(entropy_window)
+    insufficient_reference = len(window) < window_days * MIN_REFERENCE_MULTIPLIER
+    if insufficient_reference:
+        logger.warning(
+            "nash_frozen_7d: solo %d puntos de referencia (se recomiendan >= %d, "
+            "%dx window_days) -- std_normalized puede estar inflado por micro-ruido, "
+            "igual que el bug corregido en esta sesión.",
+            len(window), window_days * MIN_REFERENCE_MULTIPLIER, MIN_REFERENCE_MULTIPLIER,
+        )
+
     e_min, e_max = min(window), max(window)
     e_range = (e_max - e_min) if (e_max - e_min) > 0 else 1.0
     normalized = [(v - e_min) / e_range for v in window]
@@ -326,6 +364,7 @@ def compute_nash_frozen_7d(
         )
         return NashFrozenResult(
             std_normalized=None, frozen=False, insufficient_data=True,
+            insufficient_reference=insufficient_reference,
             source=NashFrozenSource.GDELT_FOUNDATION_NORMALIZED_STD,
         )
 
@@ -334,6 +373,7 @@ def compute_nash_frozen_7d(
         std_normalized=std_normalized,
         frozen=std_normalized < threshold,
         insufficient_data=False,
+        insufficient_reference=insufficient_reference,
         source=NashFrozenSource.GDELT_FOUNDATION_NORMALIZED_STD,
     )
 
@@ -366,6 +406,11 @@ class MassPanicResult:
     z_entropy: float | None
     z_goldstein: float | None
     insufficient_data: bool
+    #: Fijo en True -- ninguna de las 2 señales que esto combina tiene
+    #: backtest todavía (ver docstring de compute_mass_panic_index). No
+    #: es un parámetro: no hay forma de que esto sea False hasta que
+    #: exista esa validación.
+    is_experimental: bool = True
 
 
 def _zscore_last(window: Sequence[float] | None, current: float | None) -> float | None:
@@ -549,10 +594,16 @@ BMA_WEIGHTS: dict[str, dict[str, float]] = {
 #: spel_bayesian_core.py::KL_DIVERGENCE_THRESHOLD.
 KL_DIVERGENCE_THRESHOLD = 0.20
 
+#: spel_bayesian_core.py::SHANNON_KILL_THRESHOLD -- umbral fijo del
+#: legacy original. Reincorporado en esta sesión como red de seguridad
+#: independiente de godel_active() -- ver docstring de
+#: compute_gold_score_bma para el razonamiento completo.
+SHANNON_KILL_THRESHOLD = 0.42
+
 
 class GoldScoreRegime(str, Enum):
     """TRANSCENDENCE/STRUCTURE/CREATION: umbrales sobre godel_score,
-    spel_bayesian_core.py (g>=0.90 / g>=0.33 / si no). Los otros 2 son
+    spel_bayesian_core.py (g>=0.90 / g>=0.33 / si no). Los otros 3 son
     para las ramas de kill signal -- nunca se confunden con los 3
     anteriores (el legacy también los separaba: HIGH_ENTROPY y
     DRIFT_DETECTED eran regímenes distintos de TRANSCENDENCE)."""
@@ -561,6 +612,7 @@ class GoldScoreRegime(str, Enum):
     CREATION = "creation"
     GODEL_ACTIVE_KILL = "godel_active_kill"
     DRIFT_DETECTED = "drift_detected"
+    HIGH_ENTROPY_LEGACY_KILL = "high_entropy_legacy_kill"
 
 
 class GoldScoreAction(str, Enum):
@@ -573,8 +625,9 @@ class GoldScoreAction(str, Enum):
 
 class GoldScoreKillReason(str, Enum):
     NONE = "none"
-    GODEL_ACTIVE = "godel_active"      # entropy>=P90 OR vitality==9
-    DRIFT_CONTROL = "drift_control"    # kl_divergence > 0.20
+    GODEL_ACTIVE = "godel_active"                    # entropy>=P90 OR vitality==9
+    DRIFT_CONTROL = "drift_control"                  # kl_divergence > 0.20
+    LEGACY_ENTROPY_THRESHOLD = "legacy_entropy_threshold"  # entropy > 0.42 fijo
 
 
 @dataclass(frozen=True)
@@ -597,6 +650,7 @@ def compute_gold_score_bma(
     p90_entropy: float,
     vitality_tesla: int,
     kl_divergence: float = 0.0,
+    legacy_entropy_threshold: float | None = SHANNON_KILL_THRESHOLD,
 ) -> GoldScoreResult:
     """
     gold_score -- Bayesian Model Averaging de 3 componentes.
@@ -612,17 +666,31 @@ def compute_gold_score_bma(
         synthetic (todo lo demás, ej. EURUSD): 0.55 / 0.45 / 0.00
     Inputs clampeados a [0,1] antes de combinar, igual que el legacy.
 
-    SÍNTESIS DE KILL SIGNAL (diferencia deliberada vs. el legacy, no un
-    port 1:1): el legacy original mata la señal con un umbral FIJO
-    (shannon_entropy > 0.42) independiente de vitality_tesla. Este mismo
-    módulo YA tiene godel_active() -- confirmado con evidencia doble
-    (godel_bound.py + Bug#35/36) -- que combina entropy>=P90 OR
-    vitality==9. Mantener 2 compuertas distintas para "¿esto es
-    demasiado riesgoso?" viola Tamiz 3 (una implementación por
-    concepto). Acá se REUTILIZA godel_active() en vez de reimplementar
-    el umbral fijo -- kill_signal = godel_active(...) OR kl_divergence > 0.20.
-    Si se prefiere el umbral fijo de 0.42 en paralelo, es un cambio de
-    una línea -- queda marcado para que no sea una decisión oculta.
+    SÍNTESIS DE KILL SIGNAL, actualizada en esta sesión: la primera
+    versión reemplazaba el umbral fijo del legacy (shannon_entropy >
+    0.42) por godel_active() puro, argumentando Tamiz 3 (una
+    implementación por concepto). Se reincorpora el umbral fijo como
+    RED DE SEGURIDAD INDEPENDIENTE, no como reemplazo de esa decisión:
+    godel_active() depende de p90_entropy, que en frío (poca historia)
+    puede venir de compute_adaptive_percentile() en modo GLOBAL -- un
+    default sin backtest. Si ese default está mal calibrado,
+    godel_active() puede fallar en dejar pasar entropías
+    moderadas-altas. legacy_entropy_threshold es un chequeo absoluto,
+    independiente de esa calibración -- exactamente el rol de una red
+    de seguridad, no el de la señal principal.
+
+        kill_signal = godel_active(...) OR kl_divergence > 0.20
+                      OR (legacy_entropy_threshold is not None
+                          AND entropy_shannon > legacy_entropy_threshold)
+
+    Prioridad si varias disparan a la vez (para kill_reason, todas
+    ponen gold_score=0.0 y action=HOLD igual): godel_active primero
+    (evidencia doble, dos fuentes distintas) > legacy_entropy_threshold
+    (red de seguridad, una sola fuente) > drift_control (mide otra
+    cosa -- desvío del modelo, no nivel de entropía).
+
+    legacy_entropy_threshold=None desactiva esta red de seguridad y
+    vuelve al comportamiento anterior (solo godel_active + drift).
 
     DISCREPANCIA encontrada (registrada, no ocultada): la memoria de
     sesiones anteriores decía "KL divergence > 0.20 -> HOLD (not zero
@@ -634,10 +702,13 @@ def compute_gold_score_bma(
         asset: nombre del activo -- determina native vs synthetic.
         entropy_shannon, p90_entropy, vitality_tesla: para godel_active().
         kl_divergence: default 0.0.
+        legacy_entropy_threshold: default SHANNON_KILL_THRESHOLD (0.42).
+            None para desactivar.
 
-    Validación pendiente (F2): ¿la síntesis del kill signal (godel_active
-    en vez del umbral fijo 0.42) diverge del original en algún caso?
-    Backtest contra el histórico de COVID-19 usado para godel_bound.py.
+    Validación pendiente (F2): con datos reales, ¿la red de seguridad
+    dispara alguna vez que godel_active() no lo haga ya? El benchmark
+    A/B/C de esta sesión compara los 3 casos con datos sintéticos --
+    la validación con datos reales sigue pendiente.
     """
     g = max(0.0, min(1.0, godel_score))
     t = max(0.0, min(1.0, te_score))
@@ -648,10 +719,18 @@ def compute_gold_score_bma(
 
     is_godel_active = godel_active(entropy_shannon, p90_entropy, vitality_tesla)
     is_drift = kl_divergence > KL_DIVERGENCE_THRESHOLD
+    is_legacy_kill = (
+        legacy_entropy_threshold is not None
+        and entropy_shannon > legacy_entropy_threshold
+    )
 
-    if is_godel_active or is_drift:
-        kill_reason = GoldScoreKillReason.GODEL_ACTIVE if is_godel_active else GoldScoreKillReason.DRIFT_CONTROL
-        regime = GoldScoreRegime.GODEL_ACTIVE_KILL if is_godel_active else GoldScoreRegime.DRIFT_DETECTED
+    if is_godel_active or is_legacy_kill or is_drift:
+        if is_godel_active:
+            kill_reason, regime = GoldScoreKillReason.GODEL_ACTIVE, GoldScoreRegime.GODEL_ACTIVE_KILL
+        elif is_legacy_kill:
+            kill_reason, regime = GoldScoreKillReason.LEGACY_ENTROPY_THRESHOLD, GoldScoreRegime.HIGH_ENTROPY_LEGACY_KILL
+        else:
+            kill_reason, regime = GoldScoreKillReason.DRIFT_CONTROL, GoldScoreRegime.DRIFT_DETECTED
         logger.info("gold_score_bma: kill_signal=True reason=%s asset=%s", kill_reason.value, asset)
         return GoldScoreResult(
             gold_score=0.0, regime=regime, action=GoldScoreAction.HOLD,
