@@ -1,11 +1,15 @@
 # Fase 1 -- verificado contra imports reales del repo (grep, no supuesto):
 # core/scoring.py -> numpy. ingestion/adapters.py -> pandas (top-level),
-# websockets (lazy, DerivAdapter._default_connector). tests -> pytest,
+# websockets (lazy, DerivAdapter._default_connector). ingestion/gdelt.py
+# -> httpx (async nativo -- no requests, que es bloqueante y ya se
+# eliminó esa trampa en fetch_async()/AdapterChain). tests -> pytest,
 # pytest-asyncio. NO incluye PyTorch/ML (Decisión #7: sin ML en F1) ni
-# polars (gdelt_foundation.py lo usa pero ese ingestion todavía no está
-# portado al repo nuevo -- se agrega cuando exista, junto con requests).
+# polars (gdelt_foundation.py lo usa; se evaluó no usarlo acá para no
+# sumar una dependencia pesada solo por el parseo de 8 columnas -- ver
+# ingestion/gdelt.py, parseo con str.split() puro).
 numpy
 pandas
 websockets
+httpx
 pytest
 pytest-asyncio
