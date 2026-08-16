@@ -9,13 +9,17 @@ donde un port descuidado suele introducir un bug de un solo carácter.
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from core.scoring import (
     DEFAULT_GLOBAL_P33,
     DEFAULT_GLOBAL_P66,
     FIBONACCI_LAG_DAYS,
+    MIN_OBS_FOR_HYBRID,
+    MIN_OBS_FOR_ROLLING,
     NASH_FROZEN_THRESHOLD,
+    AdaptivePercentileResult,
     CORE_COUNTRY_FILTERS,
     GOBIERNO_COUNTRY_FILTERS,
     GdeltPipeline,
@@ -25,8 +29,10 @@ from core.scoring import (
     InvalidThresholdError,
     MassPanicComponent,
     NashFrozenSource,
+    PercentileSource,
     VitalityTier,
     classify_gdelt_event,
+    compute_adaptive_percentile,
     compute_entropy_fibonacci_lags,
     compute_gold_score_bma,
     compute_mass_panic_index,
@@ -648,3 +654,66 @@ def test_gdelt_core_country_filters_tiene_los_4_activos_confirmados():
 
 def test_gdelt_gobierno_country_filters_es_usa_deu():
     assert GOBIERNO_COUNTRY_FILTERS == ("USA", "DEU")
+
+
+# ─── compute_adaptive_percentile ────────────────────────────────────────────
+
+def test_adaptive_pct_puro_global_con_poca_historia():
+    result = compute_adaptive_percentile(
+        history=[0.5, 0.6, 0.4], percentile=90.0, global_default=0.42,
+    )
+    assert result.source == PercentileSource.GLOBAL
+    assert result.value == 0.42
+    assert result.n_obs == 3
+
+
+def test_adaptive_pct_puro_global_sin_historia():
+    result = compute_adaptive_percentile(history=None, percentile=90.0, global_default=0.42)
+    assert result.source == PercentileSource.GLOBAL
+    assert result.n_obs == 0
+
+
+def test_adaptive_pct_puro_rolling_con_historia_suficiente():
+    history = list(np.linspace(0.0, 1.0, 150))
+    result = compute_adaptive_percentile(history=history, percentile=90.0, global_default=0.42)
+    assert result.source == PercentileSource.ROLLING
+    assert result.value == pytest.approx(np.percentile(history, 90.0))
+    assert result.n_obs == 150
+
+
+def test_adaptive_pct_hibrido_en_zona_intermedia():
+    history = list(np.linspace(0.0, 1.0, 50))  # 10 <= 50 < 100
+    result = compute_adaptive_percentile(history=history, percentile=90.0, global_default=0.42)
+    assert result.source == PercentileSource.HYBRID
+    rolling_expected = np.percentile(history, 90.0)
+    expected = 0.7 * 0.42 + 0.3 * rolling_expected
+    assert result.value == pytest.approx(expected)
+
+
+def test_adaptive_pct_borde_exacto_diez_obs_es_hibrido():
+    history = [float(x) for x in range(10)]  # exactamente 10 -> zona híbrida, no global
+    result = compute_adaptive_percentile(history=history, percentile=50.0, global_default=0.5)
+    assert result.source == PercentileSource.HYBRID
+
+
+def test_adaptive_pct_borde_exacto_cien_obs_es_rolling():
+    history = [float(x) for x in range(100)]  # exactamente 100 -> rolling puro
+    result = compute_adaptive_percentile(history=history, percentile=50.0, global_default=0.5)
+    assert result.source == PercentileSource.ROLLING
+
+
+def test_adaptive_pct_es_generico_sirve_para_p33_y_p66():
+    history = list(np.linspace(0.0, 1.0, 200))
+    p33 = compute_adaptive_percentile(history, percentile=33.0, global_default=DEFAULT_GLOBAL_P33)
+    p66 = compute_adaptive_percentile(history, percentile=66.0, global_default=DEFAULT_GLOBAL_P66)
+    assert p33.value < p66.value
+    assert p33.source == PercentileSource.ROLLING
+
+
+def test_adaptive_pct_respeta_umbrales_personalizados():
+    history = [float(x) for x in range(20)]
+    result = compute_adaptive_percentile(
+        history=history, percentile=50.0, global_default=0.5,
+        min_obs_for_hybrid=25,  # 20 < 25 -> fuerza GLOBAL aunque normalmente sería HYBRID
+    )
+    assert result.source == PercentileSource.GLOBAL

@@ -776,3 +776,86 @@ def classify_gdelt_event(
         pipeline = GdeltPipeline.NONE
 
     return GdeltClassificationResult(pipeline=pipeline, matched_countries=matched)
+
+
+# ─── adaptive_percentile (multi-tier) ───────────────────────────────────────
+
+#: Por debajo de esto, la rolling no tiene sentido -- puro global.
+MIN_OBS_FOR_HYBRID = 10
+
+#: Por encima de esto, la rolling es confiable -- puro rolling.
+MIN_OBS_FOR_ROLLING = 100
+
+#: Peso del global en la zona híbrida (10-99 obs). Sin calibrar -- ver
+#: Validación pendiente abajo.
+HYBRID_WEIGHT_GLOBAL = 0.7
+
+
+class PercentileSource(str, Enum):
+    GLOBAL = "global"
+    ROLLING = "rolling"
+    HYBRID = "hybrid"
+
+
+@dataclass(frozen=True)
+class AdaptivePercentileResult:
+    value: float
+    source: PercentileSource
+    n_obs: int
+
+
+def compute_adaptive_percentile(
+    history: Sequence[float] | None,
+    percentile: float,
+    global_default: float,
+    *,
+    min_obs_for_hybrid: int = MIN_OBS_FOR_HYBRID,
+    min_obs_for_rolling: int = MIN_OBS_FOR_ROLLING,
+    hybrid_weight_global: float = HYBRID_WEIGHT_GLOBAL,
+) -> AdaptivePercentileResult:
+    """
+    Percentil adaptativo de 3 niveles -- SIN precedente legacy exacto (el
+    legacy cargaba P90/P33/P66 desde un JSON pre-calibrado por Altair, no
+    calculaba esto en runtime). Diseñado acá, no portado.
+
+    Genérico para cualquier percentil (P90 para godel_active, P33/P66
+    para vitality_tesla) -- la lógica de "¿cuánta historia hay?" es la
+    misma sin importar cuál percentil se pida.
+
+        n_obs < 10          -> global_default puro (sin historia confiable)
+        10 <= n_obs < 100    -> híbrido: 0.7*global + 0.3*rolling
+        n_obs >= 100         -> rolling puro (np.percentile sobre history)
+
+    Args:
+        history: serie histórica (ej. entropy_shannon), sin incluir el
+            punto actual -- mismo criterio que el resto del módulo.
+        percentile: 0-100 (ej. 90.0 para P90).
+        global_default: valor a usar en el nivel GLOBAL. Para P33/P66,
+            usar DEFAULT_GLOBAL_P33/P66 (ya confirmados en el legacy,
+            HINC OMNIA CERNO §Vitality_Tesla). Para P90 NO hay default
+            legacy confirmado -- debe proveerse explícitamente (ej.
+            desde ENTROPY_P90_GLOBAL en governance, si se define).
+
+    Validación pendiente (F2): min_obs_for_hybrid=10, min_obs_for_rolling=100
+    y hybrid_weight_global=0.7 son puntos de partida razonables, no
+    valores calibrados con backtest -- ninguno de los 3 tiene evidencia
+    empírica todavía.
+    """
+    n_obs = len(history) if history else 0
+
+    if n_obs < min_obs_for_hybrid:
+        return AdaptivePercentileResult(
+            value=global_default, source=PercentileSource.GLOBAL, n_obs=n_obs,
+        )
+
+    rolling_value = float(np.percentile(list(history), percentile))
+
+    if n_obs >= min_obs_for_rolling:
+        return AdaptivePercentileResult(
+            value=rolling_value, source=PercentileSource.ROLLING, n_obs=n_obs,
+        )
+
+    hybrid_value = hybrid_weight_global * global_default + (1 - hybrid_weight_global) * rolling_value
+    return AdaptivePercentileResult(
+        value=hybrid_value, source=PercentileSource.HYBRID, n_obs=n_obs,
+    )
