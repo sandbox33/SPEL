@@ -685,3 +685,94 @@ def compute_gold_score_bma(
         kill_signal=False, kill_reason=GoldScoreKillReason.NONE,
         weights_used=dict(weights), asset_type=asset_type,
     )
+
+
+# ─── gdelt_pipeline_classification ──────────────────────────────────────────
+
+#: gdelt_foundation.py::ASSET_COUNTRY_FILTERS -- port directo. XAU vacío =
+#: sin filtro (todo el dataset), no un error de captura.
+CORE_COUNTRY_FILTERS: dict[str, tuple[str, ...]] = {
+    "NVDA": ("USA", "TWN", "KOR", "CHN", "JPN"),
+    "XAU": (),
+    "BTC": ("USA", "CHN", "RUS", "PRK", "DEU", "GBR"),
+    "NIFTY50": ("IND", "PAK", "CHN", "USA"),
+}
+
+#: SIN PRECEDENTE LEGACY -- EURUSD no aparece en ASSET_COUNTRY_FILTERS ni en
+#: base_adapter.py::_KEYWORDS (grep confirma: cero menciones en todo el
+#: proyecto). DISEÑADO acá, no portado: USA (Fed, lado USD) + DEU (mayor
+#: economía de la Eurozona -- GDELT no tiene código de país para "Eurozona"
+#: como entidad supranacional, DEU es el proxy más directo del BCE).
+GOBIERNO_COUNTRY_FILTERS: tuple[str, ...] = ("USA", "DEU")
+
+
+class GdeltPipeline(str, Enum):
+    CORE = "core"
+    GOBIERNO = "gobierno"
+    NONE = "none"
+
+
+@dataclass(frozen=True)
+class GdeltClassificationResult:
+    pipeline: GdeltPipeline
+    matched_countries: tuple[str, ...]
+
+
+def classify_gdelt_event(
+    actor_countries: Sequence[str | None],
+    asset: str,
+) -> GdeltClassificationResult:
+    """
+    Clasifica un evento GDELT como CORE (activo nativo) o GOBIERNO (EURUSD)
+    por país de actor -- única vía gratuita confirmada. Actor1Type
+    ('BUSINESS'/'GOV') NO existe en ninguna fuente del proyecto: ni
+    gdelt_foundation.py (bulk CSV gratis) ni base_adapter.py (ese usa
+    _KEYWORDS, pero corre sobre BigQuery -- tiene costo de GCP, descartado
+    por requisito explícito de Altair de mantener todo gratuito).
+
+    CORE: XAU/BTC/NVDA/NIFTY50 -- port directo de
+    gdelt_foundation.py::ASSET_COUNTRY_FILTERS. XAU con lista vacía usa
+    TODO el dataset (así está en el legacy, no un descuido).
+
+    GOBIERNO: EURUSD -- sin precedente legacy, diseñado acá (ver
+    GOBIERNO_COUNTRY_FILTERS). Un evento matchea GOBIERNO si su país de
+    actor está en (USA, DEU), independientemente del activo -- refleja
+    que la política monetaria Fed/BCE mueve el par sin importar contra
+    qué otro activo se esté evaluando.
+
+    Args:
+        actor_countries: Actor1CountryCode/Actor2CountryCode del evento,
+            códigos ISO-3 (pueden venir None si GDELT no los reportó).
+        asset: activo CORE contra el que se evalúa (ignorado para el
+            chequeo GOBIERNO, que es independiente del activo).
+
+    Un evento puede matchear ambos pipelines a la vez (ej. USA aparece en
+    NVDA y en GOBIERNO) -- eso es correcto, no un bug: la clasificación es
+    por relevancia, no exclusiva.
+
+    Validación pendiente (F2): ¿DEU solo alcanza para "Eurozona", o hace
+    falta FRA/ITA? Sin backtest todavía -- ver docstring del módulo.
+    """
+    countries = {c for c in actor_countries if c}
+
+    core_filter = CORE_COUNTRY_FILTERS.get(asset)
+    if core_filter is None:
+        raise ValueError(f"Activo '{asset}' sin CORE_COUNTRY_FILTERS configurado")
+
+    is_core = (len(core_filter) == 0) or bool(countries & set(core_filter))
+    is_gobierno = bool(countries & set(GOBIERNO_COUNTRY_FILTERS))
+
+    if is_core and is_gobierno:
+        matched = tuple(sorted(countries & (set(core_filter) | set(GOBIERNO_COUNTRY_FILTERS))))
+        pipeline = GdeltPipeline.CORE  # CORE tiene prioridad si el activo evaluado es CORE
+    elif is_core:
+        matched = tuple(sorted(countries & set(core_filter))) if core_filter else tuple(sorted(countries))
+        pipeline = GdeltPipeline.CORE
+    elif is_gobierno:
+        matched = tuple(sorted(countries & set(GOBIERNO_COUNTRY_FILTERS)))
+        pipeline = GdeltPipeline.GOBIERNO
+    else:
+        matched = ()
+        pipeline = GdeltPipeline.NONE
+
+    return GdeltClassificationResult(pipeline=pipeline, matched_countries=matched)

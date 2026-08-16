@@ -16,6 +16,9 @@ from core.scoring import (
     DEFAULT_GLOBAL_P66,
     FIBONACCI_LAG_DAYS,
     NASH_FROZEN_THRESHOLD,
+    CORE_COUNTRY_FILTERS,
+    GOBIERNO_COUNTRY_FILTERS,
+    GdeltPipeline,
     GoldScoreAction,
     GoldScoreKillReason,
     GoldScoreRegime,
@@ -23,6 +26,7 @@ from core.scoring import (
     MassPanicComponent,
     NashFrozenSource,
     VitalityTier,
+    classify_gdelt_event,
     compute_entropy_fibonacci_lags,
     compute_gold_score_bma,
     compute_mass_panic_index,
@@ -578,3 +582,69 @@ def test_gold_no_kill_por_defecto_sin_kl_divergence():
     )
     assert result.kill_signal is False
     assert result.kill_reason == GoldScoreKillReason.NONE
+
+
+# ─── classify_gdelt_event ───────────────────────────────────────────────────
+
+def test_gdelt_nvda_matchea_core_por_usa():
+    result = classify_gdelt_event(["USA"], asset="NVDA")
+    assert result.pipeline == GdeltPipeline.CORE
+    assert result.matched_countries == ("USA",)
+
+
+def test_gdelt_xau_matchea_core_con_cualquier_pais_lista_vacia():
+    result = classify_gdelt_event(["BRA"], asset="XAU")
+    assert result.pipeline == GdeltPipeline.CORE
+
+
+def test_gdelt_pais_fuera_de_todas_las_listas_es_none():
+    result = classify_gdelt_event(["BRA"], asset="NVDA")
+    assert result.pipeline == GdeltPipeline.NONE
+    assert result.matched_countries == ()
+
+
+def test_gdelt_gobierno_por_deu_sin_matchear_core():
+    result = classify_gdelt_event(["DEU"], asset="NVDA")
+    assert result.pipeline == GdeltPipeline.GOBIERNO
+    assert result.matched_countries == ("DEU",)
+
+
+def test_gdelt_usa_prioriza_core_sobre_gobierno_si_matchea_ambos():
+    # USA está en NVDA (core) Y en GOBIERNO -- core gana
+    result = classify_gdelt_event(["USA"], asset="NVDA")
+    assert result.pipeline == GdeltPipeline.CORE
+
+
+def test_gdelt_activo_desconocido_lanza_valueerror():
+    with pytest.raises(ValueError):
+        classify_gdelt_event(["USA"], asset="AAPL")
+
+
+def test_gdelt_filtra_none_de_actor_countries():
+    result = classify_gdelt_event([None, "USA", None], asset="NVDA")
+    assert result.pipeline == GdeltPipeline.CORE
+    assert result.matched_countries == ("USA",)
+
+
+def test_gdelt_btc_matchea_gbr():
+    result = classify_gdelt_event(["GBR"], asset="BTC")
+    assert result.pipeline == GdeltPipeline.CORE
+    assert result.matched_countries == ("GBR",)
+
+
+def test_gdelt_nifty50_matchea_pak():
+    result = classify_gdelt_event(["PAK"], asset="NIFTY50")
+    assert result.pipeline == GdeltPipeline.CORE
+
+
+def test_gdelt_lista_vacia_de_countries_es_none():
+    result = classify_gdelt_event([], asset="NVDA")
+    assert result.pipeline == GdeltPipeline.NONE
+
+
+def test_gdelt_core_country_filters_tiene_los_4_activos_confirmados():
+    assert set(CORE_COUNTRY_FILTERS.keys()) == {"NVDA", "XAU", "BTC", "NIFTY50"}
+
+
+def test_gdelt_gobierno_country_filters_es_usa_deu():
+    assert GOBIERNO_COUNTRY_FILTERS == ("USA", "DEU")
