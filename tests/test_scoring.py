@@ -14,8 +14,13 @@ import pytest
 from core.scoring import (
     DEFAULT_GLOBAL_P33,
     DEFAULT_GLOBAL_P66,
+    NASH_FROZEN_THRESHOLD,
     InvalidThresholdError,
+    MassPanicComponent,
+    NashFrozenSource,
     VitalityTier,
+    compute_mass_panic_index,
+    compute_nash_frozen_7d,
     compute_vitality_tesla,
     godel_active,
 )
@@ -222,3 +227,151 @@ def test_godel_activo_en_el_borde_exacto_del_p90():
 
 def test_godel_activo_cuando_ambas_condiciones_se_cumplen():
     assert godel_active(entropy_shannon=2.0, p90_entropy=1.2, vitality_tesla=9) is True
+
+
+# ─── nash_frozen_7d ─────────────────────────────────────────────────────────
+
+def test_nash_insufficient_data_cuando_ventana_es_none():
+    result = compute_nash_frozen_7d(None)
+    assert result.insufficient_data is True
+    assert result.std_normalized is None
+
+
+def test_nash_insufficient_data_cuando_ventana_esta_vacia():
+    result = compute_nash_frozen_7d([])
+    assert result.insufficient_data is True
+
+
+def test_nash_insufficient_data_con_un_solo_punto():
+    result = compute_nash_frozen_7d([0.5])
+    assert result.insufficient_data is True
+
+
+def test_nash_frozen_true_cuando_entropia_es_constante():
+    # min == max -> e_range fallback a 1.0, normalizado siempre 0.0, std=0.0
+    result = compute_nash_frozen_7d([0.5] * 7)
+    assert result.insufficient_data is False
+    assert result.std_normalized == 0.0
+    assert result.frozen is True
+
+
+def test_nash_frozen_false_cuando_entropia_alterna_al_maximo():
+    # alterna entre min y max -> std normalizado alto, muy por encima de 0.15
+    result = compute_nash_frozen_7d([0.1, 0.9, 0.1, 0.9, 0.1, 0.9, 0.1])
+    assert result.insufficient_data is False
+    assert result.std_normalized > NASH_FROZEN_THRESHOLD
+    assert result.frozen is False
+
+
+def test_nash_usa_menor_estricto_no_menor_o_igual_en_el_borde():
+    # calcula el std real de una ventana conocida, y usa ESE valor exacto
+    # como threshold -- fuerza el caso borde std == threshold.
+    base = compute_nash_frozen_7d([0.2, 0.4, 0.3, 0.5, 0.35, 0.45, 0.25])
+    on_boundary = compute_nash_frozen_7d(
+        [0.2, 0.4, 0.3, 0.5, 0.35, 0.45, 0.25],
+        threshold=base.std_normalized,
+    )
+    assert on_boundary.frozen is False  # < estricto, no <=
+
+
+def test_nash_recorta_a_los_ultimos_window_days():
+    # 14 puntos, pero solo los últimos 7 deben usarse para el std
+    ventana_larga = [0.9] * 7 + [0.5] * 7  # primeros 7 son ruido irrelevante
+    solo_cola = compute_nash_frozen_7d([0.5] * 7)
+    con_cola_larga = compute_nash_frozen_7d(ventana_larga)
+    assert con_cola_larga.std_normalized == solo_cola.std_normalized
+
+
+def test_nash_funciona_con_exactamente_el_minimo_de_dos_puntos():
+    result = compute_nash_frozen_7d([0.3, 0.7])
+    assert result.insufficient_data is False
+
+
+def test_nash_source_es_gdelt_foundation():
+    result = compute_nash_frozen_7d([0.5, 0.5])
+    assert result.source == NashFrozenSource.GDELT_FOUNDATION_NORMALIZED_STD
+
+
+# ─── mass_panic_index ────────────────────────────────────────────────────────
+
+def test_panic_insufficient_data_sin_ninguna_ventana():
+    result = compute_mass_panic_index(None, current_entropy=0.5)
+    assert result.insufficient_data is True
+    assert result.component == MassPanicComponent.NONE
+
+
+def test_panic_no_dispara_con_entropia_normal_y_sin_goldstein():
+    # ventana estable, current cerca de la media -> z bajo, no dispara
+    result = compute_mass_panic_index(
+        entropy_window=[0.5, 0.51, 0.49, 0.50, 0.52, 0.48, 0.50],
+        current_entropy=0.50,
+    )
+    assert result.flag is False
+    assert result.component == MassPanicComponent.NONE
+    assert result.insufficient_data is False
+
+
+def test_panic_dispara_por_entropia_cuando_z_supera_el_umbral():
+    # ventana muy estable (std chico) + salto grande -> z_entropy alto
+    result = compute_mass_panic_index(
+        entropy_window=[0.50, 0.50, 0.51, 0.49, 0.50, 0.50, 0.51],
+        current_entropy=0.90,
+    )
+    assert result.flag is True
+    assert result.component == MassPanicComponent.ENTROPY
+    assert result.z_entropy >= 2.0
+
+
+def test_panic_dispara_por_goldstein_cuando_z_es_muy_negativo():
+    result = compute_mass_panic_index(
+        entropy_window=[0.5, 0.51, 0.49, 0.50, 0.52, 0.48, 0.50],
+        current_entropy=0.50,
+        goldstein_window=[1.0, 1.1, 0.9, 1.0, 1.05, 0.95, 1.0],
+        current_goldstein=-8.0,
+    )
+    assert result.flag is True
+    assert result.component == MassPanicComponent.GOLDSTEIN
+    assert result.z_goldstein <= -2.0
+
+
+def test_panic_component_both_cuando_las_dos_senales_disparan():
+    result = compute_mass_panic_index(
+        entropy_window=[0.50, 0.50, 0.51, 0.49, 0.50, 0.50, 0.51],
+        current_entropy=0.90,
+        goldstein_window=[1.0, 1.1, 0.9, 1.0, 1.05, 0.95, 1.0],
+        current_goldstein=-8.0,
+    )
+    assert result.flag is True
+    assert result.component == MassPanicComponent.BOTH
+
+
+def test_panic_funciona_solo_con_entropia_cuando_no_hay_goldstein():
+    # goldstein_window=None (adapter de GDELT event-level no conectado)
+    result = compute_mass_panic_index(
+        entropy_window=[0.50, 0.50, 0.51, 0.49, 0.50, 0.50, 0.51],
+        current_entropy=0.90,
+        goldstein_window=None,
+        current_goldstein=None,
+    )
+    assert result.insufficient_data is False
+    assert result.z_goldstein is None
+    assert result.component == MassPanicComponent.ENTROPY
+
+
+def test_panic_z_score_es_cero_cuando_la_ventana_no_tiene_varianza():
+    result = compute_mass_panic_index(
+        entropy_window=[0.5, 0.5, 0.5],
+        current_entropy=0.5,
+    )
+    assert result.z_entropy == 0.0
+    assert result.flag is False
+
+
+def test_panic_respeta_umbrales_personalizados():
+    result = compute_mass_panic_index(
+        entropy_window=[0.50, 0.50, 0.51, 0.49, 0.50, 0.50, 0.51],
+        current_entropy=0.55,  # z moderado, no cruzaría 2.0
+        z_entropy_threshold=0.5,  # umbral bajo a propósito -> sí dispara
+    )
+    assert result.flag is True
+    assert result.component == MassPanicComponent.ENTROPY
