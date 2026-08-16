@@ -2,21 +2,23 @@
 tests/test_persistence.py
 ==========================
 Cobertura de governance/persistence.py -- los 4 streams declarados
-(Decisión #14). No hay I/O real que probar todavía (el módulo solo
-declara rutas) -- estos tests protegen la estructura: que los 4 streams
-existan, que cada uno esté clasificado en exactamente un lugar
-(Drive XOR GitHub, nunca ambos ni ninguno), y que las rutas no cambien
-por accidente en un refactor futuro.
+(Decisión #14) y drive_root() (fix del hallazgo #6 de auditoría: antes
+hardcodeado, ahora detecta entorno con el mismo orden de prioridad que
+secrets.py::load_secret() -- env var, Colab, fallback).
 """
 
 from __future__ import annotations
 
+import governance.persistence as persistence_module
 from governance.persistence import (
-    DRIVE_ROOT,
+    COLAB_DRIVE_ROOT,
+    DRIVE_ROOT_ENV_VAR,
     DRIVE_STREAMS,
     GITHUB_STREAMS,
-    PERSISTENCE_PATHS,
+    LOCAL_FALLBACK_DRIVE_ROOT,
+    PERSISTENCE_RELATIVE_PATHS,
     PersistenceStream,
+    drive_root,
     stream_is_local_to_drive,
     stream_is_versioned,
     stream_path,
@@ -32,10 +34,10 @@ def test_existen_exactamente_los_4_streams():
     }
 
 
-def test_cada_stream_tiene_ruta_declarada():
+def test_cada_stream_tiene_ruta_relativa_declarada():
     for stream in PersistenceStream:
-        assert stream in PERSISTENCE_PATHS
-        assert stream_path(stream)  # no vacío
+        assert stream in PERSISTENCE_RELATIVE_PATHS
+        assert PERSISTENCE_RELATIVE_PATHS[stream]  # no vacío
 
 
 def test_metrics_y_models_son_drive():
@@ -53,14 +55,7 @@ def test_ningun_stream_es_drive_y_github_a_la_vez():
 
 
 def test_todos_los_streams_estan_clasificados_en_algun_lado():
-    # ni huérfanos (ni Drive ni GitHub) ni duplicados -- ya cubierto por
-    # el test anterior, este confirma que la UNIÓN cubre los 4.
     assert DRIVE_STREAMS | GITHUB_STREAMS == set(PersistenceStream)
-
-
-def test_rutas_de_drive_son_absolutas_bajo_drive_root():
-    for stream in DRIVE_STREAMS:
-        assert stream_path(stream).startswith(str(DRIVE_ROOT))
 
 
 def test_rutas_de_github_son_repo_relativas_no_absolutas():
@@ -70,3 +65,65 @@ def test_rutas_de_github_son_repo_relativas_no_absolutas():
 
 def test_decision_log_apunta_a_decision_log_md():
     assert stream_path(PersistenceStream.DECISION_LOG) == "decision-log.md"
+
+
+# ─── drive_root() -- fix del hallazgo #6 de auditoría ──────────────────────
+
+def test_drive_root_usa_fallback_local_sin_env_var_ni_colab(monkeypatch):
+    monkeypatch.delenv(DRIVE_ROOT_ENV_VAR, raising=False)
+    monkeypatch.setattr(persistence_module, "_is_colab", lambda: False)
+    assert drive_root() == LOCAL_FALLBACK_DRIVE_ROOT
+
+
+def test_drive_root_respeta_env_var_override(monkeypatch, tmp_path):
+    monkeypatch.setenv(DRIVE_ROOT_ENV_VAR, str(tmp_path))
+    monkeypatch.setattr(persistence_module, "_is_colab", lambda: False)
+    assert drive_root() == tmp_path
+
+
+def test_drive_root_detecta_colab_cuando_no_hay_override(monkeypatch):
+    monkeypatch.delenv(DRIVE_ROOT_ENV_VAR, raising=False)
+    monkeypatch.setattr(persistence_module, "_is_colab", lambda: True)
+    assert drive_root() == COLAB_DRIVE_ROOT
+
+
+def test_drive_root_env_var_tiene_prioridad_sobre_colab(monkeypatch, tmp_path):
+    # Aunque _is_colab() diga True, si hay override explícito gana el
+    # override -- mismo orden que secrets.py::load_secret() (env var
+    # primero, antes de intentar Colab userdata).
+    monkeypatch.setenv(DRIVE_ROOT_ENV_VAR, str(tmp_path))
+    monkeypatch.setattr(persistence_module, "_is_colab", lambda: True)
+    assert drive_root() == tmp_path
+
+
+def test_drive_root_se_evalua_en_cada_llamada_no_es_constante_fija(monkeypatch, tmp_path):
+    # Corrige exactamente el hallazgo #6: la versión vieja fijaba la
+    # ruta al importar el módulo. Esta se recalcula por llamada.
+    monkeypatch.setattr(persistence_module, "_is_colab", lambda: False)
+    monkeypatch.delenv(DRIVE_ROOT_ENV_VAR, raising=False)
+    primero = drive_root()
+
+    monkeypatch.setenv(DRIVE_ROOT_ENV_VAR, str(tmp_path))
+    segundo = drive_root()
+
+    assert primero != segundo
+    assert segundo == tmp_path
+
+
+def test_stream_path_de_metrics_usa_drive_root_actual(monkeypatch, tmp_path):
+    monkeypatch.setenv(DRIVE_ROOT_ENV_VAR, str(tmp_path))
+    monkeypatch.setattr(persistence_module, "_is_colab", lambda: False)
+    assert stream_path(PersistenceStream.METRICS) == str(tmp_path / "metrics")
+
+
+def test_stream_path_de_models_usa_drive_root_actual(monkeypatch, tmp_path):
+    monkeypatch.setenv(DRIVE_ROOT_ENV_VAR, str(tmp_path))
+    monkeypatch.setattr(persistence_module, "_is_colab", lambda: False)
+    assert stream_path(PersistenceStream.MODELS) == str(tmp_path / "models")
+
+
+def test_rutas_de_drive_son_absolutas_bajo_el_drive_root_actual(monkeypatch, tmp_path):
+    monkeypatch.setenv(DRIVE_ROOT_ENV_VAR, str(tmp_path))
+    monkeypatch.setattr(persistence_module, "_is_colab", lambda: False)
+    for stream in DRIVE_STREAMS:
+        assert stream_path(stream).startswith(str(tmp_path))
