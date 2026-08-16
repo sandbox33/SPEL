@@ -491,20 +491,22 @@ class AdapterChain:
     """
     Orquesta una lista de BaseAdapter con fallback automático y reintentos.
 
-    IMPORTANTE — reentrancia de asyncio.run():
-      fetch() es SÍNCRONA a propósito (decisión explícita del 13-14 ago
-      2026: portar la interfaz síncrona del original en vez de reescribir
-      la cadena entera como async). Por dentro, cada intento contra un
-      adapter async se resuelve con asyncio.run(). asyncio.run() NO es
-      reentrante: llamar a este método desde código que ya está corriendo
-      dentro de un event loop (por ejemplo, desde dentro de otro `async def`
-      ya en ejecución) lanza RuntimeError.
-      Hoy (Fase 1) esto no es un problema — nada en ingestion/ ni en
-      core/scoring.py llama fetch() desde un contexto ya-async. Si en
-      Fase 4 execution/ necesita invocar esta cadena desde dentro de un
-      loop async existente (por ejemplo, un orquestador async que también
-      llama a Deriv para ejecución de órdenes), este wrapper hay que
-      revisarlo entonces — no se resuelve por adelantado acá.
+    fetch_async() es la lógica real (async nativo). fetch() es un
+    wrapper síncrono delgado sobre fetch_async() -- detecta si ya hay
+    un event loop activo y, si lo hay, lanza RuntimeError explícito
+    señalando fetch_async() en vez de fallar con el RuntimeError
+    genérico y confuso de asyncio.run() llamado dentro de un loop.
+
+    Refactor de esta sesión (reemplaza el diseño anterior, documentado
+    como pendiente desde varias sesiones atrás -- ver commits previos
+    que mencionaban 'reentrancia de asyncio.run()' como trampa para
+    Fase 4): antes, cada intento de cada adapter llamaba
+    `asyncio.run(...)` por separado -- además de romper con
+    RuntimeError si se invocaba desde dentro de un loop ya activo,
+    creaba y destruía un event loop por cada intento (hasta 3 veces por
+    adapter). Ahora hay UN SOLO asyncio.run() en fetch(), envolviendo
+    toda la cadena de adapters y reintentos en un único ciclo de vida
+    de event loop -- corrección de reentrancia y de eficiencia a la vez.
     """
 
     MAX_RETRIES: int = 3
@@ -524,14 +526,42 @@ class AdapterChain:
         limit: int = 100,
     ) -> AdapterResult:
         """
-        Prueba cada adapter en orden. Devuelve el primer resultado no
+        Wrapper síncrono sobre fetch_async(). Válido SOLO fuera de un
+        event loop activo -- si se llama desde dentro de otro `async def`
+        ya en ejecución (por ejemplo, un orquestador async de Fase 4),
+        lanza RuntimeError indicando usar `await chain.fetch_async(...)`.
+        """
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # No hay loop activo -- único punto de entrada a asyncio.run()
+            # en toda la clase, ver docstring de la clase.
+            return asyncio.run(self.fetch_async(symbol, timeframe=timeframe, limit=limit))
+        else:
+            raise RuntimeError(
+                "AdapterChain.fetch() fue llamado desde dentro de un event "
+                "loop activo. Use 'await chain.fetch_async(...)' en su lugar "
+                "-- fetch() es solo para contextos síncronos, sin loop corriendo."
+            )
+
+    async def fetch_async(
+        self,
+        symbol: str,
+        *,
+        timeframe: str = "1h",
+        limit: int = 100,
+    ) -> AdapterResult:
+        """
+        Versión async nativa -- lógica real de la cadena (fetch() es un
+        wrapper delgado sobre esto, ver docstring de la clase). Prueba
+        cada adapter en orden. Devuelve el primer resultado no
         degradado. Si todos fallan, devuelve el resultado degradado del
         último adapter probado (nunca lanza).
         """
         ultimo_resultado: Optional[AdapterResult] = None
 
         for adapter in self.adapters:
-            resultado = self._fetch_con_reintentos(adapter, symbol, timeframe, limit)
+            resultado = await self._fetch_con_reintentos_async(adapter, symbol, timeframe, limit)
             ultimo_resultado = resultado
 
             if not resultado.is_degraded:
@@ -561,15 +591,21 @@ class AdapterChain:
             error_msg="AdapterChain sin adapters ejecutables",
         )
 
-    def _fetch_con_reintentos(
+    async def _fetch_con_reintentos_async(
         self, adapter: BaseAdapter, symbol: str, timeframe: str, limit: int,
     ) -> AdapterResult:
+        """Traducción async directa de la versión anterior -- misma
+        lógica de reintentos y corte en AdapterAuthError. Diferencia
+        deliberada: `await asyncio.sleep(...)` en vez de `time.sleep(...)`
+        -- time.sleep() dentro de una función async bloquea TODO el event
+        loop (no solo esta corrutina), lo cual habría anulado el punto
+        entero de este refactor."""
         last_error: Optional[str] = None
         t0 = time.monotonic()
 
         for intento in range(1, self.MAX_RETRIES + 1):
             try:
-                df = asyncio.run(adapter.fetch_ohlcv(symbol, timeframe, limit))
+                df = await adapter.fetch_ohlcv(symbol, timeframe, limit)
                 latencia_ms = (time.monotonic() - t0) * 1000
                 resultado = AdapterResult(
                     data=df,
@@ -592,7 +628,7 @@ class AdapterChain:
                     # repetir la misma falla dos veces más.
                     break
                 if intento < self.MAX_RETRIES:
-                    time.sleep(self.RETRY_DELAY_S * intento)
+                    await asyncio.sleep(self.RETRY_DELAY_S * intento)
 
         latencia_ms = (time.monotonic() - t0) * 1000
         resultado = AdapterResult(

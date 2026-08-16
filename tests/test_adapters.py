@@ -12,6 +12,8 @@ import json
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
+import asyncio
+
 import pytest
 
 from ingestion.adapters import (
@@ -454,7 +456,7 @@ class TestAdapterChain:
 
         assert resultado.is_degraded
         # Un solo intento -- no tiene sentido reintentar un token inválido
-        # tres veces (ver comentario en AdapterChain._fetch_con_reintentos).
+        # tres veces (ver comentario en AdapterChain._fetch_con_reintentos_async).
         assert adapter.calls == 1
 
     def test_escribe_log_de_auditoria_cuando_logs_dir_provisto(self, tmp_path):
@@ -488,3 +490,113 @@ class TestAdapterChain:
             is_degraded=True, error_msg="algo falló",
         )
         resultado.log_summary()
+
+    # ─── fetch_async() / reentrancia (refactor de esta sesión) ─────────────
+
+    @pytest.mark.asyncio
+    async def test_fetch_async_funciona_dentro_de_un_loop_activo(self):
+        # asyncio_mode=auto ya hace esto automático -- @pytest.mark.asyncio
+        # explícito de todas formas, por pedido directo y para que quede
+        # auditable sin depender de leer pytest.ini.
+        adapter = FakeAdapter("fuente_a", [_ohlcv_valido()])
+        chain = AdapterChain([adapter])
+
+        resultado = await chain.fetch_async("EURUSD")
+
+        assert not resultado.is_degraded
+        assert resultado.adapter_name == "fuente_a"
+
+    @pytest.mark.asyncio
+    async def test_fetch_async_respeta_fallback_y_reintentos_igual_que_fetch(self):
+        # Mismo escenario que test_primero_falla_todos_los_reintentos_cae_al_segundo,
+        # pero por la vía async -- confirma que fetch_async() no perdió
+        # ninguna lógica de la cadena al separarse de fetch().
+        adapter_a = FakeAdapter("fuente_a", [AdapterConnectionError("timeout")] * 3)
+        adapter_b = FakeAdapter("fuente_b", [_ohlcv_valido()])
+        chain = AdapterChain([adapter_a, adapter_b])
+        chain.RETRY_DELAY_S = 0
+
+        resultado = await chain.fetch_async("EURUSD")
+
+        assert not resultado.is_degraded
+        assert resultado.adapter_name == "fuente_b"
+        assert adapter_a.calls == 3
+        assert adapter_b.calls == 1
+
+    @pytest.mark.asyncio
+    async def test_fetch_sincrono_lanza_runtimeerror_claro_si_hay_loop_activo(self):
+        # El bug original: llamar fetch() (síncrono) desde DENTRO de un
+        # contexto que ya tiene un event loop corriendo -- este mismo
+        # test, por ser `async def`, YA está corriendo dentro de un loop.
+        # Antes del fix: RuntimeError genérico de asyncio.run() ("cannot
+        # be called from a running event loop"). Con el fix: mensaje
+        # claro señalando fetch_async().
+        adapter = FakeAdapter("fuente_a", [_ohlcv_valido()])
+        chain = AdapterChain([adapter])
+
+        with pytest.raises(RuntimeError, match="fetch_async"):
+            chain.fetch("EURUSD")
+
+    def test_fetch_sincrono_sigue_funcionando_fuera_de_un_loop(self):
+        # Contraparte del test anterior -- fuera de un contexto async
+        # (test NO async), fetch() debe seguir funcionando exactamente
+        # igual que siempre. Ya cubierto indirectamente por el resto de
+        # esta clase, pero se deja explícito como contrato documentado.
+        adapter = FakeAdapter("fuente_a", [_ohlcv_valido()])
+        chain = AdapterChain([adapter])
+
+        resultado = chain.fetch("EURUSD")
+
+        assert not resultado.is_degraded
+
+    @pytest.mark.asyncio
+    async def test_fetch_async_no_usa_asyncio_run_internamente(self):
+        # fetch_async() debe ser 100% coroutine nativa -- si contuviera
+        # un asyncio.run() por dentro, este mismo test (ya corriendo
+        # dentro de un loop) fallaría con el error de reentrancia.
+        # Cubre la instrucción de "cero asyncio.run() salvo en fetch()".
+        contador = {"n": 0}
+        run_original = asyncio.run
+
+        def run_contado(*a, **kw):
+            contador["n"] += 1
+            return run_original(*a, **kw)
+
+        asyncio.run = run_contado
+        try:
+            adapter = FakeAdapter("fuente_a", [_ohlcv_valido()])
+            chain = AdapterChain([adapter])
+            await chain.fetch_async("EURUSD")
+        finally:
+            asyncio.run = run_original
+
+        assert contador["n"] == 0
+
+    def test_fetch_sincrono_invoca_asyncio_run_exactamente_una_vez_pese_a_reintentos(self):
+        # Hallazgo de eficiencia de esta sesión, verificado con números:
+        # antes, asyncio.run() se llamaba una vez POR INTENTO (hasta 3
+        # veces por adapter). Ahora hay un único asyncio.run() en fetch(),
+        # sin importar cuántos reintentos internos ocurran.
+        contador = {"n": 0}
+        run_original = asyncio.run
+
+        def run_contado(*a, **kw):
+            contador["n"] += 1
+            return run_original(*a, **kw)
+
+        asyncio.run = run_contado
+        try:
+            adapter = FakeAdapter("fuente_a", [
+                AdapterConnectionError("timeout 1"),
+                AdapterConnectionError("timeout 2"),
+                _ohlcv_valido(),
+            ])
+            chain = AdapterChain([adapter])
+            chain.RETRY_DELAY_S = 0
+            resultado = chain.fetch("EURUSD")
+        finally:
+            asyncio.run = run_original
+
+        assert adapter.calls == 3       # 3 intentos reales al adapter
+        assert contador["n"] == 1       # pero un solo ciclo de event loop
+        assert not resultado.is_degraded
