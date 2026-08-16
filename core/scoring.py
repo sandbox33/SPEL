@@ -436,3 +436,76 @@ def compute_mass_panic_index(
         z_entropy=z_entropy, z_goldstein=z_goldstein,
         insufficient_data=False,
     )
+
+
+# ─── entropy_fibonacci_lags ─────────────────────────────────────────────────
+
+FIBONACCI_LAG_DAYS: tuple[int, ...] = (1, 2, 3, 5, 8, 13, 21)
+
+
+@dataclass(frozen=True)
+class FibonacciLagResult:
+    """Valores por lag -- None donde falta historia. Un lag faltante
+    (ej. no hay 21 días todavía) no invalida los demás -- resultado
+    parcial, no todo-o-nada."""
+    lags: dict[int, float | None]
+    available_lags: tuple[int, ...]
+    cadence_days: int
+
+
+def compute_entropy_fibonacci_lags(
+    entropy_history: Sequence[float] | None,
+    *,
+    lag_days: tuple[int, ...] = FIBONACCI_LAG_DAYS,
+) -> FibonacciLagResult:
+    """
+    fibonacci_lag_{1,2,3,5,8,13,21} -- entropy_shannon rezagada N DÍAS.
+
+    CORRECCIÓN DE ESTA SESIÓN (ver docstring del módulo, hallazgo #3):
+    2 turnos atrás se había "confirmado" cadencia de 1 MINUTO para este
+    feature, basada en la granularidad OHLCV de Deriv (Pregunta A). Esa
+    cadencia es real para Deriv, pero NO aplica acá:
+    gdelt_foundation.py dice explícitamente "fibonacci_lag_* -> Entropía
+    en lags 1,2,3,5,8,13,21 DÍAS", y su ENTROPY_SCHEMA usa "date": pl.Date
+    (no datetime) como clave -- confirma agregación diaria, no intradía.
+    spel_backbone_engine.py usa fibonacci_lag_21 + ATR14 para stop-loss
+    en contexto de swing diario, consistente con esto. La cadencia de 1m
+    de Deriv sigue siendo correcta para OTROS features intradía (OHLCV)
+    -- simplemente no para este.
+
+    Args:
+        entropy_history: entropy_shannon diaria, orden cronológico, el
+            ÚLTIMO elemento es HOY. lag_N = entropy_history[-1-N].
+        lag_days: qué lags calcular (default: Fibonacci 1..21).
+
+    Validación pendiente (F2, ver docstring del módulo): las 7 columnas
+    pueden ser redundantes (alta colinealidad entre lags cercanos) --
+    auditar matriz de correlación antes de tratarlas como features
+    definitivas. Acá se calculan las 7 en modo diagnóstico.
+    """
+    if not entropy_history:
+        return FibonacciLagResult(
+            lags={n: None for n in lag_days}, available_lags=(), cadence_days=1,
+        )
+
+    history = list(entropy_history)
+    n_points = len(history)
+
+    lags: dict[int, float | None] = {}
+    available: list[int] = []
+    for n in lag_days:
+        idx = -1 - n
+        if -idx <= n_points:
+            lags[n] = float(history[idx])
+            available.append(n)
+        else:
+            lags[n] = None
+
+    if len(available) < len(lag_days):
+        logger.warning(
+            "entropy_fibonacci_lags: historia insuficiente (%d días) para "
+            "lags %s -- devueltos como None.",
+            n_points, [n for n in lag_days if n not in available],
+        )
+
+    return FibonacciLagResult(lags=lags, available_lags=tuple(available), cadence_days=1)

@@ -14,11 +14,13 @@ import pytest
 from core.scoring import (
     DEFAULT_GLOBAL_P33,
     DEFAULT_GLOBAL_P66,
+    FIBONACCI_LAG_DAYS,
     NASH_FROZEN_THRESHOLD,
     InvalidThresholdError,
     MassPanicComponent,
     NashFrozenSource,
     VitalityTier,
+    compute_entropy_fibonacci_lags,
     compute_mass_panic_index,
     compute_nash_frozen_7d,
     compute_vitality_tesla,
@@ -375,3 +377,61 @@ def test_panic_respeta_umbrales_personalizados():
     )
     assert result.flag is True
     assert result.component == MassPanicComponent.ENTROPY
+
+
+# ─── entropy_fibonacci_lags ─────────────────────────────────────────────────
+
+def test_fib_historia_none_devuelve_todos_los_lags_en_none():
+    result = compute_entropy_fibonacci_lags(None)
+    assert result.available_lags == ()
+    assert all(v is None for v in result.lags.values())
+
+
+def test_fib_historia_vacia_devuelve_todos_los_lags_en_none():
+    result = compute_entropy_fibonacci_lags([])
+    assert result.available_lags == ()
+
+
+def test_fib_cadence_siempre_es_un_dia():
+    result = compute_entropy_fibonacci_lags([0.1, 0.2])
+    assert result.cadence_days == 1
+
+
+def test_fib_valores_exactos_con_historia_completa():
+    # history[i] = i, 22 puntos (índices 0..21) -> lag_N = 21 - N,
+    # verificado a mano para no confiar en la misma lógica que prueba.
+    history = list(range(22))  # [0, 1, 2, ..., 21], hoy = 21
+    result = compute_entropy_fibonacci_lags([float(x) for x in history])
+    assert result.available_lags == FIBONACCI_LAG_DAYS
+    assert result.lags[1] == 20.0
+    assert result.lags[2] == 19.0
+    assert result.lags[3] == 18.0
+    assert result.lags[5] == 16.0
+    assert result.lags[8] == 13.0
+    assert result.lags[13] == 8.0
+    assert result.lags[21] == 0.0
+
+
+def test_fib_resultado_parcial_con_historia_de_diez_dias():
+    # 10 días de historia -> lag 1,2,3,5,8 disponibles; 13,21 no (parcial)
+    history = [float(x) for x in range(10)]
+    result = compute_entropy_fibonacci_lags(history)
+    assert result.available_lags == (1, 2, 3, 5, 8)
+    assert result.lags[8] is not None
+    assert result.lags[13] is None
+    assert result.lags[21] is None
+
+
+def test_fib_un_lag_faltante_no_invalida_los_demas():
+    history = [float(x) for x in range(3)]  # solo alcanza para lag_1 y lag_2
+    result = compute_entropy_fibonacci_lags(history)
+    assert result.lags[1] is not None
+    assert result.lags[2] is not None
+    assert result.lags[3] is None
+
+
+def test_fib_respeta_lag_days_personalizado():
+    history = [float(x) for x in range(5)]
+    result = compute_entropy_fibonacci_lags(history, lag_days=(1, 2))
+    assert set(result.lags.keys()) == {1, 2}
+    assert result.available_lags == (1, 2)
