@@ -16,11 +16,15 @@ from core.scoring import (
     DEFAULT_GLOBAL_P66,
     FIBONACCI_LAG_DAYS,
     NASH_FROZEN_THRESHOLD,
+    GoldScoreAction,
+    GoldScoreKillReason,
+    GoldScoreRegime,
     InvalidThresholdError,
     MassPanicComponent,
     NashFrozenSource,
     VitalityTier,
     compute_entropy_fibonacci_lags,
+    compute_gold_score_bma,
     compute_mass_panic_index,
     compute_nash_frozen_7d,
     compute_vitality_tesla,
@@ -435,3 +439,142 @@ def test_fib_respeta_lag_days_personalizado():
     result = compute_entropy_fibonacci_lags(history, lag_days=(1, 2))
     assert set(result.lags.keys()) == {1, 2}
     assert result.available_lags == (1, 2)
+
+
+# ─── gold_score_bma ─────────────────────────────────────────────────────────
+
+def test_gold_pesos_native_correctos_xau():
+    result = compute_gold_score_bma(
+        godel_score=0.5, te_score=0.5, backbone_score=0.5, asset="XAU",
+        entropy_shannon=0.3, p90_entropy=1.0, vitality_tesla=6,
+    )
+    assert result.weights_used == {"godel": 0.40, "te_entropy": 0.30, "backbone": 0.30}
+    assert result.asset_type == "native"
+    assert result.gold_score == pytest.approx(0.5)
+    assert result.kill_signal is False
+
+
+def test_gold_pesos_synthetic_correctos_eurusd():
+    result = compute_gold_score_bma(
+        godel_score=0.5, te_score=0.5, backbone_score=1.0, asset="EURUSD",
+        entropy_shannon=0.3, p90_entropy=1.0, vitality_tesla=6,
+    )
+    assert result.weights_used == {"godel": 0.55, "te_entropy": 0.45, "backbone": 0.00}
+    assert result.asset_type == "synthetic"
+    # backbone_score=1.0 no debe influir -- peso 0.0 en synthetic
+    assert result.gold_score == pytest.approx(0.55 * 0.5 + 0.45 * 0.5)
+
+
+def test_gold_reconoce_activo_en_minuscula():
+    result = compute_gold_score_bma(
+        godel_score=0.5, te_score=0.5, backbone_score=0.5, asset="xau",
+        entropy_shannon=0.3, p90_entropy=1.0, vitality_tesla=6,
+    )
+    assert result.asset_type == "native"
+
+
+def test_gold_kill_por_godel_active_via_entropia_sobre_p90():
+    result = compute_gold_score_bma(
+        godel_score=0.9, te_score=0.9, backbone_score=0.9, asset="XAU",
+        entropy_shannon=1.5, p90_entropy=1.2, vitality_tesla=6,
+    )
+    assert result.kill_signal is True
+    assert result.kill_reason == GoldScoreKillReason.GODEL_ACTIVE
+    assert result.gold_score == 0.0
+    assert result.action == GoldScoreAction.HOLD
+    assert result.regime == GoldScoreRegime.GODEL_ACTIVE_KILL
+
+
+def test_gold_kill_por_godel_active_via_vitality_9():
+    result = compute_gold_score_bma(
+        godel_score=0.9, te_score=0.9, backbone_score=0.9, asset="XAU",
+        entropy_shannon=0.1, p90_entropy=1.2, vitality_tesla=9,
+    )
+    assert result.kill_signal is True
+    assert result.kill_reason == GoldScoreKillReason.GODEL_ACTIVE
+    assert result.gold_score == 0.0
+
+
+def test_gold_kill_por_drift_control_kl_divergence():
+    result = compute_gold_score_bma(
+        godel_score=0.9, te_score=0.9, backbone_score=0.9, asset="XAU",
+        entropy_shannon=0.1, p90_entropy=1.2, vitality_tesla=6,
+        kl_divergence=0.25,
+    )
+    assert result.kill_signal is True
+    assert result.kill_reason == GoldScoreKillReason.DRIFT_CONTROL
+    assert result.regime == GoldScoreRegime.DRIFT_DETECTED
+    assert result.gold_score == 0.0
+    assert result.action == GoldScoreAction.HOLD
+
+
+def test_gold_kl_en_el_borde_no_dispara_drift_es_estricto():
+    result = compute_gold_score_bma(
+        godel_score=0.5, te_score=0.5, backbone_score=0.5, asset="XAU",
+        entropy_shannon=0.1, p90_entropy=1.2, vitality_tesla=6,
+        kl_divergence=0.20,  # == threshold, no > threshold
+    )
+    assert result.kill_signal is False
+
+
+def test_gold_godel_active_tiene_prioridad_sobre_drift_si_ambos_disparan():
+    result = compute_gold_score_bma(
+        godel_score=0.9, te_score=0.9, backbone_score=0.9, asset="XAU",
+        entropy_shannon=1.5, p90_entropy=1.2, vitality_tesla=6,
+        kl_divergence=0.99,
+    )
+    assert result.kill_reason == GoldScoreKillReason.GODEL_ACTIVE
+
+
+def test_gold_regime_transcendence_cuando_godel_score_es_090_o_mas():
+    result = compute_gold_score_bma(
+        godel_score=0.95, te_score=0.9, backbone_score=0.9, asset="XAU",
+        entropy_shannon=0.1, p90_entropy=1.2, vitality_tesla=6,
+    )
+    assert result.regime == GoldScoreRegime.TRANSCENDENCE
+    assert result.action == GoldScoreAction.EXECUTE_STRONG
+
+
+def test_gold_regime_creation_cuando_godel_score_bajo():
+    result = compute_gold_score_bma(
+        godel_score=0.1, te_score=0.1, backbone_score=0.1, asset="XAU",
+        entropy_shannon=0.1, p90_entropy=1.2, vitality_tesla=6,
+    )
+    assert result.regime == GoldScoreRegime.CREATION
+    assert result.action == GoldScoreAction.HOLD
+
+
+def test_gold_action_execute_strong_en_el_borde_085():
+    result = compute_gold_score_bma(
+        godel_score=0.85, te_score=0.85, backbone_score=0.85, asset="XAU",
+        entropy_shannon=0.1, p90_entropy=1.2, vitality_tesla=6,
+    )
+    assert result.gold_score == pytest.approx(0.85)
+    assert result.action == GoldScoreAction.EXECUTE_STRONG
+
+
+def test_gold_action_watch_en_el_borde_040():
+    result = compute_gold_score_bma(
+        godel_score=0.40, te_score=0.40, backbone_score=0.40, asset="XAU",
+        entropy_shannon=0.1, p90_entropy=1.2, vitality_tesla=6,
+    )
+    assert result.gold_score == pytest.approx(0.40)
+    assert result.action == GoldScoreAction.WATCH
+
+
+def test_gold_clampea_inputs_fuera_de_rango():
+    # godel_score=1.5 debe clampearse a 1.0 antes de ponderar
+    result = compute_gold_score_bma(
+        godel_score=1.5, te_score=0.0, backbone_score=0.0, asset="XAU",
+        entropy_shannon=0.1, p90_entropy=1.2, vitality_tesla=6,
+    )
+    assert result.gold_score == pytest.approx(0.40)  # 0.40 * 1.0 clampeado
+
+
+def test_gold_no_kill_por_defecto_sin_kl_divergence():
+    result = compute_gold_score_bma(
+        godel_score=0.5, te_score=0.5, backbone_score=0.5, asset="XAU",
+        entropy_shannon=0.1, p90_entropy=1.2, vitality_tesla=6,
+    )
+    assert result.kill_signal is False
+    assert result.kill_reason == GoldScoreKillReason.NONE

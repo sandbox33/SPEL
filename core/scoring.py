@@ -1,10 +1,11 @@
 """
 core/scoring.py
 ================
-`vitality_tesla` (cascada B->A->C), condición Gödel, `nash_frozen_7d` y
-`mass_panic_index`. El resto (BMA/gold_score completo, TE, backbone,
-fibonacci_lag, fear_momentum) se agrega en incrementos posteriores --
-cada uno bloqueado por su propia decisión de fórmula. Ver ESTADO.md.
+`vitality_tesla` (cascada B->A->C), condición Gödel, `nash_frozen_7d`,
+`mass_panic_index`, `entropy_fibonacci_lags` y `gold_score_bma`.
+Pendiente (fear_momentum, backbone_score real / TE real -- acá son
+inputs externos al gold_score, no calculados por este módulo todavía):
+ver ESTADO.md.
 
 HALLAZGOS DE ESTA SESIÓN (verificados contra fuente, no supuestos --
 "Modo Investigador": diagnosticar antes de construir):
@@ -31,6 +32,26 @@ HALLAZGOS DE ESTA SESIÓN (verificados contra fuente, no supuestos --
      gdelt_foundation.py se prefirió por tener constantes nombradas
      (NASH_FROZEN_THRESHOLD, NASH_ROLLING_WINDOW) y estar referenciado
      internamente por su propio método de auditoría (nash_frozen_days).
+
+  #3 fibonacci_lag es en DÍAS, no en minutos. 1 turno atrás en esta
+     misma conversación se había confirmado cadencia de 1 minuto para
+     este feature específico, basada en la granularidad OHLCV de Deriv
+     -- esa cadencia es real para Deriv pero no aplica acá.
+     gdelt_foundation.py lo dice explícito ("lags en DÍAS") y su
+     ENTROPY_SCHEMA usa date (no datetime), confirmando agregación
+     diaria del pipeline GDELT. La cadencia de 1m de Deriv sigue siendo
+     correcta para features intradía de OHLCV -- no para este.
+
+  #4 gold_score / BMA: SÍ es Bayesian Model Averaging real, con pesos
+     "inamovibles" (Regla 13, spel_bayesian_core.py) -- una sesión
+     anterior de este proyecto había propuesto renombrarlo para evitar
+     llamarlo BMA, asumiendo que eran pesos heurísticos sin marco. Con
+     la fuente real en mano, esa cautela no aplicaba acá: el propio
+     proyecto SÍ define esto formalmente como BMA. Se sintetizó una
+     sola diferencia deliberada (no un port ciego): el kill signal
+     reutiliza godel_active() en vez de reimplementar el umbral fijo
+     de entropía del legacy (0.42) -- ver docstring de
+     compute_gold_score_bma para el razonamiento completo (Tamiz 3).
 
 DECISIÓN QUE ESTO IMPLEMENTA (confirmada explícitamente, no inventada):
   vitality_tesla se resuelve con una cascada de degradación en 3 niveles:
@@ -509,3 +530,158 @@ def compute_entropy_fibonacci_lags(
         )
 
     return FibonacciLagResult(lags=lags, available_lags=tuple(available), cadence_days=1)
+
+
+# ─── gold_score_bma ─────────────────────────────────────────────────────────
+
+#: spel_bayesian_core.py::NATIVE_ASSETS -- activos con backbone LSTM real.
+NATIVE_ASSETS: frozenset[str] = frozenset({"NVDA", "BTC", "XAU", "NIFTY50"})
+
+#: spel_bayesian_core.py::BMA_WEIGHTS -- comentado ahí como "Regla 13
+#: (inamovibles -- cambiarlos requiere bug# asignado)". Se portan tal
+#: cual, mismo nombre: SÍ es BMA real, con pesos fijos por diseño del
+#: propio proyecto (no una heurística sin marco).
+BMA_WEIGHTS: dict[str, dict[str, float]] = {
+    "native":    {"godel": 0.40, "te_entropy": 0.30, "backbone": 0.30},
+    "synthetic": {"godel": 0.55, "te_entropy": 0.45, "backbone": 0.00},
+}
+
+#: spel_bayesian_core.py::KL_DIVERGENCE_THRESHOLD.
+KL_DIVERGENCE_THRESHOLD = 0.20
+
+
+class GoldScoreRegime(str, Enum):
+    """TRANSCENDENCE/STRUCTURE/CREATION: umbrales sobre godel_score,
+    spel_bayesian_core.py (g>=0.90 / g>=0.33 / si no). Los otros 2 son
+    para las ramas de kill signal -- nunca se confunden con los 3
+    anteriores (el legacy también los separaba: HIGH_ENTROPY y
+    DRIFT_DETECTED eran regímenes distintos de TRANSCENDENCE)."""
+    TRANSCENDENCE = "transcendence"
+    STRUCTURE = "structure"
+    CREATION = "creation"
+    GODEL_ACTIVE_KILL = "godel_active_kill"
+    DRIFT_DETECTED = "drift_detected"
+
+
+class GoldScoreAction(str, Enum):
+    """Umbrales sobre gold_score compuesto, spel_bayesian_core.py."""
+    EXECUTE_STRONG = "execute_strong"
+    EXECUTE_WEAK = "execute_weak"
+    WATCH = "watch"
+    HOLD = "hold"
+
+
+class GoldScoreKillReason(str, Enum):
+    NONE = "none"
+    GODEL_ACTIVE = "godel_active"      # entropy>=P90 OR vitality==9
+    DRIFT_CONTROL = "drift_control"    # kl_divergence > 0.20
+
+
+@dataclass(frozen=True)
+class GoldScoreResult:
+    gold_score: float
+    regime: GoldScoreRegime
+    action: GoldScoreAction
+    kill_signal: bool
+    kill_reason: GoldScoreKillReason
+    weights_used: dict[str, float]
+    asset_type: str  # "native" | "synthetic"
+
+
+def compute_gold_score_bma(
+    godel_score: float,
+    te_score: float,
+    backbone_score: float,
+    asset: str,
+    entropy_shannon: float,
+    p90_entropy: float,
+    vitality_tesla: int,
+    kl_divergence: float = 0.0,
+) -> GoldScoreResult:
+    """
+    gold_score -- Bayesian Model Averaging de 3 componentes.
+
+    PORT de spel_bayesian_core.py::compute_gold_score_bma (Regla 13),
+    con una diferencia deliberada -- ver SÍNTESIS DE KILL SIGNAL abajo.
+
+        gold_score = w_godel*godel_score + w_te*te_score + w_backbone*backbone_score
+
+    Pesos (BMA_WEIGHTS, "inamovibles" según spel_bayesian_core.py --
+    cambiarlos requiere bug# asignado):
+        native    (NVDA, BTC, XAU, NIFTY50): 0.40 / 0.30 / 0.30
+        synthetic (todo lo demás, ej. EURUSD): 0.55 / 0.45 / 0.00
+    Inputs clampeados a [0,1] antes de combinar, igual que el legacy.
+
+    SÍNTESIS DE KILL SIGNAL (diferencia deliberada vs. el legacy, no un
+    port 1:1): el legacy original mata la señal con un umbral FIJO
+    (shannon_entropy > 0.42) independiente de vitality_tesla. Este mismo
+    módulo YA tiene godel_active() -- confirmado con evidencia doble
+    (godel_bound.py + Bug#35/36) -- que combina entropy>=P90 OR
+    vitality==9. Mantener 2 compuertas distintas para "¿esto es
+    demasiado riesgoso?" viola Tamiz 3 (una implementación por
+    concepto). Acá se REUTILIZA godel_active() en vez de reimplementar
+    el umbral fijo -- kill_signal = godel_active(...) OR kl_divergence > 0.20.
+    Si se prefiere el umbral fijo de 0.42 en paralelo, es un cambio de
+    una línea -- queda marcado para que no sea una decisión oculta.
+
+    DISCREPANCIA encontrada (registrada, no ocultada): la memoria de
+    sesiones anteriores decía "KL divergence > 0.20 -> HOLD (not zero
+    score)". La fuente real (spel_bayesian_core.py, rama DRIFT_CONTROL)
+    sí pone gold_score en 0.0. Acá se porta lo que dice la fuente.
+
+    Args:
+        godel_score, te_score, backbone_score: inputs [0,1].
+        asset: nombre del activo -- determina native vs synthetic.
+        entropy_shannon, p90_entropy, vitality_tesla: para godel_active().
+        kl_divergence: default 0.0.
+
+    Validación pendiente (F2): ¿la síntesis del kill signal (godel_active
+    en vez del umbral fijo 0.42) diverge del original en algún caso?
+    Backtest contra el histórico de COVID-19 usado para godel_bound.py.
+    """
+    g = max(0.0, min(1.0, godel_score))
+    t = max(0.0, min(1.0, te_score))
+    b = max(0.0, min(1.0, backbone_score))
+
+    asset_type = "native" if asset.upper() in NATIVE_ASSETS else "synthetic"
+    weights = BMA_WEIGHTS[asset_type]
+
+    is_godel_active = godel_active(entropy_shannon, p90_entropy, vitality_tesla)
+    is_drift = kl_divergence > KL_DIVERGENCE_THRESHOLD
+
+    if is_godel_active or is_drift:
+        kill_reason = GoldScoreKillReason.GODEL_ACTIVE if is_godel_active else GoldScoreKillReason.DRIFT_CONTROL
+        regime = GoldScoreRegime.GODEL_ACTIVE_KILL if is_godel_active else GoldScoreRegime.DRIFT_DETECTED
+        logger.info("gold_score_bma: kill_signal=True reason=%s asset=%s", kill_reason.value, asset)
+        return GoldScoreResult(
+            gold_score=0.0, regime=regime, action=GoldScoreAction.HOLD,
+            kill_signal=True, kill_reason=kill_reason,
+            weights_used=dict(weights), asset_type=asset_type,
+        )
+
+    gold_score = round(
+        max(0.0, min(1.0, weights["godel"] * g + weights["te_entropy"] * t + weights["backbone"] * b)),
+        6,
+    )
+
+    if g >= 0.90:
+        regime = GoldScoreRegime.TRANSCENDENCE
+    elif g >= 0.33:
+        regime = GoldScoreRegime.STRUCTURE
+    else:
+        regime = GoldScoreRegime.CREATION
+
+    if gold_score >= 0.85:
+        action = GoldScoreAction.EXECUTE_STRONG
+    elif gold_score >= 0.65:
+        action = GoldScoreAction.EXECUTE_WEAK
+    elif gold_score >= 0.40:
+        action = GoldScoreAction.WATCH
+    else:
+        action = GoldScoreAction.HOLD
+
+    return GoldScoreResult(
+        gold_score=gold_score, regime=regime, action=action,
+        kill_signal=False, kill_reason=GoldScoreKillReason.NONE,
+        weights_used=dict(weights), asset_type=asset_type,
+    )
