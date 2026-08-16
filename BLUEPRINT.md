@@ -66,6 +66,46 @@ entorno desde el día uno en el código nuevo.
 GDELT real, `core/scoring.py` calcula un Gold Score real a partir de eso,
 con un test que corre en CI y pasa.
 
+### Estado real, auditado (no estimado) — post-patch 0017
+
+**`core/scoring.py`: cumplido y más.** 8 funciones puras, cada una auditada
+contra fuente legacy exacta (no memoria de sesión, no supuesto): vitality_tesla
+(cascada B→A→C), nash_frozen_7d (con fix confirmado en 500 muestras —
+la primera versión inflaba con micro-ruido), mass_panic_index (síntesis
+de 2 fuentes en conflicto, marcado EXPERIMENTAL), entropy_fibonacci_lags
++ entropy_delta_lags, gold_score_bma (BMA real, Regla 13, con 3 kill
+signals cuya prioridad se confirmó empíricamente), classify_gdelt_event,
+compute_adaptive_percentile. 201 tests, benchmark A/B/C entre las 3
+lógicas de kill signal.
+
+**`ingestion/`: parcial.** DerivAdapter con fetch_async() nativo (la
+trampa de reentrancia de asyncio.run() documentada en sesiones
+anteriores, resuelta y verificada con contador real). **GDELT: 0%
+portado.** Esto NO es un descuido — es el bloqueante real del criterio
+de "terminado" de esta fase. `gdelt_foundation.py` (900 líneas),
+`spel_bulk_harvester.py` (1083), `spel_ingest_incremental.py` (518) no
+tienen equivalente en el repo nuevo todavía.
+
+**`execution/` + `governance/`:** circuit_breaker, execution_guard,
+secrets (detección de entorno real, no rutas fijas), persistence (4
+streams, con el mismo fix de detección de entorno tras un hallazgo de
+auditoría — DRIVE_ROOT estaba hardcodeado, corregido).
+
+**Orquestador: 0% portado.** `spel_orchestrator_v10.py` (735 líneas) es
+el main loop real del legacy — corre BMA, exporta JSON de estado,
+watchdog. No existe versión nueva. `.github/workflows/tests.yml`
+corre la suite en cada push, pero no orquesta nada del sistema todavía
+— es CI, no el orquestador de trading.
+
+**Dashboard: 0% portado, a propósito.** Los 8 archivos de UI legacy
+(main_ui_vFinal.py, dashboard_fx.py, spel_hud.py, spel_graph_tab.py,
+spel_scalping_tab.py, spel_inventory_dashboard.py, main_ui.py,
+spel_dashboard.py — 7,020 líneas) son 100% Streamlit, confirmado con
+grep, sin excepción. Streamlit está fuera de las restricciones de
+plataforma actuales (Android, Colab+Drive). No se portan — Fase 3 ya
+decidía construir algo nuevo y más simple, no re-crear estos 8
+archivos.
+
 ## Fase 2 — Diagnosticar el modelo antes de portarlo ciego (esta semana)
 
 La precisión de validación en ~0.50 no se hereda al código nuevo sin
@@ -80,6 +120,13 @@ es una prueba de 15-30 minutos, no una investigación abierta):
 
 **Criterio de terminado**: un diagnóstico con causa identificada y evidencia
 (no "probablemente es X"), antes de escribir una línea de `execution/`.
+
+**Estado: no arrancó.** Este es el siguiente paso genuino del plan — no
+más funciones de scoring, no el dashboard, no GDELT todavía. Necesita
+datos reales (no sintéticos) para las 3 hipótesis, lo cual a su vez
+depende parcialmente de que exista algo de ingestion GDELT real
+(Fase 1 incompleta) o de reusar el dataset legacy ya generado, si
+sigue siendo válido — a confirmar antes de arrancar.
 
 ## Fase 3 — Visualización (después de Fase 1 y 2, no antes)
 
@@ -112,6 +159,32 @@ Supabase como bus de señales entre el motor y un frontend Flet auditable.
 GitHub Actions para el ciclo de reentrenamiento (medido: 0.27 min para 4
 activos × 50 épocas — sobra margen); Colab como respaldo solo si un
 benchmark con datos reales (no sintéticos) dice que hace falta.
+
+---
+
+## Auditoría cuantitativa legacy vs. repo nuevo (post-patch 0017)
+
+32,577 líneas en el legacy (`/mnt/project`, 76 archivos). 2,358 líneas en
+el repo nuevo (7.2%). No es la métrica que importa por sí sola — importa
+DESGLOSADA, porque la mayoría de esas líneas no debían portarse nunca:
+
+| Categoría | Líneas legacy | Decisión |
+|---|---:|---|
+| GDELT / ingestion de datos | 5,773 | Pendiente — bloqueante real de Fase 1 |
+| Dashboard / UI / Terminal | 7,020 | **No se porta** — 100% Streamlit, fuera de plataforma. Fase 3 construye otra cosa |
+| Auditoría / guardianes / monitoreo | 4,371 | No planeado para F1-F4 |
+| ML / entrenamiento | 4,303 | Bloqueado por Fase 2 |
+| Scoring / matemática | 3,868 | Mayormente portado (`core/scoring.py`) |
+| Setup / infra (Colab, Drive, Telegram) | 2,886 | Reemplazado por detección de entorno (patrón `secrets.py`) |
+| Orquestación / main loop | 2,818 | Pendiente — 0% portado |
+
+**Terminal institucional:** los 8 archivos de dashboard legacy
+(`main_ui_vFinal.py`, `dashboard_fx.py`, `spel_hud.py`,
+`spel_graph_tab.py`, `spel_scalping_tab.py`,
+`spel_inventory_dashboard.py`, `main_ui.py`, `spel_dashboard.py`) usan
+`import streamlit as st`, confirmado con grep, sin excepción. No hay
+ningún archivo legacy que use Flet — el target de Fase 5 no tiene
+prototipo previo, se construye desde cero cuando llegue el momento.
 
 ---
 
