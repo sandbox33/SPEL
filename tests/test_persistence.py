@@ -127,3 +127,20 @@ def test_rutas_de_drive_son_absolutas_bajo_el_drive_root_actual(monkeypatch, tmp
     monkeypatch.setattr(persistence_module, "_is_colab", lambda: False)
     for stream in DRIVE_STREAMS:
         assert stream_path(stream).startswith(str(tmp_path))
+
+
+# ─── decision-log.md real, no solo la ruta declarada ────────────────────────
+
+def test_decision_log_md_existe_en_la_raiz_del_repo():
+    # stream_path(DECISION_LOG) declara "decision-log.md" -- confirma
+    # que el archivo REAL está donde el stream dice que debería estar,
+    # no en otro lado por accidente.
+    from pathlib import Path
+    ruta_declarada = stream_path(PersistenceStream.DECISION_LOG)
+    assert Path(ruta_declarada).exists()
+
+
+def test_decision_log_md_no_esta_vacio():
+    from pathlib import Path
+    contenido = Path(stream_path(PersistenceStream.DECISION_LOG)).read_text()
+    assert len(contenido) > 100
