@@ -1,0 +1,11 @@
+# Fase 1 -- verificado contra imports reales del repo (grep, no supuesto):
+# core/scoring.py -> numpy. ingestion/adapters.py -> pandas (top-level),
+# websockets (lazy, DerivAdapter._default_connector). tests -> pytest,
+# pytest-asyncio. NO incluye PyTorch/ML (Decisión #7: sin ML en F1) ni
+# polars (gdelt_foundation.py lo usa pero ese ingestion todavía no está
+# portado al repo nuevo -- se agrega cuando exista, junto con requests).
+numpy
+pandas
+websockets
+pytest
+pytest-asyncio

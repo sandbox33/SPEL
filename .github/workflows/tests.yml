@@ -1,0 +1,43 @@
+# .github/workflows/tests.yml
+# ============================
+# Orchestrator stub (Decisión #13, confirmada en sesión anterior).
+#
+# Esto es REAL y funciona hoy: corre la suite completa en cada push a
+# main y en cada PR -- CI genuino, no un placeholder.
+#
+# Es un "stub" en el sentido de que NO hace ingestion ni entrenamiento
+# todavía -- ninguno de los dos existe como script ejecutable en el
+# repo nuevo. Pero los 3 pasos de abajo (checkout, setup Python,
+# instalar deps) son exactamente el andamiaje que un job de ingestion
+# programado (F2) va a reusar -- solo hace falta agregarle un trigger
+# `schedule:` (cron) y cambiar el paso final por `python ingestion/run_gdelt.py`
+# una vez que ese script exista. No se escribe ese trigger todavía
+# porque agregarlo ahora apuntaría a un script que no existe.
+#
+# GitHub Actions, no Colab: Colab no tiene API pública para ejecución
+# headless (confirmado en sesión anterior) -- por eso la automatización
+# programada vive acá, y Colab queda para trabajo manual bajo demanda.
+
+name: SPEL Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Correr suite completa
+        run: python -m pytest tests/ -v
