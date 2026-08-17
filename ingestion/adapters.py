@@ -223,6 +223,24 @@ _DERIV_SYMBOL_MAP: dict[str, str] = {
     "USDJPY": "frxUSDJPY",
     "USDCHF": "frxUSDCHF",
     "AUDUSD": "frxAUDUSD",
+    # Índices de Volatilidad (sintéticos) -- confirmados contra
+    # github.com/deriv-com/deriv-api/blob/master/docs/DerivAPI.md (fuente
+    # oficial Deriv, no un tercero): "R_10, R_25, R_50, R_75, R_100" citados
+    # explícitamente ahí. NO se agregan R_150/R_250 ni variantes "(1s)"
+    # (ej. Volatility 75 (1s)) -- se mencionan en fuentes de terceros pero
+    # no se confirmó el símbolo exacto contra una fuente oficial de Deriv,
+    # así que se dejan afuera hasta confirmarlas (Tamiz #1 -- no adivinar).
+    #
+    # HALLAZGO de Fase 6 (BLUEPRINT.md): estos índices son generados por un
+    # RNG criptográfico -- Deriv los describe explícito como "unaffected by
+    # real-world news". GDELT no aplica sobre estos símbolos, por diseño,
+    # no por limitación de datos. Cualquier ruteo de señal GDELT debe
+    # excluir el prefijo VOL* de este mapa.
+    "VOL10":  "R_10",
+    "VOL25":  "R_25",
+    "VOL50":  "R_50",
+    "VOL75":  "R_75",
+    "VOL100": "R_100",
 }
 
 _DERIV_GRANULARITY_SECONDS: dict[str, int] = {

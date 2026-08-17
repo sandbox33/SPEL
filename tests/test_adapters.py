@@ -69,6 +69,11 @@ def make_connector(responses: list[dict] | None = None, raise_on_connect: Except
 
     def _connector(uri: str):
         return ws
+    # Mismo objeto lista que ws.sent_messages (no una copia) -- expuesto acá
+    # para que los tests puedan assertar qué se mandó de verdad al broker
+    # sin necesitar guardar `ws` por separado. Aditivo: no cambia el
+    # comportamiento para los tests que ya existían antes de esta sesión.
+    _connector.sent_messages = ws.sent_messages
     return _connector
 
 
@@ -108,6 +113,50 @@ def test_deriv_adapter_instanciacion_correcta():
     assert adapter.source_name == "deriv"
     assert "EURUSD" in adapter.SUPPORTED_SYMBOLS
     assert "15m" in adapter.SUPPORTED_TIMEFRAMES
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  Índices de Volatilidad (sintéticos) -- agregados esta sesión, Fase 6.
+#  Símbolos confirmados contra github.com/deriv-com/deriv-api (fuente
+#  oficial), no adivinados por patrón "R_" + número.
+# ══════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.parametrize("clean_symbol,deriv_symbol", [
+    ("VOL10", "R_10"), ("VOL25", "R_25"), ("VOL50", "R_50"),
+    ("VOL75", "R_75"), ("VOL100", "R_100"),
+])
+def test_indices_volatilidad_estan_en_supported_symbols(clean_symbol, deriv_symbol):
+    adapter = DerivAdapter(api_token="tok", app_id="1089", connector=make_connector())
+    assert clean_symbol in adapter.SUPPORTED_SYMBOLS
+
+
+@pytest.mark.asyncio
+async def test_fetch_ohlcv_indice_volatilidad_pide_el_simbolo_deriv_correcto():
+    """Confirma que VOL50 (nombre limpio de SPEL) pide R_50 (símbolo real
+    de Deriv) al broker -- no VOL50 literal, que no existe del lado de
+    Deriv y fallaría silenciosamente distinto (o el broker lo rechazaría
+    con un error confuso en vez de este test fallando con un mensaje claro
+    apuntando exactamente a dónde se rompió el mapeo)."""
+    now = datetime.now(timezone.utc)
+    candles = [make_candle(int((now - timedelta(minutes=15)).timestamp()))]
+    connector = make_connector(responses=[AUTH_OK, candles_response(candles)])
+    adapter = DerivAdapter(api_token="tok", app_id="1089", connector=connector)
+
+    await adapter.fetch_ohlcv("VOL50", "5m", limit=1)
+
+    sent = connector.sent_messages  # ver fixture make_connector más abajo
+    ticks_history_msg = next(m for m in sent if "ticks_history" in m)
+    assert ticks_history_msg["ticks_history"] == "R_50"
+
+
+def test_indice_volatilidad_no_confirmado_sigue_fuera_del_mapa():
+    """Regresión de alcance: R_150/R_250/variantes '(1s)' se ENCONTRARON en
+    fuentes de terceros durante la investigación de esta sesión, pero NO
+    contra una fuente oficial de Deriv -- deben seguir ausentes hasta que
+    se confirmen, no agregarse "por patrón" con los que sí están confirmados."""
+    adapter = DerivAdapter(api_token="tok", app_id="1089", connector=make_connector())
+    assert "VOL150" not in adapter.SUPPORTED_SYMBOLS
+    assert "VOL250" not in adapter.SUPPORTED_SYMBOLS
 
 
 # ══════════════════════════════════════════════════════════════════════════
