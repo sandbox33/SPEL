@@ -149,6 +149,17 @@ patrón) y el gate de paper trading — la duración se decide una vez, se
 escribe en `governance/PRINCIPLES.md`, no se renegocia bajo presión de
 tiempo cada sesión.
 
+**Decisión de prioridad de broker (17 ago 2026, confirmada por Altair):**
+Deriv es el único broker autorizado para capital real en el arranque de
+Fase 4 — depósito ahí no requiere verificación de identidad, a diferencia
+de Alpaca. **Alpaca queda en modo paper/testing exclusivamente hasta
+nuevo aviso explícito** — el código de Alpaca se mantiene funcional y se
+sigue probando, pero cualquier lógica de ruteo de órdenes que se escriba
+en Fase 4 debe bloquear duro (no-IA, guardrail) cualquier orden real
+hacia Alpaca mientras este estado siga vigente. Este es un requisito para
+el código que se escriba en Fase 4, no algo ya implementado — todavía no
+existe ruteo de órdenes de ningún tipo.
+
 **Criterio de terminado**: una orden real ejecutada en Deriv, de punta a
 punta, con log de auditoría, sin intervención manual.
 

@@ -109,6 +109,32 @@ sesión.
 
 ---
 
+## 2026-08-17 — Deriv primero y único para capital real; Alpaca a paper hasta nuevo aviso
+
+**Fuente:** decisión directa de Altair, motivada por una restricción real, no de ingeniería:
+Deriv acepta depósito sin verificación de identidad; la cuenta que sí quedará verificada (para
+poder retirar ganancias) depende de un tercero de confianza y toma tiempo. Detalle personal
+completo en memoria de usuario, no en este repo — acá solo la consecuencia técnica.
+
+**Decisión:** Deriv es el único broker autorizado para capital real al arrancar Fase 4. Alpaca
+se mantiene funcional (se sigue construyendo y probando) pero **gateado a paper trading
+exclusivamente** hasta que Altair confirme explícitamente lo contrario. Reflejado en
+`BLUEPRINT.md`, Fase 4.
+
+**Requisito para código futuro (no implementado todavía, no existe ruteo de órdenes de ningún
+tipo aún):** cuando se escriba la lógica de ruteo de Fase 4, el bloqueo de órdenes reales hacia
+Alpaca debe ser un guardrail duro (no una bandera de configuración que se pueda tocar por
+accidente) — mismo principio que ya rige `execution_guard.py` y `circuit_breaker.py` (capa
+no-IA, no depende de que el modelo "decida bien").
+
+**Corrección de una entrada anterior de este log:** la entrada del 17 ago sobre Fase 6 proponía
+Oracle Cloud Always Free como host del motor rápido — probado por Altair esa misma sesión, no
+viable (fricción de signup). Reemplazado por un segundo trigger en GitHub Actions
+(`.github/workflows/heartbeat.yml`, patch 0024) — ver ese patch para el detalle real, no la
+entrada original de este log.
+
+---
+
 ## Principios que se sostuvieron toda la sesión
 
 - Ningún número entra sin fuente verificada contra el código real (no contra memoria de sesiones anteriores, no contra texto pegado sin auditar).
