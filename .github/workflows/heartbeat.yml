@@ -21,14 +21,24 @@
 # cadena de scheduling + ejecución real, no coloca órdenes. Se reemplaza
 # el paso final cuando ingestion/deriv.py (Fase 6, pendiente) exista.
 #
-# workflow_dispatch: permite dispararlo a mano desde la pestaña Actions,
-# para probarlo sin esperar al próximo tick del cron.
+# workflow_dispatch: permite dispararlo a mano desde la pestaña Actions.
+#
+# DECISIÓN de Abraham (esta sesión): el trigger `schedule:` queda
+# DESACTIVADO a propósito. El código corre y está probado, pero correr
+# solo cada 15min con datos PLACEHOLDER no aporta nada real todavía --
+# "cuando se lancen, que funcionen para algo... si el sistema no está
+# preparado, no hay por qué lanzarlo aún". Queda solo workflow_dispatch
+# (manual, bajo demanda) hasta que ingestion/deriv.py exista y este
+# workflow procese datos reales, no placeholders.
+#
+# CÓMO REACTIVARLO cuando corresponda: descomentar el bloque `schedule:`
+# de abajo. Nada más cambia -- el resto del archivo ya está listo.
 
 name: SPEL Heartbeat
 
 on:
-  schedule:
-    - cron: "*/15 * * * *"
+  # schedule:
+  #   - cron: "*/15 * * * *"   # desactivado -- ver nota arriba
   workflow_dispatch: {}
 
 jobs:

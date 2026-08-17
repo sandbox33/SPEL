@@ -188,15 +188,24 @@ def test_misma_seed_da_el_mismo_resultado_exacto():
     assert r1 == r2  # dataclass frozen, comparación por valor
 
 
-def test_sin_seed_dos_corridas_difieren_con_iteraciones_razonables():
-    # volatility alta a propósito -- este test solo necesita que el
-    # resultado varíe entre corridas, no que sea realista de mercado.
-    kwargs = dict(current_price=100.0, volatility=5.0, base_gold_score=0.8, iterations=1000)
-    r1 = run_monte_carlo_validation(**kwargs)
-    r2 = run_monte_carlo_validation(**kwargs)
-    # Con aleatoriedad real (sin seed), coincidir exacto en p50 sobre 1000
-    # iteraciones sería prácticamente imposible.
-    assert r1.success_rate != r2.success_rate or r1.p50_score != r2.p50_score
+def test_seeds_distintas_producen_resultados_distintos():
+    """Corrige un test FLAKY encontrado en verificación real (no en teoría):
+    la versión anterior de este test comparaba dos corridas SIN seed,
+    confiando en que la aleatoriedad real las haría diferir. Corrida real
+    contra este mismo repo: 5 de 15 intentos fallaron (~33%) -- con
+    volatility=5.0 y horizon_minutes=15 (default), la dispersión resultante
+    es tan chica (sensitivity fallback=0.05, T pequeño) que redondeando a
+    4 decimales, dos corridas distintas frecuentemente coinciden por puro
+    azar. Fix real, no un parche de suerte: se compara con SEEDS EXPLÍCITAS
+    distintas (determinista, no depende de qué toque en el momento) y con
+    parámetros donde el spread p95-p5 es ~150x el redondeo de 4 decimales
+    (verificado: spread≈0.0154 vs. granularidad 0.0001) -- una colisión
+    espuria queda fuera de rango, no solo "poco probable"."""
+    kwargs = dict(current_price=100.0, volatility=0.40, base_gold_score=0.5,
+                  asset="BTC", iterations=2000, horizon_minutes=10_080.0)
+    r1 = run_monte_carlo_validation(seed=1, **kwargs)
+    r2 = run_monte_carlo_validation(seed=2, **kwargs)
+    assert r1 != r2
 
 
 # ─── mc_approved coherente con los thresholds ─────────────────────────────
