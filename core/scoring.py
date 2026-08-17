@@ -859,6 +859,23 @@ CORE_COUNTRY_FILTERS: dict[str, tuple[str, ...]] = {
 #: como entidad supranacional, DEU es el proxy más directo del BCE).
 GOBIERNO_COUNTRY_FILTERS: tuple[str, ...] = ("USA", "DEU")
 
+#: BUG ENCONTRADO Y CORREGIDO ESTA SESIÓN (confirmado, no supuesto):
+#: classify_gdelt_event(asset="EURUSD") lanzaba ValueError SIEMPRE, porque
+#: el chequeo original exigía asset en CORE_COUNTRY_FILTERS antes de
+#: siquiera llegar al chequeo GOBIERNO -- el docstring documentaba
+#: "GOBIERNO: EURUSD" como vía de clasificación, pero el código nunca la
+#: dejaba ejecutar. Cero tests la ejercitaban (grep confirma:
+#: test_scoring.py nunca llama classify_gdelt_event con asset="EURUSD").
+#: Fix: EURUSD (y cualquier futuro par FX sin país nativo propio) se
+#: registra acá explícitamente y se clasifica SOLO contra
+#: GOBIERNO_COUNTRY_FILTERS, sin pasar por CORE_COUNTRY_FILTERS.
+#:
+#: GBPUSD/USDJPY/USDCHF/AUDUSD (ya soportados por DerivAdapter para
+#: precio) NO están acá todavía -- requeriría decidir qué país no-USA
+#: representa a cada banco central (BoE/BoJ/SNB/RBA), decisión de Altair
+#: pendiente, no inventada acá.
+FX_GOBIERNO_ONLY_ASSETS: frozenset[str] = frozenset({"EURUSD"})
+
 
 class GdeltPipeline(str, Enum):
     CORE = "core"
@@ -908,6 +925,13 @@ def classify_gdelt_event(
     falta FRA/ITA? Sin backtest todavía -- ver docstring del módulo.
     """
     countries = {c for c in actor_countries if c}
+
+    if asset in FX_GOBIERNO_ONLY_ASSETS:
+        # Sin país "nativo" propio -- se clasifica SOLO por GOBIERNO,
+        # nunca llega a CORE_COUNTRY_FILTERS (ver FX_GOBIERNO_ONLY_ASSETS).
+        matched = tuple(sorted(countries & set(GOBIERNO_COUNTRY_FILTERS)))
+        pipeline = GdeltPipeline.GOBIERNO if matched else GdeltPipeline.NONE
+        return GdeltClassificationResult(pipeline=pipeline, matched_countries=matched)
 
     core_filter = CORE_COUNTRY_FILTERS.get(asset)
     if core_filter is None:

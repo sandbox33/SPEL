@@ -22,6 +22,7 @@ from core.scoring import (
     AdaptivePercentileResult,
     CORE_COUNTRY_FILTERS,
     GOBIERNO_COUNTRY_FILTERS,
+    FX_GOBIERNO_ONLY_ASSETS,
     GdeltPipeline,
     GoldScoreAction,
     GoldScoreKillReason,
@@ -742,6 +743,61 @@ def test_gdelt_core_country_filters_tiene_los_4_activos_confirmados():
 
 def test_gdelt_gobierno_country_filters_es_usa_deu():
     assert GOBIERNO_COUNTRY_FILTERS == ("USA", "DEU")
+
+
+# ─── Regresión: classify_gdelt_event(asset="EURUSD") -- bug real de esta ──
+# ─── sesión, nunca ejercitado por ningún test hasta ahora ─────────────────
+
+def test_gdelt_eurusd_ya_no_lanza_valueerror():
+    """Antes del fix: asset='EURUSD' lanzaba ValueError siempre, porque
+    el código exigía que estuviera en CORE_COUNTRY_FILTERS antes de
+    llegar al chequeo GOBIERNO que el propio docstring documentaba para
+    este caso. Confirmado empíricamente antes de escribir el fix."""
+    resultado = classify_gdelt_event(["USA", "DEU"], asset="EURUSD")
+    assert resultado.pipeline == GdeltPipeline.GOBIERNO
+
+
+def test_gdelt_eurusd_matchea_usa_solo():
+    resultado = classify_gdelt_event(["USA", "JPN"], asset="EURUSD")
+    assert resultado.pipeline == GdeltPipeline.GOBIERNO
+    assert resultado.matched_countries == ("USA",)
+
+
+def test_gdelt_eurusd_matchea_deu_solo():
+    resultado = classify_gdelt_event(["FRA", "DEU"], asset="EURUSD")
+    assert resultado.pipeline == GdeltPipeline.GOBIERNO
+    assert resultado.matched_countries == ("DEU",)
+
+
+def test_gdelt_eurusd_sin_paises_relevantes_es_none():
+    resultado = classify_gdelt_event(["BRA", "ZAF"], asset="EURUSD")
+    assert resultado.pipeline == GdeltPipeline.NONE
+    assert resultado.matched_countries == ()
+
+
+def test_gdelt_eurusd_nunca_pasa_por_core_country_filters():
+    """EURUSD no está en CORE_COUNTRY_FILTERS -- si esto alguna vez
+    intentara mirar ese dict para EURUSD, lanzaría ValueError. Este test
+    confirma que el camino FX_GOBIERNO_ONLY_ASSETS se toma ANTES."""
+    assert "EURUSD" not in CORE_COUNTRY_FILTERS
+    assert "EURUSD" in FX_GOBIERNO_ONLY_ASSETS
+    classify_gdelt_event(["USA"], asset="EURUSD")  # no debe lanzar
+
+
+def test_gdelt_asset_core_desconocido_sigue_lanzando_valueerror():
+    """Regresión inversa: el fix no debe volver el chequeo permisivo para
+    activos que genuinamente no están configurados en ningún lado."""
+    with pytest.raises(ValueError, match="sin CORE_COUNTRY_FILTERS"):
+        classify_gdelt_event(["USA"], asset="ACTIVO_INVENTADO_XYZ")
+
+
+def test_gdelt_activos_core_siguen_funcionando_igual_que_antes_del_fix():
+    """Regresión de no-ruptura: NVDA/XAU/BTC/NIFTY50 no pasan por
+    FX_GOBIERNO_ONLY_ASSETS, su comportamiento es idéntico a antes."""
+    r_nvda = classify_gdelt_event(["USA", "TWN"], asset="NVDA")
+    assert r_nvda.pipeline == GdeltPipeline.CORE
+    r_xau = classify_gdelt_event(["BRA"], asset="XAU")  # XAU: filtro vacío = todo matchea
+    assert r_xau.pipeline == GdeltPipeline.CORE
 
 
 # ─── compute_adaptive_percentile ────────────────────────────────────────────
