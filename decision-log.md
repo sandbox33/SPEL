@@ -68,6 +68,47 @@ Auditoría de decisiones de arquitectura (stream `DECISION_LOG`, Decisión #14).
 
 ---
 
+## 2026-08-17 — Confirmación: `execution/` (Actuator) entra a producción en Fase 4
+
+**Fuente:** decisión directa de Altair, no un hallazgo de auditoría.
+
+**Decisión:** `execution/circuit_breaker.py` y `execution/execution_guard.py` (31 tests,
+congelados desde su construcción) quedan confirmados para pasar a uso activo cuando arranque
+Fase 4 — no antes, la compuerta de Fase 2 sigue firme (capital real solo después de que el
+paper trading lo demuestre, `governance/PRINCIPLES.md` #6). Esto no adelanta Fase 4, formaliza
+qué pasa cuando llegue.
+
+**Validación pendiente:** ninguna nueva — sigue dependiendo de que Fase 2 cierre primero.
+
+---
+
+## 2026-08-17 — Investigación: motor de streaming multi-timeframe (Deriv + Alpaca), DRL + ONNX
+
+**Fuente:** propuesta de Altair + 6 búsquedas web verificadas esta sesión (no opinión sin
+respaldo). Detalle completo en `BLUEPRINT.md`, Fase 6.
+
+**Hallazgo:** los índices sintéticos de Deriv están diseñados para ser inmunes a noticias reales
+(confirmado con la propia documentación de Deriv) — GDELT no aplica ahí, sí aplica en forex/oro
+real. GitHub Actions tiene piso de 5 min en `cron` y no garantiza puntualidad — no sirve como
+host de un motor de 1 minuto. Reinforcement Learning para trading tiene resultados de producción
+reales en ejecución/hedging, no en alpha puro desde precio — alto riesgo de sobreajuste sin
+walk-forward real.
+
+**Decisión:** motor rápido (Deriv sintéticos + Alpaca) se trata como un Fase 6 en evaluación,
+paralelo al motor GDELT (Fases 1-5), no un reemplazo. Host propuesto para el motor rápido: VM
+gratuita Oracle Cloud Always Free (no Termux, no GitHub Actions). Componente de aprendizaje se
+nombra `DRL` (no `RL`, que ya está tomado por Risk Limits en `axiom_master.xml`). ONNX se
+revisita cuando exista un modelo entrenado que exportar, no antes.
+
+**Descartado:** construir el motor rápido sobre `core/scoring.py` tal cual (día como unidad de
+tiempo) — física de datos incompatible con 1-30 min, no es un ajuste de parámetro.
+
+**Validación pendiente:** Altair debe confirmar si GDELT sigue siendo el motor principal con el
+motor rápido en paralelo, o si cambia la prioridad — no se asumió ninguna de las dos en esta
+sesión.
+
+---
+
 ## Principios que se sostuvieron toda la sesión
 
 - Ningún número entra sin fuente verificada contra el código real (no contra memoria de sesiones anteriores, no contra texto pegado sin auditar).

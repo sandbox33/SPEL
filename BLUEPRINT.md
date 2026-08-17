@@ -188,6 +188,149 @@ prototipo previo, se construye desde cero cuando llegue el momento.
 
 ---
 
+## Fase 6 — Motor de streaming multi-timeframe (propuesta de Altair, 17 ago 2026) — EN EVALUACIÓN, NADA CONSTRUIDO TODAVÍA
+
+Altair propuso una segunda vía, en paralelo a la macro (GDELT diario, Fases 1-5): un motor que
+opere en 1/5/15/30 min sobre Deriv (forex + herramientas propias) y, en paralelo, un motor
+símil sobre Alpaca para ejecución rápida. Objetivo explícito: generar ingresos que no dependan
+de esperar días a que una noticia confirme una tesis — motivo declarado: gastos, deudas y falta
+de empleo actuales. Esto se investigó (web, no solo criterio) antes de escribir una sola línea,
+seis búsquedas, siguiendo el mismo protocolo de auditoría del resto de este documento.
+
+### Hallazgo 1 — Deriv no es un mercado, son dos, con física distinta
+
+**Índices sintéticos / Volatility / Crash-Boom / Step**: generados por un generador de números
+aleatorios criptográficamente seguro. Deriv lo dice explícito en su propio marketing: *"mimic
+real markets but are unaffected by real-world news or market volatility"*. GDELT no tiene nada
+que decirle a un mercado diseñado para ser inmune a las noticias — cero, por diseño, no por
+limitación de datos.
+
+**Forex real (90+ pares) y CFDs de oro/commodities**: mercado real, sí se mueve con noticias —
+acá SÍ aplica el motor GDELT existente.
+
+**Consecuencia para el diseño**: no hace falta forzar `core/scoring.py` (construido en unidades
+de DÍAS) a operar en minutos. El motor rápido de Deriv corre sobre índices sintéticos con señal
+técnica pura (momentum, volatilidad, Monte Carlo) — un motor genuinamente distinto, no una
+versión acelerada del motor GDELT. El motor GDELT sigue existiendo, sin tocar, para forex/oro
+real. Dos motores, dos mercados, cada uno con la física que le corresponde — no una
+reconciliación forzada.
+
+### Hallazgo 2 — "HFT" no es lo que Alpaca (ni nada gratis) puede dar
+
+HFT institucional real es microsegundos, con servidores co-ubicados físicamente en el exchange —
+no existe versión gratuita de eso, para nadie, en ningún broker retail. Lo que sí ofrece Alpaca
+gratis: WebSocket de cripto en tiempo real (trades/quotes/orderbook), 200 req/min en el plan
+free, sin comisión en acciones/opciones, comisión pequeña por volumen en cripto. Es decir: **el
+motor rápido sobre Alpaca es trading intradía automatizado de segundos-a-minutos, no HFT en el
+sentido técnico** — la etiqueta no cambia lo que se puede construir (que es real y gratis), pero
+sí las expectativas de qué tipo de ventaja es capturable.
+
+### Hallazgo 3 — el bloqueante real no es de estrategia, es de infraestructura
+
+`.github/workflows/tests.yml` (patch 0011) fue diseñado asumiendo que GitHub Actions con
+`schedule:` sería el host de la automatización recurrente. Investigado esta sesión: **GitHub
+Actions tiene un piso duro de 5 minutos en `cron`** — cualquier intervalo menor se acepta en el
+YAML, no da error, y simplemente nunca dispara. Además, en horas de carga alta, los `schedule:`
+documentadamente llegan con 10-30 min de atraso (a veces más de una hora) — GitHub no garantiza
+la puntualidad. **Esto no es apto para un motor de 1 minuto ni para mantener una conexión
+WebSocket persistente** (los jobs son efímeros, se apagan al terminar el step). El plan de F5
+("GitHub Actions vs. Colab") necesita revisión antes de construir el motor rápido: sirve para
+ingestion diaria de GDELT y para CI, no sirve como host del motor de streaming.
+
+**Investigado y resuelto, sin costo:** Oracle Cloud "Always Free" da una VM ARM siempre encendida
+(2 OCPU / 12GB RAM tras el recorte de junio 2026 — antes 4/24, la tendencia es a la baja, no
+garantizado a perpetuidad, pero hoy es real y gratis) — suficiente de sobra para un cliente
+Python liviano con conexión WebSocket persistente a Deriv/Alpaca. Alternativa de respaldo:
+Northflank (2 servicios, 1 vCPU/1GB, sin cold-starts, plan gratis genuino). **Esto resuelve el
+"sacrificar el teléfono" sin sacrificarlo**: la VM gratuita en la nube corre 24/7 sin depender de
+la RAM del teléfono ni reabrir la discusión de Termux (que sigue descartada por las razones ya
+documentadas — esto es una VM en la nube, no Termux en el dispositivo, son cosas distintas).
+GitHub Actions se queda para lo que ya hace bien: CI, ingestion diaria de GDELT, reentrenamiento
+programado.
+
+### Hallazgo 4 — Cerebro (DRL + ONNX): investigado, veredicto con condiciones
+
+Reinforcement Learning para trading es un área activa 2024-2026, pero la literatura (arXiv,
+guías especializadas) es consistente en un punto: los resultados auditables y de producción real
+están en *deep hedging, algoritmos de ejecución y market making* — no en "generar alpha puro
+desde el precio", que sigue siendo difícil y con alto riesgo de sobreajuste al backtest. El
+riesgo #1, citado en cada fuente seria: un agente que memoriza ruido histórico y parece brillante
+en backtest, y pierde en vivo. La mitigación estándar (walk-forward, out-of-sample real, penalizar
+agentes sobreajustados como hipótesis estadística) es exactamente el mismo espíritu que ya rige
+este proyecto (Tamiz #2, integridad temporal) — no hay que aprender una disciplina nueva, hay que
+aplicar la que ya existe a un tipo de modelo nuevo.
+
+**Veredicto: sí, vale la pena investigar más a fondo cuando llegue el momento — no ahora.**
+Orden correcto: Fase 2 (diagnosticar por qué el LSTM actual da ~0.50) antes que un agente DRL
+nuevo — no tiene sentido construir un segundo modelo sin entender por qué el primero no aprende.
+Si Fase 2 confirma que el problema es de arquitectura/señal (no de fuga de datos), un agente DRL
+para el motor rápido (que sí tiene la cadencia de datos — ticks/minutos, no días — que DRL
+necesita para tener suficientes transiciones de estado) es un candidato razonable *ahí*, no para
+el motor GDELT macro.
+
+**ONNX: relevante, pero después de que exista un modelo que exportar.** El beneficio real medido
+en la literatura (2-3x más rápido en CPU, footprint de instalación mucho menor que PyTorch
+completo) importa específicamente para correr inferencia en un runner de GitHub Actions o una VM
+chica sin instalar PyTorch entero en cada corrida — encaja con "gratis e inteligente". No hay
+nada que exportar todavía (Decisión #7: sin ML en F1). Se revisita en Fase 2/DRL, no antes.
+
+### Hallazgo 5 — colisión de nombres, resuelta sin costo
+
+El legacy ya usa `RL_01`..`RL_05` para *Risk Limits* (`axiom_master.xml`, capital máximo por
+trade, pérdida diaria, exposición total, posiciones concurrentes, kill-switch). El componente de
+*Reinforcement Learning* se nombra **DRL** (Deep Reinforcement Learning) en todo el proyecto —
+es además el término que usa la propia literatura especializada, no una convención inventada acá.
+Cero código ni tests referencian "RL" como aprendizaje todavía — el cambio de nombre es gratis
+hoy y deja de serlo en cuanto exista una sola línea de código con el nombre viejo.
+
+### Hallazgo 6 — el "chat de pensamiento" ya casi existe, no hay que construirlo de cero
+
+Altair pidió que el sistema registre por qué hizo cada operación. Tamiz #1 de este proyecto
+("transparencia matemática — cero cajas negras") ya obliga a que cada score sea descomponible:
+`gold_score_bma()` ya devuelve `weights_used` y `kill_reason`; `godel_active()` ya es una
+condición explícita, no una caja negra. **El "chat de pensamiento" no necesita un LLM narrando
+en vivo (eso cuesta dinero y latencia, rompe "gratis") — necesita que `governance/persistence.py`
+(stream METRICS) registre, por cada operación, la descomposición completa que la función ya
+calcula.** Es un consumidor nuevo de infraestructura que ya existe, no una pieza nueva de
+infraestructura.
+
+### Hallazgo 7 — precedente legacy real, ya escrito, nunca portado
+
+No hay que inventar de cero. `archive/legacy-pre-20260813` ya tiene:
+- `spel_bayesian_core.py::run_monte_carlo_validation()` — GBM vectorizado, 1000 trayectorias de
+  15 min sobre `gold_score`, <50ms con NumPy puro, umbral ≥850/1000 → `MC_APPROVE`. Esto es
+  literalmente el "Monte Carlo a su conveniencia" que Altair describió — ya calculado, ya
+  diseñado, nunca portado al repo nuevo.
+- `spel_trading_router.py::SPELTradingRouter` — ya router-ea MODO_INSTITUCIONAL (score≥90,
+  diario, Kelly completo, RR 2.5x) vs. MODO_SCALPING (score 70-89, 15/30min, Kelly al 50%, RR
+  1.5x, máx. 3 trades/sesión) vs. MODO_FLAT. Es precedente directo del motor multi-timeframe —
+  la lógica de "cuándo operar más chico y más rápido" ya está pensada.
+- `spel_forex_iq.py` tiene una lógica de confluencia de 4 capas (macro GDELT 40pts + estructura
+  diaria 25pts + VWAP de sesión 20pts + sesión activa 15pts) — el archivo en sí no se porta
+  (`yfinance`, prohibido), pero el diseño de scoring por capas es reusable con Deriv como fuente.
+
+### Tensión abierta — necesita tu confirmación explícita, no se resolvió acá
+
+¿El motor GDELT (Fases 1-5, la tesis original de SPEL — Socio-Political Entropy *Loss*) sigue
+siendo el motor principal, y el motor rápido es un *segundo* motor en paralelo sobre índices
+sintéticos? ¿O el foco cambia hacia el motor rápido como prioridad, y GDELT pasa a ser una señal
+secundaria solo para forex real? Son dos proyectos legítimos — la arquitectura de carpetas
+(`core/`, `ingestion/`) puede alojar ambos sin pelearse entre sí, pero el orden de qué se
+construye primero cambia según cuál elijas. No se asumió ninguno de los dos.
+
+### Riesgo real a declarar (auditoría, no validación)
+
+El principio #6 de `governance/PRINCIPLES.md` ("capital real solo después de que el paper trading
+lo demuestre") existe precisamente para el escenario que motiva esta fase: presión por ganancias
+inmediatas es la causa número uno, documentada en toda la literatura de trading algorítmico, de
+cuentas reventadas por meter capital real antes de tiempo. Un motor de 1 minuto con búsqueda
+automática de configuración (Monte Carlo, DRL) es, además, el tipo de sistema con mayor riesgo de
+sobreajuste — exactamente donde la disciplina de paper trading importa más, no menos. Esto no
+cambia el objetivo (ingresos reales, rápido); cambia qué se valida antes de arriesgar el primer
+dólar real en el motor rápido específicamente.
+
+---
+
 ## Regla de todas las fases
 
 Ningún archivo bajo `ingestion/`, `core/`, `execution/` o `visualization/`
