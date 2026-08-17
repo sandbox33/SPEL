@@ -1,0 +1,48 @@
+# .github/workflows/heartbeat.yml
+# ================================
+# Fase 6 (BLUEPRINT.md) -- primer trigger `schedule:` real del proyecto,
+# construido sobre el mismo andamiaje que ya probó tests.yml (patch 0011).
+#
+# POR QUÉ 15 MIN Y NO 5: investigado esta sesión -- GitHub Actions tiene un
+# piso duro de 5 min en `cron` (menos que eso se acepta en el YAML y nunca
+# dispara, sin error visible), y en horas de carga alta los `schedule:`
+# documentadamente llegan con 10-30 min de atraso. 15 min da margen real
+# contra ese atraso sin ser tan laxo que pierda el sentido de "automático".
+#
+# POR QUÉ ESTO Y NO UNA VM SIEMPRE ENCENDIDA: Oracle Cloud (probado por
+# Abraham, no viable -- fricción de alta en el signup) y una VM propia
+# quedan descartados por ahora. Esto no reemplaza una conexión WebSocket
+# persistente (que necesitaría un host siempre encendido) -- reemplaza la
+# necesidad de tener el teléfono o la laptop prendidos. Corre en los
+# servidores de GitHub, gratis en un repo público, sin que Abraham
+# intervenga. Ver BLUEPRINT.md, Fase 6, Hallazgo 3.
+#
+# QUÉ HACE HOY: corre tools/heartbeat.py -- valores PLACEHOLDER, prueba la
+# cadena de scheduling + ejecución real, no coloca órdenes. Se reemplaza
+# el paso final cuando ingestion/deriv.py (Fase 6, pendiente) exista.
+#
+# workflow_dispatch: permite dispararlo a mano desde la pestaña Actions,
+# para probarlo sin esperar al próximo tick del cron.
+
+name: SPEL Heartbeat
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  heartbeat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Correr heartbeat (Fase 6 -- esqueleto, valores placeholder)
+        run: python tools/heartbeat.py
