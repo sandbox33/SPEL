@@ -5,140 +5,196 @@
 > Si algo en un chat contradice lo que dice acá, este archivo gana — a menos que
 > el chat verifique contra GitHub real y lo actualice con evidencia.
 
-**Última actualización:** 14 ago 2026, sesión "Análisis global + admin panel"
-**Actualizado por:** sesión que NO tocó código, solo consolidó estado
+**Última actualización:** 18 ago 2026 — cierra 17 días de desactualización real. Este
+archivo llevaba congelado en el patch 0002 (14 ago) mientras `main` avanzaba hasta el
+0031 sin que nadie lo reflejara acá — el mismo hallazgo de gobernanza que ya se había
+señalado el 17 ago no se había corregido en el propio git hasta este patch.
+
+**Ver también:** `FASE2_NOTAS_ARQUITECTURA_MODELO.md` (raíz del repo) — glosario y
+opciones de arquitectura de modelo (LSTM vs. árboles/ensambles), separado de este
+archivo a propósito para no mezclar "estado actual" con "notas de investigación".
 
 ---
 
 ## 🚦 SEMÁFORO DE FASES
 
 ```
-FASE 1 — ingestion/ + core/scoring.py     🟡 EN PROGRESO (ver detalle abajo)
-FASE 2 — Diagnóstico del modelo            ⚪ NO INICIADA
+FASE 1 — ingestion/ + core/scoring.py     🟢 INGESTION LISTA · 🟡 ORQUESTACIÓN PARCIAL
+FASE 2 — Diagnóstico + entrenamiento LSTM  ⚪ NO INICIADA — ver Incógnita #1
 FASE 3 — visualization/ (grafo)            ⚪ NO INICIADA
-FASE 4 — execution/ + Deriv real           ⚪ NO INICIADA (bloqueada por F2)
-FASE 5 — Escala (Supabase, Flet, Actions)  ⚪ NO INICIADA
+FASE 4 — execution/ + Deriv real           🟡 Actuator confirmado, gate F2 firme
+FASE 5 — Escala (Supabase, Flet)           ⚪ NO INICIADA
+FASE 6 — Motor streaming multi-timeframe   🟡 Infraestructura lista, señal sin construir
 ```
 
 ---
 
-## 📍 DÓNDE ESTAMOS EXACTAMENTE — FASE 1
+## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-### Lo que SÍ está confirmado en GitHub `main` (verificado, no supuesto):
+242 → 307 tests desde el 17 ago (65 tests nuevos en un día de trabajo). Todo lo de
+abajo corrió en clon 100% ajeno, venv limpio desde `requirements.txt`, más de una vez.
 
-| Archivo | Estado | Tests | Última verificación |
-|---|---|---|---|
-| `governance/secrets.py` | ✅ En main | 6/6 | Confirmado contra clon fresco de main |
-| `execution/circuit_breaker.py` | ✅ En main (no tocar hasta F4) | 14/14 | Confirmado contra clon fresco de main |
-| `execution/execution_guard.py` | ✅ En main (no tocar hasta F4) | 17/17 | Confirmado contra clon fresco de main |
-| `ingestion/adapters.py` (versión original, sin AdapterChain) | ✅ En main | 22/22 | Confirmado contra clon fresco de main |
+| Módulo | Qué hace | Tests | Estado |
+|---|---:|---:|---|
+| `core/scoring.py` | vitality_tesla, nash_frozen_7d, godel_active, gold_score_bma, classify_gdelt_event (+ fix EURUSD) | 116 | ✅ |
+| `core/monte_carlo.py` | Validación GBM — NO entrena, simulación pura en cada llamada | 22 | ✅ |
+| `core/price_signals.py` | te_score (proxy TE) + backbone_score (EMA20/63) | 12 | ✅ |
+| `ingestion/adapters.py` | DerivAdapter — forex + 5 Índices de Volatilidad (VOL10-VOL100) | 44 | ✅ |
+| `ingestion/gdelt.py` + `_aggregation` + `_series` | Pipeline GDELT completo, persistencia JSONL | 41 | ✅ |
+| `ingestion/training_dataset.py` | Une OHLCV + serie GDELT, forward-fill, coverage_ratio explícito | 7 | ✅ |
+| `orchestration/cycle.py` | Corre vitality/nash/godel sobre 5 activos a la vez | 10 | ✅ |
+| `execution/circuit_breaker.py` + `execution_guard.py` | Guardrails duros — congelados hasta F4 | 31 | ✅ |
+| `governance/persistence.py` + `secrets.py` | 4 streams, SecretKey único | 24 | ✅ |
+| `tools/heartbeat.py` + `.github/workflows/heartbeat.yml` | Trigger `schedule:` real — **desactivado a propósito**, ver Fase 6 | — | ✅ código, 🔴 apagado |
 
-### Lo que NO está confirmado en GitHub `main` — punto crítico de retomar:
-
-| Ítem | Estado real | Qué falta |
-|---|---|---|
-| `AdapterResult` + `AdapterChain` (fusionados a `adapters.py`) | 🟡 Probado LOCAL (68/68 en clon fresco del sandbox — NUNCA llegó a main), patch generado | **Confirmar si el push desde Colab llegó a main real.** Última vez que se preguntó esto, no hubo respuesta confirmando. |
-| Archivo `0001-fase1-adapterchain.patch` | 🟡 Generado y verificado (aplica limpio dos veces contra main fresco) | Confirmar aplicación real vía notebook de Colab |
-
-**➡️ PRIMER PASO DEL PRÓXIMO CHAT DE CÓDIGO: re-clonar `main`, correr `pytest tests/ -v`, y confirmar si da 105/105 (68+6+14+17) o 82/82 (22+6+14+17, si el patch nunca se aplicó). Ese número solo dice qué quedó pendiente — no asumir ninguno de los dos.**
-
-### Decisiones de arquitectura ya tomadas (no reabrir sin razón nueva):
-
-1. **`adapters.py` es la base, no `base_adapter.py`** — excepciones tipadas, protección anti-fuga de vela, probado contra 403/timeout. De `base_adapter.py` solo se porta el patrón `AdapterResult`/`AdapterChain` (degradación con fallback), adaptado a `pandas` (no `polars`), sin `logging.basicConfig` global, sin las columnas `COLS_CANONICAS_V4`.
-2. **`secrets.py` es la base, no `secrets_env_loader.py`** — único que exporta `SecretError`, `SecretKey`, `load_secret`, `secrets_status_report`.
-3. **`AdapterChain.fetch()` es síncrono con `asyncio.run()` interno**, no async de punta a punta — porque el resto de Fase 1 (`core/scoring.py`) no necesita async, y no hay que meter esa complejidad sin que la pida el siguiente archivo real. **Deuda documentada, no oculta:** `asyncio.run()` no es reentrante; si Fase 4 (`execution/`) necesita llamar esto desde un event loop ya corriendo, hay que revisar este wrapper entonces, no antes.
-4. **Deriv es un adapter más, no un caso especial** — mismo contrato `BaseAdapter` que cualquier otra fuente (Alpaca, GDELT). Lo que lo distingue es que declara su propia latencia medida (no estimada) como fuente candidata para HFT; `AdapterChain` decide cuál usar según esa declaración, no por hardcodeo. Esto ya es lo que hace el diseño actual — no es arquitectura nueva pendiente.
-5. **`AdapterAuthError` corta el reintento temprano** (no reintenta 3 veces un token inválido) — decisión tomada fuera del diff original aprobado, marcada explícitamente en el código y en el commit.
-
-### Pendiente de decidir (NO decidir en el aire, decidir con el archivo delante):
-
-- **¿`ingestion/deriv.py` se separa como archivo propio, o se mantiene como clase dentro de `adapters.py`?** El blueprint original lo pide separado. Hoy vive como clase adentro. Es una decisión de 5 minutos una vez que Fase 1 esté con el push confirmado — no antes.
-- **`core/scoring.py`** — candidato a portar: `spel_bayesian_core.py` (BMA, Gödel, kill-switch). NO se audita todavía, se hace con el mismo protocolo que `adapters.py`: leer el archivo completo, comparar contra si hay otros candidatos/linajes, decidir con evidencia.
+**No existe todavía, confirmado por ausencia real (no supuesto):** ningún adapter de
+precio para NVDA/XAU/BTC/NIFTY50 (cero `AlpacaAdapter`, `TiingoAdapter` en el repo —
+grep de `class.*Adapter` en `ingestion/adapters.py` da un solo resultado: `DerivAdapter`).
+Ningún trainer de LSTM. Ningún ruteo de órdenes de ningún tipo.
 
 ---
 
-## 🔬 FASE 2 — DIAGNÓSTICO DEL MODELO (no iniciada, no inventar causa)
+## 🔬 FASE 2 — el bloqueo real, ahora entendido con precisión
 
-**Lo único confirmado:** accuracy de validación estancado en ~0.50 (visto en gráficos de entrenamiento propios). Esto bloquea Fase 4 — no entra capital real hasta que se resuelva.
+No es "escribir 3 funciones". Auditado contra el legacy real esta sesión:
 
-**Hipótesis planteadas (ninguna confirmada todavía, cada una necesita su propia prueba de 15-30 min, no investigación abierta):**
-1. Fuga de horizonte en features — ¿alguna columna usa información futura respecto al target?
-2. Arquitectura insuficiente (64 unidades ocultas, 1 capa) — ¿alcanza para superar el ruido con datos reales?
-3. La señal no está en esas columnas / ese lookback específico
+- `te_score` y `backbone_score`: **listos**, portados con 2 bugs reales corregidos
+  (`core/price_signals.py`).
+- `godel_score`: depende de `val_dir`, salida de un **LSTM entrenado** — arquitectura
+  canónica "Regla 13", **bloqueada por guardián real** (`enforce_lstm_architecture()`
+  en el legacy lanza `RuntimeError` ante cualquier desvío de `input_size=20,
+  hidden_size=64, num_layers=1` — existen 14 checkpoints `.pt` atados a esa forma
+  exacta). No hay nada que portar hasta que ese modelo aprenda algo real.
+- Accuracy base histórica confirmada (legacy, `LSTM_BASE_ACCURACY`): NVDA 0.550, BTC
+  0.528, XAU 0.547, NIFTY50 0.625 — el "~0.50" que bloquea Fase 4 puede ser ese mismo
+  techo bajo original, no necesariamente una regresión nueva.
+- Causa raíz real del estancamiento (Altair, 18 ago): parquets fuente con columnas de
+  fecha en formatos distintos entre sí ('/' vs '-') — datos no normalizados
+  alimentando el entrenamiento sin detectarse a tiempo. **Ya no puede repetirse en la
+  parte nueva**: Deriv entrega epoch (sin ambigüedad de formato posible),
+  `validate_ohlcv_schema()` rechaza cualquier timestamp que no sea UTC estricto y
+  ordenado — verificado con test de regresión directo.
+- Clase de bug MÁS AMPLIA encontrada en el legacy (`spel_trainer_audit.py`,
+  BUG-LA-01): normalizar con estadísticas del dataset completo en vez de solo train,
+  o mezclar datos temporales antes del split. Documentado en
+  `ingestion/training_dataset.py` para cuando se escriba el trainer — no resuelto
+  todavía porque ese código no existe.
+- `ingestion/training_dataset.py` ya construido: une OHLCV + serie GDELT con
+  forward-fill, listo para alimentar cualquier arquitectura que se elija.
 
-**Esto NO se toca hasta que Fase 1 tenga push confirmado.**
+**Ver `FASE2_NOTAS_ARQUITECTURA_MODELO.md` para las opciones reales (LSTM vs.
+Random Forest/XGBoost/etc.) — nada decidido todavía, es investigación, no un plan.**
 
 ---
 
-## 🗂️ CÓDIGO LEGACY — dónde vive, qué es seguro portar
+## 🗂️ CÓDIGO LEGACY — sin cambios, ya estaba correcto
 
 ```
-archive/legacy-pre-20260813              → 74 módulos originales, intactos, con historia
-archive/dashboard-data-pre-20260813      → cache de datos de GitHub Actions
+archive/legacy-pre-20260813              → 74 módulos originales, intactos
+archive/dashboard-data-pre-20260813      → cache de GitHub Actions
 archive/feature-cache-pre-20260813       → cache de features
-archive/model-cache-pre-20260813         → cache de modelos
-archive/limpieza-legado-99-pre-20260813  → última sesión de limpieza previa al reinicio
+archive/model-cache-pre-20260813         → cache de modelos (14 checkpoints .pt)
+archive/limpieza-legado-99-pre-20260813  → última limpieza previa al reinicio
 ```
 
-**Regla fija:** nada en `ingestion/`, `core/`, `execution/`, `visualization/` importa desde ninguna rama `archive/*`. Lo que se necesita de ahí se reescribe con su test antes de darse por portado.
-
-**Candidatos ya identificados en `archive/limpieza-legado-99` para portar cuando corresponda:**
-- `spel_bayesian_core.py` → candidato para `core/scoring.py` (Fase 1, pendiente auditar)
-- `base_adapter.py` → ya se extrajo lo útil (`AdapterResult`/`AdapterChain`), no se necesita más de acá para Fase 1
-
-**Explícitamente NO portar (fuera de alcance permanente o por decisión):**
-- `spel_forex_iq.py` — usa IQOption, prohibido (sin API oficial)
-- Cualquier variante de `spel_orchestrator_v*.py` — múltiples versiones del mismo concepto, viola modularidad estricta
-- `axiom_master.xml` (6 versiones sin reconciliar) — reemplazado por `governance/PRINCIPLES.md`, queda como referencia histórica en Drive, no como texto gobernante
+Regla fija sin excepción: nada bajo `ingestion/`, `core/`, `execution/`,
+`orchestration/` o `visualization/` importa desde ninguna rama `archive/*`.
 
 ---
 
-## 🔐 SEGURIDAD — incidentes y estado actual
+## ⚠️ GOBERNANZA DE DOCUMENTOS — hallazgo del 17 ago, TODAVÍA sin resolver
 
-- **2 tokens de GitHub fueron pegados en texto plano en chats distintos** (uno en una sesión anterior a esta, uno en este chat). **Ambos fueron revocados por el usuario.** Ningún chat de Claude usó nunca un token para hacer push directamente — el sandbox de Claude puede clonar (lectura pública) pero nunca tuvo un token cargado para escribir.
-- **Regla vigente, establecida por el usuario:** ningún token se pega en texto de chat, bajo ninguna circunstancia, incluso con autorización explícita en el momento. Los tokens se manejan vía Colab Secrets (`userdata.get()`) o se pegan directamente en el flujo de Colab, nunca en un mensaje de Claude.
-- **Token de Deriv:** ya almacenado en Colab Secrets, según confirmó el usuario. No pasó nunca por ningún chat.
-
----
-
-## 🖥️ ENTORNO DE TRABAJO — restricciones fijas
-
-```
-✅ Google Colab (notebook — admin panel + desarrollo)
-✅ Google Drive (almacenamiento, un solo patch a la vez, no duplicar código)
-✅ GitHub (github.com/sandbox33/SPEL — fuente de verdad única)
-✅ Colab Secrets (userdata.get()) para tokens — NUNCA getpass()/input() en Android, falla con StdinNotImplementedError
-✅ Deriv (API oficial, WebSocket)
-
-❌ Termux — descartado explícitamente, complejo, alto consumo de RAM en el teléfono (2GB disponibles de 8GB)
-❌ Streamlit — descartado explícitamente
-❌ IQOption — sin API oficial, reemplazado por Deriv
-❌ Rutas hardcodeadas de Colab (/content/drive/...) en el código de producción
-```
-
-**Restricción de contexto entre chats (auto-impuesta):**
-- Máx. ~50 turnos por chat → cerrar con resumen y actualizar este archivo antes de seguir
-- 1 chat = 1 fase o 1 bloque bien definido dentro de una fase — nunca mezclar
-- Si en 15 turnos no bajó código nuevo a un archivo real, es señal de circularidad → cortar, actualizar este archivo, empezar de nuevo con foco
+Sigue pendiente, no se resolvió solo con el tiempo: `SPEL_PERSISTENCE_STATE.md` y
+`SPEL_PERSISTENCIA_v2.md` en Drive raíz siguen ahí, sin archivar, compitiendo con
+este archivo. Este patch reemplaza el contenido de `SPEL_PERSISTENCE_STATE.md` con
+un espejo literal de este archivo (marcado como espejo, no editable ahí) — pero
+`SPEL_PERSISTENCIA_v2.md` sigue sin archivar. Acción pendiente para la próxima
+sesión, no lo resolví en esta.
 
 ---
 
-## ▶️ PRÓXIMO PASO CONCRETO (una sola cosa, no una lista)
+## ❓ INCÓGNITAS REALES — sin resolver, no inventadas para llenar espacio
 
-**Re-clonar `main` desde GitHub real y correr `pytest tests/ -v`.**
+1. **¿GitHub Actions ya verificó una descarga real de GDELT?** Nunca confirmado —
+   cada intento de chequear la pestaña Actions vía API chocó con rate limit sin
+   autenticar. Sigue siendo la verificación más urgente pendiente.
+2. **¿GDELT tiene cobertura completa de 2026?** El auditor legacy
+   (`spel_auditoria_total.py`) tenía un chequeo específico para esto
+   (`GDELT_GAP_2026`) — no se corrió el equivalente contra el pipeline nuevo.
+3. **¿El motor GDELT (Fases 1-5) sigue siendo el principal, o el motor rápido
+   (Fase 6) cambia la prioridad?** Pregunta abierta desde el 17 ago, todavía sin
+   que Altair la confirme.
+4. **`p90_entropy_global_default`** (necesario para `godel_active` vía
+   `orchestration/cycle.py`): sin valor por defecto a propósito — el propio
+   `compute_adaptive_percentile` documenta que P90 "no tiene default legacy
+   confirmado". Cada llamada real necesita decidir qué número usar.
+5. **DEU como único proxy de "Eurozona/BCE"** en `GOBIERNO_COUNTRY_FILTERS`: ¿alcanza
+   solo, o hace falta sumar FRA/ITA? Sin backtest, documentado como pendiente desde
+   que se escribió `classify_gdelt_event`.
+6. **GBPUSD/USDJPY/USDCHF/AUDUSD** ya tienen precio real (`DerivAdapter`) pero NO
+   tienen clasificación GDELT — `FX_GOBIERNO_ONLY_ASSETS` solo cubre EURUSD. Decidir
+   qué país no-USA representa a cada banco central (BoE/BoJ/SNB/RBA) sigue pendiente.
+7. **Transfer Entropy real (Schreiber) vs. el proxy portado**: existe una versión más
+   rigurosa en `spel_math_engine.py` (con Hurst, backend `pyinform`), pero ese archivo
+   tiene 177 referencias rotas a numpy/polars sin auditar — no se tocó esta sesión.
+8. **Índices de Volatilidad (VOL10-VOL100)**: tienen precio real, cero vía de scoring
+   — GDELT no aplica por diseño (Fase 6), pero no existe todavía una alternativa
+   técnica pura para ellos. `orchestration/cycle.py` los excluye a propósito.
+9. **Isolation Forest**: el legacy ya lo usaba para detectar anomalías en la entropía
+   GDELT (`PARAM_ISO`, umbral 0.6) — es de la misma familia que Random Forest. Nunca
+   se portó al repo nuevo. Ver `FASE2_NOTAS_ARQUITECTURA_MODELO.md`.
+10. **Alpaca**: cero código en el repo nuevo, solo la decisión de mantenerlo en modo
+    paper (17 ago). Cuando el amigo de Altair complete la verificación con Banco
+    Pichincha, hace falta construir el adapter desde cero — no existe ni un stub.
 
-Resultado posible A: 105/105 → el push llegó, Fase 1 avanza a decidir `deriv.py` + auditar `core/scoring.py`.
-Resultado posible B: 82/82 (sin AdapterChain) → el push no llegó nunca, hay que aplicar el patch de nuevo desde el notebook de Colab.
+---
 
-**No asumir cuál de los dos es. Correrlo y ver.**
+## 🖥️ SPEL_Control_Panel.ipynb — mejoras concretas para producción
+
+No auditado línea por línea esta sesión (34.6 KB, no se justificó el costo de leerlo
+completo todavía) — estas son mejoras identificadas por los síntomas reales que ya
+aparecieron, no una revisión exhaustiva:
+
+1. **Menú 4 (aplicar patch)**: defenderse de `.git/rebase-apply still exists`
+   corriendo `git am --abort` automáticamente si ese directorio existe, antes de
+   intentar aplicar — ya pasó una vez esta sesión, se resolvió reintentando a mano.
+2. **Menú 7 (ver estado/historial)**: que lea el contenido real de este archivo en
+   vez de reconstruir el estado a mano desde git log — reduce el riesgo de que
+   ESTADO.md y lo que el panel muestra diverjan otra vez.
+3. **Descarga de datos históricos para entrenamiento** (nuevo requisito, 18 ago):
+   el flujo actual de `DerivAdapter` trae velas recientes para scoring en vivo, no
+   un backfill masivo de meses/años para entrenar. Antes de que Fase 2 pueda
+   arrancar de verdad, hace falta confirmar si `ticks_history` de Deriv soporta
+   pedir historia profunda con `count` alto, o si hace falta paginar con `start`/`end`
+   — no verificado todavía, es la primera pregunta técnica real cuando se retome
+   Fase 2.
+4. **Separar "modo patch" de "modo entrenamiento"**: cuando exista un trainer real,
+   correrlo desde el mismo panel de aplicar-patches mezcla dos flujos de trabajo
+   distintos (uno es minutos, el otro puede ser horas). Mejor un menú aparte, no
+   una opción más en la lista actual.
+
+---
+
+## ▶️ PRÓXIMO PASO CONCRETO
+
+**Confirmar la Incógnita #1** (¿corrió ya GDELT real en GitHub Actions?) desde la
+pestaña Actions directamente — es lo único que decide si Fase 1 se puede dar por
+cerrada del lado de ingestion, antes de seguir construyendo sobre esa base sin
+saberlo con certeza.
 
 ---
 
 ## 📝 CÓMO ACTUALIZAR ESTE ARCHIVO
 
 Al final de cada sesión de código (no a mitad):
-1. Actualizar la tabla de "Dónde estamos exactamente" con lo que se verificó contra GitHub real
-2. Mover cualquier decisión nueva a "Decisiones de arquitectura ya tomadas"
-3. Actualizar "Próximo paso concreto" — una sola cosa, no una lista de deseos
-4. Commitear este archivo junto con el código de esa sesión, mismo commit o el siguiente inmediato
-5. Nunca dejar este archivo diciendo algo que no se verificó — si algo quedó a medias, decirlo explícitamente como 🟡, no como ✅
+1. Actualizar la tabla de módulos con lo que se verificó contra GitHub real.
+2. Mover cualquier decisión nueva a `decision-log.md`, no acá — este archivo es
+   estado, no bitácora de decisiones.
+3. Actualizar "Próximo paso concreto" — una sola cosa, no una lista de deseos.
+4. Commitear este archivo junto con el código de esa sesión, mismo commit o el
+   siguiente inmediato — la lección del 17 ago fue exactamente no hacer esto.
+5. Nunca dejar este archivo diciendo algo que no se verificó — si algo quedó a
+   medias, decirlo explícitamente como 🟡, no como ✅.
+6. Si este archivo lleva más de ~5 días sin tocarse mientras hay patches nuevos en
+   `main`, esa es la misma señal de circularidad que ya dispara "cortar y empezar de
+   nuevo con foco" — trátese como tal.
