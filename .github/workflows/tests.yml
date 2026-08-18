@@ -39,5 +39,12 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
+      # Separado a propósito, no fusionado en el paso de arriba: así el log
+      # del CI muestra qué es runtime real y qué es solo para probar. El
+      # motor NO necesita pyarrow (ver requirements-dev.txt); el auditor del
+      # data lake sí, y sin esto sus tests se saltearían en silencio.
+      - name: Instalar dependencias de desarrollo (solo para tests)
+        run: pip install -r requirements-dev.txt
+
       - name: Correr suite completa
         run: python -m pytest tests/ -v

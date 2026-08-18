@@ -1,0 +1,24 @@
+# Dependencias que SOLO hacen falta para desarrollar y para el CI --
+# nunca en el camino de ejecución del motor. Se instalan además de
+# requirements.txt, no en su lugar.
+#
+# POR QUÉ ESTE ARCHIVO EXISTE (y no simplemente agregar pyarrow arriba):
+# el repo tomó dos veces la decisión explícita de NO sumar Parquet al
+# runtime -- ingestion/gdelt_series.py eligió JSONL a propósito
+# (append-only nativo, legible a mano desde Android, sin dependencia
+# pesada) y ingestion/gdelt.py evitó polars por la misma razón. Esa
+# decisión sigue en pie: el motor no lee ni escribe Parquet.
+#
+# Pero tools/audit_data_lake.py SÍ necesita leer Parquet -- audita el data
+# lake legacy, que está en ese formato y no va a cambiar. Dejarlo como
+# dependencia opcional sin más significaría que sus 32 tests se saltean en
+# CI (verificado: venv limpio desde requirements.txt -> "307 passed,
+# 1 skipped"), o sea código entregado sin probar donde importa. Este
+# archivo resuelve las dos cosas a la vez: runtime liviano, auditor
+# probado de verdad en cada push.
+#
+# -r requirements.txt NO va acá a propósito: .github/workflows/tests.yml
+# instala los dos por separado, así queda visible en el log del CI qué
+# entró por cada lado.
+
+pyarrow
