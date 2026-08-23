@@ -4,6 +4,50 @@ Auditoría de decisiones de arquitectura (stream `DECISION_LOG`, Decisión #14).
 
 ---
 
+## 2026-08-23 (PR-1) — Convención de nombres de secretos por proveedor
+
+**Fuente:** documentación oficial de cada proveedor, y auditoría de `governance/secrets.py`
+contra el repo real (grep, no memoria).
+
+**Hallazgo:** los proveedores no llaman igual a su credencial. TwelveData y AlphaVantage
+la llaman `apikey`; Tiingo y Deriv la llaman `token`; Alpaca emite un par (key + secret).
+Uniformar los nombres del registro a la fuerza — todo a `_API_KEY`, por ejemplo — habría
+sido más prolijo de leer y peor de auditar: buscar el nombre de la variable en la doc del
+proveedor dejaría de dar resultado, que es justo lo que hace falta para verificar cada
+adapter contra su documentación real.
+
+Segundo hallazgo, del mismo grep: **no hay ningún punto de composición en el repo.** Nada
+instancia un adapter fuera de tests, `load_secret()` no se llama desde producción (los dos
+hits fuera de `tests/` son docstrings de `persistence.py`), y ningún workflow inyecta
+secretos (cero `secrets.` y cero `env:` en `.github/workflows/`). Las piezas existen y
+están probadas; nadie las conecta.
+
+**Decisión:** el sufijo de cada clave espeja el nombre que el proveedor usa en su propia
+doc (`_API_KEY` para apikey, `_API_TOKEN` para token, `_API_KEY` + `_SECRET_KEY` para el
+par de Alpaca). Se registran `TWELVEDATA_API_KEY`, `ALPHAVANTAGE_API_KEY` y
+`TIINGO_API_TOKEN` **antes** de que exista su adapter, a propósito: el registro es la
+lista de secretos que el proyecto reconoce, no la de los que ya se usan —
+`secrets_status_report()` los muestra ausentes hasta que se configuren, que es exactamente
+la visibilidad que faltaba.
+
+**No se tocó `load_secret()`.** La auditoría no encontró defecto: la prioridad
+env → Colab → `SecretError` es correcta, no expone valores en el mensaje de error, y no
+tiene la ofuscación de import que sí tenía el legado. Un test nuevo
+(`test_secret_error_de_proveedor_no_incluye_el_valor`) fija esa última propiedad por
+escrito, para que un "mejoremos el mensaje agregando contexto" falle en CI y no cuando un
+token real llegue a un log.
+
+**Descartado:** un nombre uniforme para todas las claves (ver Hallazgo). También se
+descartó agregar los secretos al workflow en este PR — inyectar un secreto que ningún
+código lee todavía es superficie de exposición sin beneficio; entra cuando entre el
+adapter que lo consume.
+
+**Validación pendiente:** las 3 claves no se probaron contra el endpoint real de ningún
+proveedor — no hay adapter que las use todavía (PR-2). Que el nombre sea el correcto está
+verificado contra la doc, no contra una respuesta HTTP 200.
+
+---
+
 ## 2026-08-16 — Fix: `nash_frozen_7d` normalizaba con la misma ventana del std
 
 **Fuente:** confirmado con números, no solo argumentado — 500 muestras aleatorias de micro-ruido (rango real ~0.0015).
