@@ -32,17 +32,37 @@ class SecretError(Exception):
 class SecretKey:
     """Un solo lugar con los nombres de variable — si se necesita un
     secreto nuevo, se agrega acá, no se hardcodea el string en otro
-    archivo."""
-    TELEGRAM_TOKEN    = "TELEGRAM_TOKEN"
-    TELEGRAM_SISTEMA  = "TELEGRAM_SISTEMA"
-    TELEGRAM_SENALES  = "TELEGRAM_SENALES"
-    TELEGRAM_BACKUP   = "TELEGRAM_BACKUP"
-    TELEGRAM_CHAOS    = "TELEGRAM_CHAOS"
-    DERIV_API_TOKEN   = "DERIV_API_TOKEN"
-    DERIV_APP_ID      = "DERIV_APP_ID"
-    ALPACA_API_KEY    = "ALPACA_API_KEY"
-    ALPACA_SECRET_KEY = "ALPACA_SECRET_KEY"
-    GITHUB_TOKEN      = "GITHUB_TOKEN"
+    archivo.
+
+    CONVENCIÓN DE NOMBRES, decisión explícita: el sufijo espeja cómo el
+    proveedor llama a su propia credencial en su documentación oficial.
+    TwelveData y AlphaVantage la llaman `apikey` -> `_API_KEY`; Tiingo y
+    Deriv la llaman `token` -> `_API_TOKEN`; Alpaca emite un par ->
+    `_API_KEY` + `_SECRET_KEY`. El motivo es práctico: buscar el nombre
+    de la variable en la doc del proveedor tiene que dar resultado.
+    Uniformar a la fuerza (todo a `_API_KEY`, por ejemplo) rompería esa
+    correspondencia y haría más difícil auditar cada adapter contra su
+    documentación real.
+
+    Las 3 claves de proveedores de OHLCV se registran ANTES de que exista
+    su adapter, a propósito: este registro es la lista de secretos que el
+    proyecto reconoce, no la de los que ya se usan. `secrets_status_report()`
+    los muestra ausentes hasta que se configuren, que es exactamente la
+    visibilidad que hacía falta.
+    """
+    TELEGRAM_TOKEN       = "TELEGRAM_TOKEN"
+    TELEGRAM_SISTEMA     = "TELEGRAM_SISTEMA"
+    TELEGRAM_SENALES     = "TELEGRAM_SENALES"
+    TELEGRAM_BACKUP      = "TELEGRAM_BACKUP"
+    TELEGRAM_CHAOS       = "TELEGRAM_CHAOS"
+    DERIV_API_TOKEN      = "DERIV_API_TOKEN"
+    DERIV_APP_ID         = "DERIV_APP_ID"
+    ALPACA_API_KEY       = "ALPACA_API_KEY"
+    ALPACA_SECRET_KEY    = "ALPACA_SECRET_KEY"
+    GITHUB_TOKEN         = "GITHUB_TOKEN"
+    TWELVEDATA_API_KEY   = "TWELVEDATA_API_KEY"
+    ALPHAVANTAGE_API_KEY = "ALPHAVANTAGE_API_KEY"
+    TIINGO_API_TOKEN     = "TIINGO_API_TOKEN"
 
     @classmethod
     def all_keys(cls) -> list[str]:

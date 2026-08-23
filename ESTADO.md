@@ -31,8 +31,9 @@ FASE 6 — Motor streaming multi-timeframe   🟡 Infraestructura lista, señal 
 
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-242 → 307 tests desde el 17 ago (65 tests nuevos en un día de trabajo). Todo lo de
-abajo corrió en clon 100% ajeno, venv limpio desde `requirements.txt`, más de una vez.
+242 → 343 tests desde el 17 ago (65 tests nuevos en un día de trabajo). Todo lo de
+abajo corrió en clon 100% ajeno, venv limpio desde `requirements.txt`, 10 corridas
+seguidas sin intermitencia.
 
 | Módulo | Qué hace | Tests | Estado |
 |---|---:|---:|---|
@@ -44,13 +45,24 @@ abajo corrió en clon 100% ajeno, venv limpio desde `requirements.txt`, más de 
 | `ingestion/training_dataset.py` | Une OHLCV + serie GDELT, forward-fill, coverage_ratio explícito | 7 | ✅ |
 | `orchestration/cycle.py` | Corre vitality/nash/godel sobre 5 activos a la vez | 10 | ✅ |
 | `execution/circuit_breaker.py` + `execution_guard.py` | Guardrails duros — congelados hasta F4 | 31 | ✅ |
-| `governance/persistence.py` + `secrets.py` | 4 streams, SecretKey único | 24 | ✅ |
+| `governance/persistence.py` + `secrets.py` | 4 streams, SecretKey único (13 claves) | 28 | ✅ |
 | `tools/heartbeat.py` + `.github/workflows/heartbeat.yml` | Trigger `schedule:` real — **desactivado a propósito**, ver Fase 6 | — | ✅ código, 🔴 apagado |
 
 **No existe todavía, confirmado por ausencia real (no supuesto):** ningún adapter de
 precio para NVDA/XAU/BTC/NIFTY50 (cero `AlpacaAdapter`, `TiingoAdapter` en el repo —
 grep de `class.*Adapter` en `ingestion/adapters.py` da un solo resultado: `DerivAdapter`).
 Ningún trainer de LSTM. Ningún ruteo de órdenes de ningún tipo.
+
+**Hallazgo relacionado — no hay ningún punto de composición.** No es que falte un
+adapter: falta el lugar donde algo se arma y corre de verdad. Verificado por grep,
+las tres mitades del mismo hueco: (1) nada instancia un adapter fuera de tests —
+`DerivAdapter(` no aparece en ningún archivo de producción, solo su propia definición
+de clase; (2) `load_secret()` no se llama desde producción — los únicos dos hits fuera
+de `tests/` son menciones en docstrings de `governance/persistence.py`, no llamadas;
+(3) los secretos de proveedores están registrados en `SecretKey` pero ningún workflow
+los inyecta — cero `secrets.` y cero `env:` en `.github/workflows/`. Es decir: las
+piezas existen y están probadas, pero nadie las conecta todavía. Eso es lo que
+`orchestration/` tiene que cerrar, y es una brecha distinta de "faltan adapters".
 
 ---
 
