@@ -22,6 +22,19 @@ configuración, así que la bandera `volume_available` se deriva de lo que de ve
 (`any("volume" in v for v in values)`), no de una regla por tipo de símbolo. Una regla
 declarada se rompe en silencio con el primer instrumento que no encaje; una observación no.
 
+> **Corrección con evidencia, 2026-08-23 (mismo día, tras conseguir las capturas
+> reales):** la formulación de arriba —"forex no, acciones sí"— era una hipótesis
+> razonable y es **falsa**. La captura real de `BTC/USD` (exchange Binance, Digital
+> Currency) tampoco trae `volume`: de los tres instrumentos capturados, el único con
+> volumen es AAPL. No hay regla por clase de activo que sirva.
+>
+> Lo que importa acá no es que la hipótesis fuera equivocada, sino que **la decisión no
+> dependía de ella**: el código nunca declaró la regla, la observó. Verificado por
+> mutación — sustituir `any("volume" in v ...)` por una regla declarada deja 4 de 28
+> tests en rojo, y el primero en caer es el que parsea la captura real de BTC. Con una
+> regla declarada, BTC habría quedado marcado con volumen disponible y el relleno `0.0`
+> habría entrado al pipeline como si fuera un dato real, sin que nada lo señalara.
+
 **Hallazgo 3 — la barra diaria no tiene hora, y eso cambia dos cosas a la vez.** El
 `datetime` diario viene como fecha sola (`"2026-08-22"`). Primero: mandar `timezone` en un
 intervalo sin hora no reinterpreta nada e invita a que el proveedor corra la fecha un día.
@@ -69,22 +82,33 @@ cuenta no cubre. El mensaje nombra el plan en el segundo caso.
 status HTTP para detectar errores (Hallazgo 4); leer la key del entorno (Decisión 6);
 agregar `XAU/USD` sin evidencia (Decisión 1).
 
-**Validación pendiente — el hueco real de este PR, declarado y no disimulado:** los
-fixtures de `tests/test_twelvedata_adapter.py` **no son capturas reales de la API**. Están
-construidos a partir de la forma documentada del endpoint, con valores inventados, y están
-marcados como tales en el docstring del archivo. El entorno donde se escribió esto no pudo
-capturarlas: sin `TWELVEDATA_API_KEY` configurada, y con `api.twelvedata.com` fuera de la
-política de red del sandbox (403 al CONNECT — denegación de política, no error del
-servidor). Firmar valores inventados como "respuesta real" habría sido exactamente el
-patrón que este proyecto prohíbe, así que se dejaron rotulados.
+**Fixtures — resuelto el mismo día, con capturas reales.** El adapter se escribió con
+fixtures sintéticos porque el entorno no podía capturar nada (sin `TWELVEDATA_API_KEY`, y
+`api.twelvedata.com` fuera de la política de red del sandbox: 403 al CONNECT, denegación
+de política, no error del servidor). Se dejaron rotulados como sintéticos en vez de
+firmarlos como reales. **Ya fueron reemplazados por las tres capturas del 2026-08-23**
+(EUR/USD, BTC/USD, AAPL en 1day, literales).
 
-Lo que los 28 tests offline sí prueban es la FORMA —qué campos se leen, cómo se traduce
-cada error, qué se manda en la petición—, y eso no depende de los valores: pegar las
-capturas reales debería dejar la suite en verde sin tocar una aserción. Los dos supuestos
-que una captura real podría desmentir están marcados `SUPUESTO DE FORMA` en el archivo
-(forex sin `volume`; cripto con `volume`). El test `live` (marker `live` + skipif sobre la
-credencial) es el que cierra el hueco de verdad — hasta que corra una vez con clave real,
-este adapter es 🟡 y no ✅.
+La predicción que se dejó escrita entonces —"pegar las capturas reales debería dejar la
+suite en verde sin tocar una aserción"— **se cumplió a medias, y la mitad que falló es la
+más valiosa**: la forma de la petición y la traducción de errores no se movieron, pero uno
+de los dos supuestos de forma resultó falso (BTC sin volumen, ver la corrección en
+Hallazgo 2). El conteo no cambió: 28 offline + 1 live, antes y después.
+
+Sobreviven dos fixtures sintéticos, marcados y con motivo declarado:
+- **contrafáctico deliberado** (forex *con* volumen): su valor depende de que NO sea real
+  — es el que atrapa una regla por clase de activo en la dirección que las capturas
+  reales no cubren.
+- **intradía por necesidad**: las tres capturas son diarias y hay dos comportamientos
+  intradía que probar; ambos dependen del argumento `timeframe` y de la petición emitida,
+  no de los valores del payload. Se reemplaza cuando haya una captura intradía real.
+
+**Validación pendiente:** el test `live` (marker `live` + skipif sobre la credencial)
+**todavía no corrió nunca con clave real**. Lo que sigue sin confirmar contra la API viva
+es exactamente lo que ningún fixture puede cubrir, por real que sea: el cliente httpx que
+el adapter abre y cierra solo (los tests offline inyectan el suyo, así que esa rama de
+`_get()` nunca se ejecuta), la autenticación aceptada de verdad, y la forma intradía.
+Hasta entonces este adapter es 🟡 y no ✅.
 
 ---
 

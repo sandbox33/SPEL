@@ -5,31 +5,36 @@ Cobertura de TwelveDataAdapter. Ningún test offline toca la red: el
 transporte se inyecta con httpx.MockTransport, no se monkeypatchea httpx
 por dentro.
 
-⚠️ PROCEDENCIA DE LOS FIXTURES — LEER ANTES DE CONFIAR EN ESTOS LITERALES.
+PROCEDENCIA DE LOS FIXTURES — tres son capturas reales, dos son sintéticos
+a propósito, y la diferencia está marcada en cada uno.
 
-Estas tres respuestas NO son capturas reales de la API. Están construidas a
-partir de la FORMA documentada del endpoint `time_series` (bloque `meta`,
-lista `values` con `datetime`/`open`/`high`/`low`/`close` y `volume` solo en
-algunos instrumentos, `status`), y los valores numéricos son inventados.
+CAPTURAS REALES (`api.twelvedata.com/time_series`, 2026-08-23):
+`RESPUESTA_EURUSD_1DAY`, `RESPUESTA_BTCUSD_1DAY`, `RESPUESTA_AAPL_1DAY`.
+Valores literales, sin retocar.
 
-Se dejan así, marcados, en vez de rotularlos como capturas reales, porque el
-entorno donde se escribió este patch no pudo hacer ninguna de las dos cosas
-que harían falta para capturarlas: no hay `TWELVEDATA_API_KEY` configurada, y
-`api.twelvedata.com` está fuera de la política de red del sandbox (el gateway
-responde 403 al CONNECT — denegación de política, no error del servidor).
-Inventar valores y firmarlos como "respuesta real del 23 ago" sería
-exactamente el patrón que este proyecto prohíbe.
+HALLAZGO QUE TRAJERON ESAS CAPTURAS, y es el motivo por el que valía la pena
+conseguirlas: **BTC/USD NO trae `volume`.** La versión anterior de este
+archivo suponía que sí —"forex no, cripto y acciones sí"— y la captura real
+lo desmiente: de los tres instrumentos, el único que trae volumen es AAPL.
+El adapter no necesitó ni un cambio, y eso no es suerte: `volume_available`
+se deriva de si la clave VINO en la respuesta, nunca de una regla por clase
+de activo (ver `decision-log.md`, PR-3, Decisión 3). Una regla declarada
+habría marcado BTC con volumen disponible y el relleno 0.0 habría entrado al
+pipeline como si fuera un dato.
 
-QUÉ CAMBIA Y QUÉ NO cuando se peguen las capturas reales: lo que estos tests
-verifican es la FORMA (qué campos se leen, cómo se traduce cada error, qué
-se manda en la petición), y eso no depende de los números. Reemplazar los
-literales por las capturas reales debería dejar la suite en verde sin tocar
-una sola aserción; si algo se rompe ahí, el hallazgo es real y hay que
-mirarlo. Los dos únicos supuestos de forma que una captura real podría
-desmentir están marcados con `SUPUESTO DE FORMA` más abajo.
+SINTÉTICOS, marcados como tales y con motivo:
+  - `RESPUESTA_FOREX_CON_VOLUMEN_SINTETICA` — contrafáctico deliberado. Su
+    valor está justamente en que no puede existir en la realidad observada:
+    prueba que la derivación de `volume_available` mira la respuesta y no el
+    tipo de símbolo. Una regla por clase de activo lo rompería.
+  - `RESPUESTA_BTCUSD_1H_SINTETICA` — las tres capturas disponibles son
+    diarias, y hacen falta dos tests sobre el comportamiento intradía. Lo
+    que esos dos verifican es la PETICIÓN que se emite y el flag que decide
+    el `timeframe`, no los valores del payload.
 
-El test `live` del final es el que sí toca la red: corre solo con
-TWELVEDATA_API_KEY presente, y es el que cierra este hueco de verdad.
+El test `live` del final es el que toca la red de verdad: corre solo con
+TWELVEDATA_API_KEY presente. Hasta que corra una vez, lo intradía y el
+manejo del cliente httpx propio siguen sin confirmar contra la API real.
 """
 
 from __future__ import annotations
@@ -53,64 +58,91 @@ API_KEY_FALSA = "clave-de-prueba-que-no-debe-filtrarse"
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  Fixtures — forma documentada del endpoint time_series (ver ⚠️ arriba)
+#  Capturas REALES de la API — 2026-08-23, literales, sin retocar
 # ══════════════════════════════════════════════════════════════════════════
 
-#: Forex diario. SUPUESTO DE FORMA: los pares de forex no traen `volume`.
+#: EUR/USD 1day — Physical Currency, SIN volume.
 RESPUESTA_EURUSD_1DAY = {
-    "meta": {
-        "symbol": "EUR/USD",
-        "interval": "1day",
-        "currency_base": "Euro",
-        "currency_quote": "US Dollar",
-        "type": "Physical Currency",
-    },
+    "meta": {"symbol": "EUR/USD", "interval": "1day",
+             "currency_base": "Euro", "currency_quote": "US Dollar",
+             "type": "Physical Currency"},
     "values": [
-        {"datetime": "2026-08-20", "open": "1.16542", "high": "1.16893",
-         "low": "1.16401", "close": "1.16775"},
-        {"datetime": "2026-08-21", "open": "1.16775", "high": "1.17012",
-         "low": "1.16688", "close": "1.16934"},
+        {"datetime": "2026-08-21", "open": "1.1679", "high": "1.17108",
+         "low": "1.16694", "close": "1.16764"},
+        {"datetime": "2026-08-22", "open": "1.16764", "high": "1.16933",
+         "low": "1.16715", "close": "1.16788"},
     ],
     "status": "ok",
 }
 
-#: Cripto intradía. SUPUESTO DE FORMA: cripto sí trae `volume`.
-RESPUESTA_BTCUSD_1H = {
-    "meta": {
-        "symbol": "BTC/USD",
-        "interval": "1h",
-        "currency_base": "Bitcoin",
-        "currency_quote": "US Dollar",
-        "exchange": "Coinbase Pro",
-        "type": "Digital Currency",
-    },
+#: BTC/USD 1day — exchange=Binance. Digital Currency, SIN volume.
+#: Desmiente el supuesto anterior de que cripto trae volumen: de los tres
+#: instrumentos capturados, el único con `volume` es AAPL. Ver el docstring
+#: del módulo — el adapter no necesitó cambios porque nunca dependió de esa
+#: suposición.
+RESPUESTA_BTCUSD_1DAY = {
+    "meta": {"symbol": "BTC/USD", "interval": "1day",
+             "currency_base": "Bitcoin", "currency_quote": "US Dollar",
+             "exchange": "Binance", "type": "Digital Currency"},
     "values": [
-        {"datetime": "2026-08-21 08:00:00", "open": "63120.40",
-         "high": "63480.00", "low": "62990.15", "close": "63301.75",
-         "volume": "142.38"},
-        {"datetime": "2026-08-21 09:00:00", "open": "63301.75",
-         "high": "63655.20", "low": "63250.00", "close": "63588.90",
-         "volume": "118.62"},
+        {"datetime": "2026-08-21", "open": "73027.02", "high": "79500",
+         "low": "73027.02", "close": "78338.03"},
+        {"datetime": "2026-08-22", "open": "78338.03", "high": "78828.15",
+         "low": "76500", "close": "77074.93"},
     ],
     "status": "ok",
 }
 
-#: Acción diaria — trae `volume` entero grande.
+#: AAPL 1day — Common Stock NASDAQ/XNGS, CON volume.
 RESPUESTA_AAPL_1DAY = {
-    "meta": {
-        "symbol": "AAPL",
-        "interval": "1day",
-        "currency": "USD",
-        "exchange_timezone": "America/New_York",
-        "exchange": "NASDAQ",
-        "mic_code": "XNGS",
-        "type": "Common Stock",
-    },
+    "meta": {"symbol": "AAPL", "interval": "1day", "currency": "USD",
+             "exchange_timezone": "America/New_York", "exchange": "NASDAQ",
+             "mic_code": "XNGS", "type": "Common Stock"},
     "values": [
-        {"datetime": "2026-08-20", "open": "226.05", "high": "228.34",
-         "low": "225.41", "close": "227.76", "volume": "38412900"},
-        {"datetime": "2026-08-21", "open": "227.90", "high": "229.15",
-         "low": "227.02", "close": "228.44", "volume": "41027300"},
+        {"datetime": "2026-08-19", "open": "310.14001", "high": "319.28000",
+         "low": "309.60001", "close": "316.82999", "volume": "50505600"},
+        {"datetime": "2026-08-20", "open": "317.45999", "high": "320.28000",
+         "low": "310.64999", "close": "311.29999", "volume": "40959200"},
+    ],
+    "status": "ok",
+}
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  Fixtures SINTÉTICOS — inventados a propósito, cada uno con su motivo
+# ══════════════════════════════════════════════════════════════════════════
+
+#: CONTRAFÁCTICO DELIBERADO: un par de forex que sí trae `volume`. Con las
+#: capturas reales en la mano, ningún instrumento se comporta así — y ese es
+#: exactamente el punto. Si `volume_available` se derivara del tipo de
+#: símbolo ("forex no trae volumen") en vez de la respuesta, este caso daría
+#: False y el 999 se perdería. Es el único fixture cuyo valor depende de que
+#: NO sea real.
+RESPUESTA_FOREX_CON_VOLUMEN_SINTETICA = {
+    "meta": {"symbol": "EUR/USD", "interval": "1day",
+             "currency_base": "Euro", "currency_quote": "US Dollar",
+             "type": "Physical Currency"},
+    "values": [
+        {"datetime": "2026-08-21", "open": "1.1679", "high": "1.17108",
+         "low": "1.16694", "close": "1.16764", "volume": "999"},
+    ],
+    "status": "ok",
+}
+
+#: SINTÉTICO POR NECESIDAD: las tres capturas disponibles son diarias, y hay
+#: dos comportamientos intradía que probar (se manda `timezone`, y
+#: `timestamp_is_convention` queda en False). Los dos dependen del argumento
+#: `timeframe` y de la petición emitida, no de los valores del payload — así
+#: que los OHLC de abajo son los de la captura real de BTC/USD y lo único
+#: inventado es el `datetime` con hora. Se reemplaza por una captura
+#: intradía real en cuanto haya una.
+RESPUESTA_BTCUSD_1H_SINTETICA = {
+    "meta": {"symbol": "BTC/USD", "interval": "1h",
+             "currency_base": "Bitcoin", "currency_quote": "US Dollar",
+             "exchange": "Binance", "type": "Digital Currency"},
+    "values": [
+        {"datetime": "2026-08-22 08:00:00", "open": "78338.03",
+         "high": "78828.15", "low": "76500", "close": "77074.93"},
     ],
     "status": "ok",
 }
@@ -138,24 +170,27 @@ async def test_parseo_forex_eurusd():
 
     assert list(df.columns) == list(REQUIRED_COLUMNS)
     assert len(df) == 2
-    assert df["close"].iloc[-1] == pytest.approx(1.16934)
+    assert df["close"].iloc[-1] == pytest.approx(1.16788)
     assert str(df["timestamp"].dt.tz) == "UTC"
 
 
 async def test_parseo_cripto_btcusd():
-    df = await adapter_con(RESPUESTA_BTCUSD_1H).fetch_ohlcv("BTCUSD", "1h", 2)
+    """La captura real de BTC/USD (Binance) NO trae `volume` — el 0.0 de la
+    columna es relleno, y por eso queda marcado como tal."""
+    df = await adapter_con(RESPUESTA_BTCUSD_1DAY).fetch_ohlcv("BTCUSD", "1d", 2)
 
     assert len(df) == 2
-    assert df["close"].iloc[-1] == pytest.approx(63588.90)
-    assert df["volume"].iloc[-1] == pytest.approx(118.62)
+    assert df["close"].iloc[-1] == pytest.approx(77074.93)
+    assert (df["volume"] == 0.0).all()
+    assert df.attrs["volume_available"] is False
 
 
 async def test_parseo_accion_aapl():
     df = await adapter_con(RESPUESTA_AAPL_1DAY).fetch_ohlcv("AAPL", "1d", 2)
 
     assert len(df) == 2
-    assert df["close"].iloc[-1] == pytest.approx(228.44)
-    assert df["volume"].iloc[-1] == pytest.approx(41027300)
+    assert df["close"].iloc[-1] == pytest.approx(311.29999)
+    assert df["volume"].iloc[-1] == pytest.approx(40959200)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -173,19 +208,14 @@ async def test_volume_available_false_cuando_la_fuente_no_lo_trae():
 
 async def test_volume_available_true_se_deriva_de_lo_observado_no_del_simbolo():
     """La bandera sale de si la clave VINO en la respuesta, no de una regla
-    'forex no, acciones sí'. Por eso el caso True se prueba con un símbolo
-    de FOREX que sí trae volumen: una regla por tipo de instrumento daría
-    False acá y se rompería en silencio. (Que AAPL parsea su volumen real
-    ya lo cubre test_parseo_accion_aapl.)"""
-    respuesta = {
-        "meta": {"symbol": "EUR/USD", "interval": "1day"},
-        "values": [
-            {"datetime": "2026-08-20", "open": "1.1", "high": "1.2",
-             "low": "1.0", "close": "1.15", "volume": "999"},
-        ],
-        "status": "ok",
-    }
-    df = await adapter_con(respuesta).fetch_ohlcv("EURUSD", "1d", 1)
+    por clase de activo. Se prueba con el fixture CONTRAFÁCTICO (forex con
+    volumen, sintético a propósito) porque es el caso que una regla
+    declarada rompería: con las capturas reales en la mano, el único
+    instrumento con volumen es AAPL, así que una regla del tipo 'forex no
+    trae volumen' pasaría los tests reales y fallaría acá.
+
+    Que AAPL parsea su volumen real ya lo cubre test_parseo_accion_aapl."""
+    df = await adapter_con(RESPUESTA_FOREX_CON_VOLUMEN_SINTETICA).fetch_ohlcv("EURUSD", "1d", 1)
 
     assert df.attrs["volume_available"] is True
     assert df["volume"].iloc[0] == pytest.approx(999)
@@ -200,7 +230,7 @@ async def test_timestamp_is_convention_true_en_diario():
 
 
 async def test_timestamp_is_convention_false_en_intradia():
-    df = await adapter_con(RESPUESTA_BTCUSD_1H).fetch_ohlcv("BTCUSD", "1h", 2)
+    df = await adapter_con(RESPUESTA_BTCUSD_1H_SINTETICA).fetch_ohlcv("BTCUSD", "1h", 1)
 
     assert df.attrs["timestamp_is_convention"] is False
 
@@ -250,7 +280,7 @@ async def test_diario_no_manda_timezone():
 
 async def test_intradia_si_manda_timezone_utc():
     captura: list[httpx.Request] = []
-    await adapter_con(RESPUESTA_BTCUSD_1H, captura=captura).fetch_ohlcv("BTCUSD", "1h", 2)
+    await adapter_con(RESPUESTA_BTCUSD_1H_SINTETICA, captura=captura).fetch_ohlcv("BTCUSD", "1h", 1)
 
     assert captura[0].url.params["timezone"] == "UTC"
 
@@ -266,7 +296,7 @@ async def test_respuesta_desc_se_reordena_localmente():
     df = await adapter_con(desc).fetch_ohlcv("EURUSD", "1d", 2)
 
     assert df["timestamp"].is_monotonic_increasing
-    assert df["close"].iloc[-1] == pytest.approx(1.16934)
+    assert df["close"].iloc[-1] == pytest.approx(1.16788)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -415,9 +445,11 @@ async def test_ningun_mensaje_de_error_expone_la_key():
     reason="requiere TWELVEDATA_API_KEY real — no corre en CI ni sin credencial",
 )
 async def test_live_eurusd_diario_contra_la_api_real():
-    """Lo que los fixtures no pueden probar: que la FORMA supuesta coincide
-    con la que el proveedor devuelve de verdad. Si este test pasa, los
-    supuestos marcados como `SUPUESTO DE FORMA` arriba quedan confirmados."""
+    """Lo que ningún fixture puede probar, por real que sea: que el camino
+    completo funciona contra la API viva — el cliente httpx propio (el que
+    el adapter abre y cierra solo, que los tests offline nunca ejercitan
+    porque inyectan el suyo), la autenticación aceptada de verdad, y que la
+    forma de la respuesta sigue siendo la de las capturas del 2026-08-23."""
     adapter = TwelveDataAdapter(api_key=os.environ["TWELVEDATA_API_KEY"])
 
     df = await adapter.fetch_ohlcv("EURUSD", "1d", 5)
@@ -426,6 +458,6 @@ async def test_live_eurusd_diario_contra_la_api_real():
     assert not df.empty
     assert df["timestamp"].is_monotonic_increasing
     assert str(df["timestamp"].dt.tz) == "UTC"
-    # El supuesto de forma que más importa confirmar: forex sin volumen.
+    # Confirmado en la captura del 2026-08-23: forex no trae volumen.
     assert df.attrs["volume_available"] is False
     assert df.attrs["timestamp_is_convention"] is True

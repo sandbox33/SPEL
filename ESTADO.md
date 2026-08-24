@@ -57,14 +57,30 @@ y NIFTY50 siguen sin fuente**, y XAU específicamente quedó fuera del mapa por 
 evidencia de que el plan gratuito lo cubra, no por olvido. Ningún trainer de LSTM.
 Ningún ruteo de órdenes de ningún tipo.
 
-⚠️ **Los fixtures de TwelveData son de forma documentada, no capturas reales.** El
-entorno donde se escribió el adapter no tenía `TWELVEDATA_API_KEY` ni alcance de red a
-`api.twelvedata.com` (403 de política en el gateway). Los 28 tests offline verifican la
-FORMA —qué campos se leen, cómo se traduce cada error, qué se manda en la petición—, que
-no depende de los valores; los dos supuestos de forma que una captura real podría
-desmentir están marcados como `SUPUESTO DE FORMA` en el archivo de tests. El test `live`
-(marker `live`, skipif sobre la credencial) es el que cierra ese hueco: hasta que corra
-una vez con clave real, esto es 🟡, no ✅.
+**Los fixtures de TwelveData ya son capturas reales** (2026-08-23, literales): EUR/USD,
+BTC/USD y AAPL en 1day. Reemplazan a los sintéticos con los que se escribió el adapter, y
+**trajeron un hallazgo que desmiente el supuesto anterior: BTC/USD NO trae `volume`.** De
+los tres instrumentos, el único con volumen es AAPL — la regla intuitiva "forex no,
+cripto y acciones sí" es falsa.
+
+El adapter no necesitó ni un cambio, y eso no es suerte: `volume_available` se deriva de
+si la clave vino en la respuesta, nunca de una regla por clase de activo. Verificado por
+mutación —sustituir la derivación observada por una regla declarada deja **4 de 28 tests
+en rojo**, y el primero en caer es el que parsea la captura real de BTC. Una regla
+declarada habría marcado BTC con volumen disponible y el relleno `0.0` habría entrado al
+pipeline como si fuera un dato.
+
+Quedan dos fixtures sintéticos, marcados como tales y con motivo: un contrafáctico
+deliberado (forex *con* volumen — su valor está en que no puede existir en la realidad
+observada, y es el que atrapa la regla declarada en la dirección inversa) y uno intradía
+por necesidad (las tres capturas son diarias, y hay dos comportamientos intradía que
+probar que dependen del argumento `timeframe`, no del payload).
+
+🟡 **Sigue amarillo, no verde**, y por una razón más chica que antes: el test `live`
+(marker `live`, skipif sobre la credencial) todavía no corrió nunca con clave real. Lo que
+falta confirmar contra la API viva es el camino que ningún fixture ejercita — el cliente
+httpx que el adapter abre y cierra solo (los tests offline inyectan el suyo), la
+autenticación aceptada de verdad, y la forma intradía.
 
 **Hallazgo relacionado — no hay ningún punto de composición.** No es que falte un
 adapter: falta el lugar donde algo se arma y corre de verdad. Verificado por grep,
