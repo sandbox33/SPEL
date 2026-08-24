@@ -9,6 +9,7 @@ no se monkeypatchea la librería websockets por dentro.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
@@ -26,6 +27,7 @@ from ingestion.adapters import (
     BaseAdapter,
     DerivAdapter,
     REQUIRED_COLUMNS,
+    drop_unclosed_candles,
     validate_ohlcv_schema,
 )
 
@@ -649,3 +651,310 @@ class TestAdapterChain:
         assert adapter.calls == 3       # 3 intentos reales al adapter
         assert contador["n"] == 1       # pero un solo ciclo de event loop
         assert not resultado.is_degraded
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  CONTRATO DE DATOS OHLCV — velas cerradas, metadata de calidad, attrs
+#
+#  Reloj FIJO en todos estos tests: sin now_utc inyectado, un fixture con
+#  una vela deliberadamente "abierta" se convierte en cerrada apenas el
+#  reloj real avanza más allá de su cierre, y el test empieza a fallar solo
+#  a una hora del día que después nadie reproduce.
+# ══════════════════════════════════════════════════════════════════════════
+
+AHORA_FIJO = pd.Timestamp("2026-08-23T12:00:00Z")
+
+
+def _df_velas(timestamps: list[pd.Timestamp]) -> pd.DataFrame:
+    n = len(timestamps)
+    return pd.DataFrame({
+        "timestamp": pd.DatetimeIndex(timestamps),
+        "open": [1.10] * n,
+        "high": [1.11] * n,
+        "low": [1.09] * n,
+        "close": [1.105] * n,
+        "volume": [0.0] * n,
+    })
+
+
+# ── Validación de cierre (5) ──────────────────────────────────────────────
+
+def test_vela_abierta_es_rechazada_cuando_hay_granularity_s():
+    # Vela de 1h abierta a las 11:30 -> cierra 12:30, después de AHORA_FIJO.
+    df = _df_velas([pd.Timestamp("2026-08-23T11:30:00Z")])
+    with pytest.raises(AdapterDataError, match="sin cerrar"):
+        validate_ohlcv_schema(
+            df, source="test", symbol="X",
+            granularity_s=3600, now_utc=AHORA_FIJO,
+        )
+
+
+def test_vela_cerrada_es_aceptada_con_granularity_s():
+    # Vela de 1h abierta a las 10:00 -> cerró 11:00, antes de AHORA_FIJO.
+    df = _df_velas([pd.Timestamp("2026-08-23T10:00:00Z")])
+    validate_ohlcv_schema(
+        df, source="test", symbol="X",
+        granularity_s=3600, now_utc=AHORA_FIJO,
+    )  # no debe lanzar
+
+
+def test_sin_granularity_s_no_se_valida_el_cierre():
+    """require_closed=True significa 'valida el cierre cuando es posible
+    saberlo', no 'siempre'. Sin granularidad no se puede saber, y NO se
+    infiere del espaciado -- este es el caso de training_dataset.py:119."""
+    df = _df_velas([pd.Timestamp("2026-08-23T11:30:00Z")])
+    validate_ohlcv_schema(
+        df, source="training_dataset", symbol="X",
+        require_closed=True, granularity_s=None, now_utc=AHORA_FIJO,
+    )  # no debe lanzar: la vela está abierta pero es indecidible
+
+
+def test_sin_granularity_s_las_demas_validaciones_siguen_activas():
+    """Omitir la verificación de cierre no debe degradar el resto del
+    contrato -- si esto se rompiera, granularity_s=None sería un bypass
+    silencioso del validador entero."""
+    df = _df_velas([pd.Timestamp("2026-08-23T10:00:00Z")])
+    df["timestamp"] = df["timestamp"].dt.tz_localize(None)  # naive
+    with pytest.raises(AdapterDataError, match="timezone"):
+        validate_ohlcv_schema(
+            df, source="test", symbol="X",
+            granularity_s=None, now_utc=AHORA_FIJO,
+        )
+
+
+def test_require_closed_false_ignora_velas_abiertas():
+    df = _df_velas([pd.Timestamp("2026-08-23T11:30:00Z")])
+    validate_ohlcv_schema(
+        df, source="test", symbol="X",
+        require_closed=False, granularity_s=3600, now_utc=AHORA_FIJO,
+    )  # no debe lanzar
+
+
+# ── drop_unclosed_candles (4) ─────────────────────────────────────────────
+
+def test_drop_unclosed_candles_es_funcion_publica_del_modulo():
+    """La salvaguarda anti-fuga-temporal no puede ser cortesía de un
+    adapter: un adapter nuevo que no la reimplemente dejaría pasar la vela
+    en formación sin que nada lo detecte."""
+    import ingestion.adapters as mod
+    assert callable(mod.drop_unclosed_candles)
+    assert not hasattr(DerivAdapter, "_drop_unclosed_candle")
+
+
+def test_drop_unclosed_candles_no_muta_el_original():
+    df = _df_velas([
+        pd.Timestamp("2026-08-23T10:00:00Z"),
+        pd.Timestamp("2026-08-23T11:30:00Z"),
+    ])
+    resultado = drop_unclosed_candles(
+        df, 3600, source="test", symbol="X", now_utc=AHORA_FIJO,
+    )
+    assert len(df) == 2       # el original intacto
+    assert len(resultado) == 1
+
+
+def test_drop_unclosed_candles_con_dataframe_vacio():
+    df = _df_velas([])
+    resultado = drop_unclosed_candles(
+        df, 3600, source="test", now_utc=AHORA_FIJO,
+    )
+    assert resultado.empty
+
+
+def test_salida_de_drop_unclosed_candles_pasa_la_validacion_de_cierre():
+    """Las dos mitades del contrato tienen que encajar: lo que el filtro
+    deja pasar es exactamente lo que el validador acepta."""
+    df = _df_velas([
+        pd.Timestamp("2026-08-23T09:00:00Z"),
+        pd.Timestamp("2026-08-23T10:00:00Z"),
+        pd.Timestamp("2026-08-23T11:30:00Z"),
+    ])
+    limpio = drop_unclosed_candles(
+        df, 3600, source="test", symbol="X", now_utc=AHORA_FIJO,
+    )
+    validate_ohlcv_schema(
+        limpio, source="test", symbol="X",
+        granularity_s=3600, now_utc=AHORA_FIJO,
+    )  # no debe lanzar
+
+
+# ── AdapterResult: metadata de calidad (3) ────────────────────────────────
+
+def test_adapter_result_conserva_los_campos_de_calidad():
+    r = AdapterResult(
+        data=_ohlcv_valido(), adapter_name="x", symbol="EURUSD",
+        volume_available=False, timestamp_is_convention=True,
+        is_fallback=True, provider_status="rate_limited",
+    )
+    assert r.volume_available is False
+    assert r.timestamp_is_convention is True
+    assert r.is_fallback is True
+    assert r.provider_status == "rate_limited"
+
+
+def test_adapter_result_defaults_conservadores():
+    """Un adapter que no reporta estas dimensiones no debe quedar marcado
+    como sospechoso -- el default asume lo benigno."""
+    r = AdapterResult(data=_ohlcv_valido(), adapter_name="x", symbol="EURUSD")
+    assert r.volume_available is True
+    assert r.timestamp_is_convention is False
+    assert r.is_fallback is False
+    assert r.provider_status == "ok"
+
+
+def test_is_fallback_es_independiente_de_is_degraded():
+    """Un respaldo puede funcionar perfecto: venir de la segunda fuente no
+    significa que el dato esté mal."""
+    r = AdapterResult(
+        data=_ohlcv_valido(), adapter_name="respaldo", symbol="EURUSD",
+        is_fallback=True, is_degraded=False,
+    )
+    assert r.is_fallback is True
+    assert r.is_degraded is False
+
+
+# ── Transporte por df.attrs (4) ───────────────────────────────────────────
+
+def test_chain_levanta_attrs_del_dataframe_a_adapter_result():
+    df = _ohlcv_valido()
+    df.attrs["volume_available"] = False
+    df.attrs["timestamp_is_convention"] = True
+    df.attrs["provider_status"] = "rate_limited"
+
+    resultado = AdapterChain([FakeAdapter("fuente_a", [df])]).fetch("EURUSD")
+
+    assert resultado.volume_available is False
+    assert resultado.timestamp_is_convention is True
+    assert resultado.provider_status == "rate_limited"
+
+
+def test_adapter_sin_attrs_no_es_un_error():
+    """No escribir attrs no es incumplir el contrato -- es no reportar esa
+    dimensión. El chain aplica defaults conservadores."""
+    resultado = AdapterChain([FakeAdapter("fuente_a", [_ohlcv_valido()])]).fetch("EURUSD")
+
+    assert not resultado.is_degraded
+    assert resultado.volume_available is True
+    assert resultado.timestamp_is_convention is False
+    assert resultado.provider_status == "ok"
+
+
+def test_regresion_attrs_muere_en_merge_y_sobrevive_copy_y_sort():
+    """Documenta la razón de diseño de AdapterResult, medida no supuesta:
+    attrs sobrevive copy/sort_values y SE PIERDE en merge. Como
+    training_dataset.py hace exactamente un join OHLCV<->GDELT, usar attrs
+    como almacenamiento durable perdería la procedencia justo ahí, en
+    silencio. Si una versión futura de pandas cambia esto, este test falla
+    y alguien revisa la decisión en vez de heredarla a ciegas."""
+    df = _ohlcv_valido()
+    df.attrs["volume_available"] = False
+
+    assert df.copy().attrs == {"volume_available": False}
+    assert df.sort_values("timestamp").attrs == {"volume_available": False}
+
+    otro = pd.DataFrame({"timestamp": df["timestamp"], "entropy": [0.1, 0.2, 0.3]})
+    assert df.merge(otro, on="timestamp").attrs == {}
+
+
+@pytest.mark.asyncio
+async def test_deriv_reporta_volume_available_false():
+    """Deriv nunca reporta volumen: su doc oficial define la vela con
+    exactamente close/epoch/high/low/open. El 0.0 es relleno, y sin esta
+    bandera un 0.0 de relleno y un 0.0 de 'no se operó' son
+    indistinguibles."""
+    epoch = int(pd.Timestamp("2026-08-01T10:00:00Z").timestamp())
+    connector = make_connector([AUTH_OK, candles_response([make_candle(epoch)])])
+    adapter = DerivAdapter(api_token="t", app_id="1", connector=connector)
+
+    df = await adapter.fetch_ohlcv("EURUSD", "1h", 1)
+
+    assert df.attrs["volume_available"] is False
+    assert df.attrs["timestamp_is_convention"] is False
+
+
+# ── Logging (4) ───────────────────────────────────────────────────────────
+#  El logger del módulo es "spel.ingestion.adapters", NO "ingestion.adapters".
+
+def test_log_de_descarte_incluye_proveedor_y_simbolo(caplog):
+    df = _df_velas([pd.Timestamp("2026-08-23T11:30:00Z")])
+    with caplog.at_level(logging.INFO, logger="spel.ingestion.adapters"):
+        drop_unclosed_candles(
+            df, 3600, source="deriv", symbol="EURUSD", now_utc=AHORA_FIJO,
+        )
+    assert "deriv/EURUSD" in caplog.text
+
+
+def test_log_sin_simbolo_no_pega_un_none(caplog):
+    """symbol es opcional -- un dataset ya compuesto puede no tener uno
+    solo. Cuando falta, el log muestra el proveedor a secas, no 'deriv/None'."""
+    df = _df_velas([pd.Timestamp("2026-08-23T11:30:00Z")])
+    with caplog.at_level(logging.INFO, logger="spel.ingestion.adapters"):
+        drop_unclosed_candles(df, 3600, source="deriv", now_utc=AHORA_FIJO)
+    assert "[deriv]" in caplog.text
+    assert "None" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_log_extremo_a_extremo_con_deriv_adapter(caplog):
+    """El camino real: DerivAdapter pide velas, una está abierta, y el log
+    identifica proveedor e instrumento sin que el adapter tenga que
+    reimplementar nada."""
+    cerrada = int(pd.Timestamp("2026-08-01T10:00:00Z").timestamp())
+    abierta = int(pd.Timestamp.now(tz="UTC").timestamp())  # su hora cierra en el futuro
+    connector = make_connector([
+        AUTH_OK,
+        candles_response([make_candle(cerrada), make_candle(abierta)]),
+    ])
+    adapter = DerivAdapter(api_token="t", app_id="1", connector=connector)
+
+    with caplog.at_level(logging.INFO, logger="spel.ingestion.adapters"):
+        df = await adapter.fetch_ohlcv("EURUSD", "1h", 2)
+
+    assert len(df) == 1
+    assert "deriv/EURUSD" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_ningun_log_expone_valores_de_secreto(caplog):
+    """source y symbol se escriben al log -- nunca debe pasarse por ahí algo
+    derivado de un secreto. El token del adapter no puede aparecer."""
+    token = "token-secreto-que-no-debe-aparecer"
+    epoch = int(pd.Timestamp("2026-08-01T10:00:00Z").timestamp())
+    connector = make_connector([AUTH_OK, candles_response([make_candle(epoch)])])
+    adapter = DerivAdapter(api_token=token, app_id="app-id-secreto", connector=connector)
+
+    with caplog.at_level(logging.DEBUG, logger="spel.ingestion.adapters"):
+        await adapter.fetch_ohlcv("EURUSD", "1h", 1)
+
+    assert token not in caplog.text
+    assert "app-id-secreto" not in caplog.text
+
+
+# ── Red de seguridad (1) ──────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_deriv_arma_la_red_de_seguridad_pasando_granularity_s(monkeypatch):
+    """Verifica el ARGUMENTO, no el efecto -- y eso es deliberado: como
+    _to_dataframe ya filtró las velas abiertas, quitar granularity_s del
+    call site dejaría todos los demás tests en verde y desarmaría la red
+    de seguridad sin que nadie se entere. Este test es lo único que lo
+    detecta."""
+    import ingestion.adapters as mod
+
+    capturado = {}
+
+    def validate_espia(df, **kwargs):
+        capturado.update(kwargs)
+
+    monkeypatch.setattr(mod, "validate_ohlcv_schema", validate_espia)
+
+    epoch = int(pd.Timestamp("2026-08-01T10:00:00Z").timestamp())
+    connector = make_connector([AUTH_OK, candles_response([make_candle(epoch)])])
+    adapter = DerivAdapter(api_token="t", app_id="1", connector=connector)
+
+    await adapter.fetch_ohlcv("EURUSD", "15m", 1)
+
+    assert capturado["granularity_s"] == 900
+    assert capturado["require_closed"] is True
+    assert capturado["symbol"] == "EURUSD"
+    assert capturado["source"] == "deriv"

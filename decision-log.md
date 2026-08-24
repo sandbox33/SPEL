@@ -48,6 +48,86 @@ verificado contra la doc, no contra una respuesta HTTP 200.
 
 ---
 
+## 2026-08-23 (PR-2) — Contrato de datos OHLCV: velas cerradas, metadata de calidad y transporte de attrs
+
+**Fuente:** auditoría de `ingestion/adapters.py` contra el repo real, más comportamiento
+de pandas medido en la versión instalada (3.0.5), no citado de memoria ni de la doc.
+
+**Hallazgo 1 — la salvaguarda anti-fuga-temporal era un método privado de un solo
+adapter.** `DerivAdapter._drop_unclosed_candle` funcionaba bien, pero como método privado
+depende de que cada adapter nuevo se acuerde de reimplementarla. Un adapter que
+simplemente no la tenga deja pasar la vela en formación disfrazada de dato histórico, sin
+que nada lo detecte — que es exactamente la hipótesis #1 que Fase 2 tiene que descartar
+(fuga de horizonte).
+
+**Hallazgo 2 — `_to_dataframe` tenía un parámetro con el nombre equivocado.** Se llamaba
+`source` y su único call site le pasaba el símbolo del usuario
+(`_to_dataframe(..., source=symbol)`). El log resultante sí mostraba el instrumento
+(`[deriv] ... para EURUSD`), así que no había pérdida de información hoy — el problema es
+que el nombre decía "proveedor" y el valor era el instrumento, y al promover el filtro a
+una función que recibe AMBOS por separado, arrastrar ese nombre habría hecho que el
+proveedor se registrara como el símbolo. Es privado y ningún test lo invoca directo, así
+que el rename salió gratis; en cuanto hubiera un segundo call site dejaría de serlo.
+
+**Hallazgo 3 — un 0.0 de volumen es ambiguo y nada lo desambiguaba.** Deriv nunca reporta
+volumen (su doc oficial define la vela con exactamente close/epoch/high/low/open), así
+que el `0.0` que escribe el adapter es relleno. Sin una bandera explícita, ese relleno y
+un 0.0 legítimo de "no se operó en esta vela" son indistinguibles aguas abajo, y
+cualquier feature que promedie volumen mezcla las dos cosas en silencio.
+
+**Hallazgo 4 — `df.attrs` sirve como transporte y NO como almacenamiento, medido.** En
+pandas 3.0.5: sobrevive `copy()`, `sort_values()`, `concat()` y `reset_index()`, y **se
+pierde en `merge()`**. `ingestion/training_dataset.py` hace exactamente un join
+OHLCV↔GDELT, o sea que apoyarse en `attrs` para procedencia durable la perdería
+justo al armar el dataset de entrenamiento, sin excepción ni warning.
+
+**Decisiones:**
+
+1. `drop_unclosed_candles()` pasa a ser función de módulo, con `source` obligatorio
+   (proveedor), `symbol` opcional (instrumento) y `now_utc` inyectable. Lo último no es
+   comodidad: sin reloj fijo, un fixture con una vela deliberadamente abierta se vuelve
+   cerrada cuando el reloj avanza, y el test se vuelve intermitente.
+2. `validate_ohlcv_schema()` gana `require_closed` / `granularity_s` / `now_utc`
+   keyword-only, con defaults que no rompen ninguna llamada existente. Semántica
+   condicional: valida el cierre *cuando es posible saberlo*. **La granularidad nunca se
+   infiere del espaciado** — un dataset con huecos legítimos (fin de semana forex,
+   feriados) daría una inferencia equivocada, y una granularidad equivocada es peor que
+   ninguna. La verificación va al final, después de las estructurales: si falta
+   `timestamp` o no es UTC, ese error es más informativo.
+3. `AdapterResult` gana cuatro campos con default (`volume_available`,
+   `timestamp_is_convention`, `is_fallback`, `provider_status`) en vez de un tipo nuevo.
+   `is_fallback` es deliberadamente independiente de `is_degraded`: un respaldo puede
+   funcionar perfecto. `AdapterChain` levanta los attrs con `.get()` y default
+   conservador — un adapter que no escribe attrs no está incumpliendo el contrato, está
+   no reportando esa dimensión.
+4. Los cuatro campos entran también al log de auditoría persistido: sin ellos el log dice
+   de dónde vino cada dato pero no con qué calidad, y esa es justo la pregunta que hay que
+   poder contestar hacia atrás cuando un modelo se comporta raro.
+5. `pandas>=2.2,<4` — única dependencia pineada, porque `attrs` es API que pandas
+   documenta como experimental y el contrato depende de su comportamiento exacto. Rango
+   amplio, no `==`: fija el límite donde una major podría romperlo, sin obligar a
+   actualizar un número a mano cada mes.
+
+**Estilo de anotaciones:** las firmas nuevas usan `X | None` (sintaxis moderna). Las 5
+preexistentes con `Optional[X]` se dejan como están — migrarlas sería ruido en el diff de
+este PR, sin ganancia funcional. El archivo ya tiene `from __future__ import annotations`,
+así que las dos formas conviven sin problema.
+
+**Descartado:** inferir la granularidad del espaciado entre timestamps (ver Hallazgo/
+Decisión 2). También se descartó crear un tipo `DataQuality` separado para los cuatro
+campos: son cuatro banderas planas, y un tipo nuevo agregaría una capa de indirección sin
+resolver nada que el dataclass no resuelva ya.
+
+**Validación pendiente:** la red de seguridad de `fetch_ohlcv()` es redundante a
+propósito y en el camino normal no dispara nunca — está verificada por mutación (quitar
+`granularity_s` del call site deja 64/65 tests en verde, solo la detecta el test que
+inspecciona el argumento), pero no se observó dispararse contra un feed real. Y ningún
+adapter escribe todavía `timestamp_is_convention=True` ni un `provider_status` distinto de
+`"ok"`: esos dos caminos están probados con dobles, no contra un proveedor real — entra
+con TwelveData (PR-3).
+
+---
+
 ## 2026-08-16 — Fix: `nash_frozen_7d` normalizaba con la misma ventana del std
 
 **Fuente:** confirmado con números, no solo argumentado — 500 muestras aleatorias de micro-ruido (rango real ~0.0015).

@@ -7,8 +7,20 @@
 # polars (gdelt_foundation.py lo usa; se evaluó no usarlo acá para no
 # sumar una dependencia pesada solo por el parseo de 8 columnas -- ver
 # ingestion/gdelt.py, parseo con str.split() puro).
+#
+# pandas ES LA ÚNICA DEPENDENCIA PINEADA, y con motivo concreto:
+# ingestion/adapters.py transporta metadata de calidad por `df.attrs`, que
+# pandas documenta como API EXPERIMENTAL. El diseño depende de su
+# comportamiento exacto -- medido en 3.0.5, no supuesto: attrs sobrevive
+# copy(), sort_values() y concat(), y se pierde en merge(). Sin el pin, una
+# resolución distinta en CI podría cambiar ese comportamiento sin que nadie
+# toque una línea de código. El rango es amplio a propósito (no ==): fija el
+# límite donde una major nueva podría romper el contrato, no una versión
+# exacta que obligue a actualizarla a mano cada mes.
+# numpy, httpx, websockets y pytest NO se pinean: nada del contrato depende
+# de su versión, y pinear de más obliga a mantener números sin motivo.
 numpy
-pandas
+pandas>=2.2,<4
 websockets
 httpx
 pytest
