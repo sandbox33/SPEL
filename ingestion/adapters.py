@@ -88,7 +88,71 @@ class AdapterDataError(AdapterException):
 REQUIRED_COLUMNS: tuple[str, ...] = ("timestamp", "open", "high", "low", "close", "volume")
 
 
-def validate_ohlcv_schema(df: pd.DataFrame, *, source: str, symbol: str) -> None:
+def drop_unclosed_candles(
+    df: pd.DataFrame,
+    granularity_s: int,
+    *,
+    source: str,
+    symbol: str | None = None,
+    now_utc: pd.Timestamp | None = None,
+) -> pd.DataFrame:
+    """
+    Descarta las velas que todavía no pudieron haber cerrado: aquellas cuyo
+    `timestamp + granularity_s` cae en el futuro respecto a `now_utc`.
+
+    POR QUÉ ES UNA FUNCIÓN DE MÓDULO Y NO UN MÉTODO DE DerivAdapter (era
+    `DerivAdapter._drop_unclosed_candle` hasta este patch): la salvaguarda
+    anti-fuga-temporal no puede depender de la cortesía de cada adapter. Como
+    método privado, un adapter nuevo que simplemente no la reimplemente deja
+    pasar la vela en formación sin que nada lo detecte — y una vela en
+    formación disfrazada de dato histórico es fuga de horizonte, exactamente
+    la hipótesis #1 que Fase 2 tiene que descartar. Acá arriba es una pieza
+    del contrato del módulo, invocable y testeable por sí sola, y
+    `validate_ohlcv_schema()` puede además verificar el resultado.
+
+    NOMENCLATURA — los dos son distintos y ambos van al log:
+      source: el PROVEEDOR ("deriv", "twelvedata"). Obligatorio.
+      symbol: el INSTRUMENTO ("EURUSD"). Opcional — un dataset ya compuesto
+        puede no tener uno solo.
+    Nunca pasar por acá nada derivado de un secreto: estos valores se
+    escriben en el log.
+
+    now_utc INYECTABLE, y no es un detalle de comodidad: sin él, un fixture
+    con una vela deliberadamente "abierta" se vuelve cerrada en cuanto el
+    reloj avanza más allá de su cierre, y el test pasa a fallar solo — la
+    clase de intermitencia que después nadie reproduce. Por defecto usa el
+    reloj real.
+
+    Devuelve un DataFrame NUEVO — nunca muta el que recibe.
+    """
+    if df.empty:
+        return df
+
+    ahora = now_utc if now_utc is not None else pd.Timestamp.now(tz="UTC")
+    origen = f"{source}/{symbol}" if symbol else source
+
+    candle_close_time = df["timestamp"] + pd.Timedelta(seconds=granularity_s)
+    still_forming = candle_close_time > ahora
+
+    if not still_forming.any():
+        return df
+
+    logger.info(
+        "[%s] descartando %d vela(s) aún no cerrada(s)",
+        origen, int(still_forming.sum()),
+    )
+    return df.loc[~still_forming].reset_index(drop=True)
+
+
+def validate_ohlcv_schema(
+    df: pd.DataFrame,
+    *,
+    source: str,
+    symbol: str,
+    require_closed: bool = True,
+    granularity_s: int | None = None,
+    now_utc: pd.Timestamp | None = None,
+) -> None:
     """
     Verifica que un DataFrame recién construido por un adapter cumple el
     contrato antes de devolverlo al llamador. Esto es el adapter
@@ -96,6 +160,21 @@ def validate_ohlcv_schema(df: pd.DataFrame, *, source: str, symbol: str) -> None
     solo porque no tiró una excepción.
 
     Lanza AdapterDataError con un mensaje específico si algo no cumple.
+
+    SEMÁNTICA DE require_closed — no es "siempre valida el cierre", es
+    "valida el cierre cuando es posible saberlo":
+      - Con `granularity_s` presente: rechaza cualquier vela abierta.
+      - Con `granularity_s=None` (default): omite ESA verificación y nada
+        más. Columnas, tipos, UTC, orden, NaN y coherencia OHLC siguen
+        activas exactamente igual.
+
+    LA GRANULARIDAD NUNCA SE INFIERE del espaciado entre timestamps. Un
+    dataset con huecos legítimos — fin de semana en forex, feriados — daría
+    una inferencia equivocada, y una granularidad equivocada es peor que no
+    tener ninguna: de más rechaza velas buenas, de menos acepta abiertas.
+    El call site que obliga a que `None` sea válido es real y está en el
+    repo: `ingestion/training_dataset.py:119` valida un dataset ya
+    construido, sin acceso a la granularidad original de las velas.
     """
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:
@@ -151,6 +230,23 @@ def validate_ohlcv_schema(df: pd.DataFrame, *, source: str, symbol: str) -> None
             f"{bad[bad].index.tolist()}"
         )
 
+    # DELIBERADAMENTE AL FINAL, después de las verificaciones estructurales:
+    # si el esquema básico está roto (falta 'timestamp', no es datetime, no
+    # es UTC), ese error es más informativo que "hay velas abiertas", y
+    # además esta comprobación necesita que 'timestamp' ya sea datetime UTC
+    # para significar algo.
+    if require_closed and granularity_s is not None:
+        ahora = now_utc if now_utc is not None else pd.Timestamp.now(tz="UTC")
+        abiertas = (df["timestamp"] + pd.Timedelta(seconds=granularity_s)) > ahora
+        if abiertas.any():
+            raise AdapterDataError(
+                f"[{source}:{symbol}] {int(abiertas.sum())} vela(s) sin cerrar "
+                f"(granularity_s={granularity_s}, now={ahora.isoformat()}, "
+                f"primer timestamp abierto={df.loc[abiertas, 'timestamp'].iloc[0].isoformat()}). "
+                f"Una vela en formación tratada como histórica es fuga de "
+                f"horizonte: aplicar drop_unclosed_candles() antes de validar."
+            )
+
 
 # ══════════════════════════════════════════════════════════════════════════
 #  BaseAdapter — el contrato. Cualquier fuente nueva implementa esto.
@@ -184,7 +280,7 @@ class BaseAdapter(abc.ABC):
           - Columnas exactas: timestamp, open, high, low, close, volume
           - timestamp: datetime64 tz-aware en UTC, orden ascendente
           - Solo velas CERRADAS — nunca la vela en formación actual
-            (ver _drop_unclosed_candle en DerivAdapter para el porqué)
+            (ver drop_unclosed_candles() a nivel de módulo para el porqué)
 
         Lanza:
           AdapterConnectionError si el transporte falla (timeout, rechazo).
@@ -312,8 +408,16 @@ class DerivAdapter(BaseAdapter):
         granularity = _DERIV_GRANULARITY_SECONDS[timeframe]
 
         raw_candles = await self._request_candles(deriv_symbol, granularity, limit)
-        df = self._to_dataframe(raw_candles, granularity, source=symbol)
-        validate_ohlcv_schema(df, source=self.source_name, symbol=symbol)
+        df = self._to_dataframe(raw_candles, granularity, symbol=symbol)
+        # Red de seguridad REDUNDANTE A PROPÓSITO: _to_dataframe ya corrió
+        # drop_unclosed_candles(), así que en el camino normal este validador
+        # no debería disparar nunca. Ese es exactamente el punto — si dispara,
+        # el filtro falló o alguien lo removió, y nos enteramos acá y no cuatro
+        # meses después mirando por qué el modelo no aprende.
+        validate_ohlcv_schema(
+            df, source=self.source_name, symbol=symbol,
+            require_closed=True, granularity_s=granularity,
+        )
         return df
 
     async def _request_candles(self, deriv_symbol: str, granularity: int, limit: int) -> list[dict]:
@@ -389,7 +493,15 @@ class DerivAdapter(BaseAdapter):
             raise AdapterAuthError(f"[{self.source_name}:{context}] {code}: {message}")
         raise AdapterConnectionError(f"[{self.source_name}:{context}] {code}: {message}")
 
-    def _to_dataframe(self, candles: list[dict], granularity: int, *, source: str) -> pd.DataFrame:
+    def _to_dataframe(self, candles: list[dict], granularity: int, *, symbol: str) -> pd.DataFrame:
+        # El parámetro se llamaba `source` y recibía el símbolo del usuario
+        # (`_to_dataframe(..., source=symbol)` en el único call site). El
+        # nombre decía "proveedor" y el valor era el instrumento: renombrado
+        # a `symbol`, que es lo que de verdad es. Es privado y no hay ningún
+        # test que lo invoque directo, así que el rename no rompe nada — y
+        # con drop_unclosed_candles() ahora recibiendo AMBOS por separado,
+        # dejar el nombre viejo habría hecho que el proveedor se registrara
+        # como el símbolo en el log de la función nueva.
         try:
             rows = [
                 {
@@ -415,30 +527,20 @@ class DerivAdapter(BaseAdapter):
         df = pd.DataFrame(rows)
         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s", utc=True)
         df = df.sort_values("timestamp").reset_index(drop=True)
-        df = self._drop_unclosed_candle(df, granularity, source=source)
-        return df
-
-    def _drop_unclosed_candle(self, df: pd.DataFrame, granularity: int, *, source: str) -> pd.DataFrame:
-        """
-        Salvaguarda anti-fuga-temporal: si la última vela todavía no pudo
-        haber cerrado (su fin de intervalo cae en el futuro respecto a
-        ahora), se descarta. No verifiqué con certeza absoluta en la
-        documentación de Deriv si end=latest siempre excluye la vela en
-        formación — en vez de asumir que sí, este filtro lo garantiza de
-        todos modos, sin importar el comportamiento exacto del broker.
-        """
-        if df.empty:
-            return df
-        now_utc = pd.Timestamp.now(tz="UTC")
-        candle_close_time = df["timestamp"] + pd.Timedelta(seconds=granularity)
-        still_forming = candle_close_time > now_utc
-        if still_forming.any():
-            n_dropped = int(still_forming.sum())
-            logger.info(
-                "[%s] descartando %d vela(s) aún no cerrada(s) para %s",
-                self.source_name, n_dropped, source,
-            )
-            df = df.loc[~still_forming].reset_index(drop=True)
+        # La salvaguarda anti-fuga-temporal ya no es un método de esta clase:
+        # es drop_unclosed_candles() a nivel de módulo, para que ningún
+        # adapter futuro pueda omitirla por olvido. Ver su docstring.
+        df = drop_unclosed_candles(
+            df, granularity, source=self.source_name, symbol=symbol,
+        )
+        # Metadata de calidad — transporte de UN SOLO SALTO hasta que
+        # AdapterChain la levante a AdapterResult (ver docstring de
+        # AdapterResult para por qué attrs no es almacenamiento durable).
+        # Deriv nunca reporta volumen: su doc oficial define la vela con
+        # exactamente close/epoch/high/low/open, así que el 0.0 de arriba es
+        # relleno, no un dato.
+        df.attrs["volume_available"] = False
+        df.attrs["timestamp_is_convention"] = False  # epoch = instante real
         return df
 
     async def health_check(self) -> bool:
@@ -483,6 +585,36 @@ class AdapterResult:
     A diferencia de BaseAdapter.fetch_ohlcv() (que lanza AdapterException),
     AdapterChain.fetch() NUNCA lanza — el pipeline aguas abajo siempre
     recibe un AdapterResult y decide qué hacer con is_degraded.
+
+    ══ REGLA DURA DE df.attrs: ES TRANSPORTE, NUNCA ALMACENAMIENTO ══
+    Un adapter escribe su metadata de calidad en `df.attrs`, y AdapterChain
+    la levanta a los campos de esta clase en el salto inmediatamente
+    siguiente. Un solo salto, y ahí muere.
+
+    Medido en pandas 3.0.5, no supuesto: `attrs` sobrevive `copy()`,
+    `sort_values()` y `concat()`, y SE PIERDE en `merge()`. Y
+    `ingestion/training_dataset.py` hace exactamente un join OHLCV↔GDELT.
+    O sea: usar attrs como almacenamiento durable perdería la procedencia
+    justo en el punto donde más importa — al armar el dataset de
+    entrenamiento — y lo perdería en silencio, sin excepción ni warning.
+    Por eso los campos viven acá, en un dataclass explícito.
+
+    Los cuatro campos de calidad:
+      volume_available=False — la columna 'volume' es RELLENO, no un dato.
+        Sin esta bandera, un 0.0 de relleno y un 0.0 de "no se operó en esta
+        vela" son literalmente indistinguibles aguas abajo, y cualquier
+        feature que promedie volumen mezcla las dos cosas.
+      timestamp_is_convention=True — el timestamp es una convención (la
+        medianoche de conveniencia que usan los diarios, caso TwelveData),
+        no el instante real del evento. Deriv entrega epoch → False.
+      is_fallback — NO es lo mismo que is_degraded. Degradado = el dato no
+        se pudo traer o vino mal. Fallback = vino de una fuente de respaldo,
+        que puede haber funcionado perfecto. Un respaldo sano es
+        is_fallback=True, is_degraded=False.
+      provider_status — ok | rate_limited | plan_denied | degraded.
+        'rate_limited' y 'plan_denied' son estados del PROVEEDOR que no
+        implican que el dato esté mal; se registran para poder decidir
+        cadena/cuota sin adivinar.
     """
     data: pd.DataFrame
     adapter_name: str
@@ -494,13 +626,30 @@ class AdapterResult:
     timestamp_utc: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
+    volume_available: bool = True
+    timestamp_is_convention: bool = False
+    is_fallback: bool = False
+    provider_status: str = "ok"
 
     def log_summary(self) -> None:
         estado = "DEGRADADO" if self.is_degraded else "OK"
+        # Marcas condicionales: solo aparecen cuando aplican, para que una
+        # línea de log sin marcas signifique "todo normal" sin tener que
+        # leer cuatro campos que casi siempre dicen lo mismo.
+        marcas = ""
+        if not self.volume_available:
+            marcas += " | vol=sintético"
+        if self.timestamp_is_convention:
+            marcas += " | ts=convención"
+        if self.is_fallback:
+            marcas += " | fallback"
+        if self.provider_status != "ok":
+            marcas += f" | status={self.provider_status}"
         logger.info(
-            "[%s] %s -> %s | filas=%d | latencia=%.0fms%s",
+            "[%s] %s -> %s | filas=%d | latencia=%.0fms%s%s",
             estado, self.adapter_name, self.symbol,
             self.rows_fetched, self.latency_ms,
+            marcas,
             f" | error: {self.error_msg}" if self.error_msg else "",
         )
 
@@ -624,6 +773,10 @@ class AdapterChain:
         for intento in range(1, self.MAX_RETRIES + 1):
             try:
                 df = await adapter.fetch_ohlcv(symbol, timeframe, limit)
+                # Levantar attrs ACÁ, antes de que el DataFrame toque
+                # cualquier otra operación de pandas: attrs es transporte de
+                # un solo salto y merge() lo borra (ver AdapterResult).
+                meta = df.attrs
                 latencia_ms = (time.monotonic() - t0) * 1000
                 resultado = AdapterResult(
                     data=df,
@@ -632,6 +785,14 @@ class AdapterChain:
                     is_degraded=False,
                     rows_fetched=len(df),
                     latency_ms=latencia_ms,
+                    # .get() con default conservador: un adapter que no
+                    # escribe attrs no es un error, es uno que no reporta
+                    # esa dimensión. Asumir lo benigno (hay volumen, el
+                    # timestamp es real, el proveedor está ok) mantiene el
+                    # comportamiento previo de todo adapter ya existente.
+                    volume_available=bool(meta.get("volume_available", True)),
+                    timestamp_is_convention=bool(meta.get("timestamp_is_convention", False)),
+                    provider_status=str(meta.get("provider_status", "ok")),
                 )
                 resultado.log_summary()
                 return resultado
@@ -673,6 +834,14 @@ class AdapterChain:
             "rows_fetched": resultado.rows_fetched,
             "latency_ms": round(resultado.latency_ms, 1),
             "error": resultado.error_msg,
+            # El log de auditoría es el registro de "qué fuente produjo cada
+            # dato". Sin estos cuatro campos responde de dónde vino, pero no
+            # con qué calidad vino — y esa es justo la pregunta que hay que
+            # poder contestar hacia atrás cuando un modelo se comporta raro.
+            "volume_available": resultado.volume_available,
+            "timestamp_is_convention": resultado.timestamp_is_convention,
+            "is_fallback": resultado.is_fallback,
+            "provider_status": resultado.provider_status,
         }
         historial: list = []
         if log_path.exists():

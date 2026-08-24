@@ -31,7 +31,7 @@ FASE 6 — Motor streaming multi-timeframe   🟡 Infraestructura lista, señal 
 
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-242 → 343 tests desde el 17 ago (65 tests nuevos en un día de trabajo). Todo lo de
+242 → 364 tests desde el 17 ago (65 tests nuevos en un día de trabajo). Todo lo de
 abajo corrió en clon 100% ajeno, venv limpio desde `requirements.txt`, 10 corridas
 seguidas sin intermitencia.
 
@@ -40,7 +40,7 @@ seguidas sin intermitencia.
 | `core/scoring.py` | vitality_tesla, nash_frozen_7d, godel_active, gold_score_bma, classify_gdelt_event (+ fix EURUSD) | 116 | ✅ |
 | `core/monte_carlo.py` | Validación GBM — NO entrena, simulación pura en cada llamada | 22 | ✅ |
 | `core/price_signals.py` | te_score (proxy TE) + backbone_score (EMA20/63) | 12 | ✅ |
-| `ingestion/adapters.py` | DerivAdapter — forex + 5 Índices de Volatilidad (VOL10-VOL100) | 44 | ✅ |
+| `ingestion/adapters.py` | DerivAdapter + contrato de datos (`drop_unclosed_candles`, `validate_ohlcv_schema`, `AdapterResult` con metadata de calidad) | 65 | ✅ |
 | `ingestion/gdelt.py` + `_aggregation` + `_series` | Pipeline GDELT completo, persistencia JSONL | 41 | ✅ |
 | `ingestion/training_dataset.py` | Une OHLCV + serie GDELT, forward-fill, coverage_ratio explícito | 7 | ✅ |
 | `orchestration/cycle.py` | Corre vitality/nash/godel sobre 5 activos a la vez | 10 | ✅ |
@@ -63,6 +63,66 @@ de `tests/` son menciones en docstrings de `governance/persistence.py`, no llama
 los inyecta — cero `secrets.` y cero `env:` en `.github/workflows/`. Es decir: las
 piezas existen y están probadas, pero nadie las conecta todavía. Eso es lo que
 `orchestration/` tiene que cerrar, y es una brecha distinta de "faltan adapters".
+
+---
+
+## 🔒 CONTRATO DE DATOS OHLCV
+
+Tres reglas que cualquier adapter nuevo tiene que respetar. No son estilo — cada una
+existe porque su ausencia produce un fallo silencioso, que es la clase de bug que ya
+costó meses en este proyecto.
+
+**1. `require_closed` tiene semántica condicional, y es a propósito.** No significa
+"siempre valida el cierre", significa "valida el cierre cuando es posible saberlo". Con
+`granularity_s` presente rechaza velas abiertas; con `granularity_s=None` omite *solo*
+esa verificación — columnas, tipos, UTC, orden, NaN y OHLC siguen activas. La
+granularidad **nunca se infiere del espaciado entre timestamps**: un dataset con huecos
+legítimos (fin de semana forex, feriados) daría una inferencia equivocada, y una
+granularidad equivocada rechaza velas buenas o acepta abiertas. El call site que obliga
+a que `None` sea válido es real: `ingestion/training_dataset.py:119` valida un dataset ya
+construido, sin acceso a la granularidad original.
+
+**2. `df.attrs` es transporte de UN SOLO SALTO, nunca almacenamiento.** El adapter
+escribe la metadata de calidad en `attrs`; `AdapterChain` la levanta a `AdapterResult`
+inmediatamente después del fetch, y ahí muere. Medido en pandas 3.0.5, no supuesto:
+
+| Operación | `attrs` sobrevive |
+|---|---|
+| `copy()` | ✅ |
+| `sort_values()` | ✅ |
+| `concat()` | ✅ |
+| `reset_index()` | ✅ |
+| `merge()` | 🔴 **se pierde** |
+
+`training_dataset.py` hace exactamente un join OHLCV↔GDELT. Usar `attrs` como
+almacenamiento durable perdería la procedencia justo donde más importa —al armar el
+dataset de entrenamiento— y en silencio, sin excepción ni warning. Por eso los campos
+viven en el dataclass.
+
+**3. `pandas>=2.2,<4` es la única dependencia pineada.** `attrs` es API documentada como
+experimental por pandas y el diseño depende de su comportamiento exacto; sin pin, una
+resolución distinta en CI podría cambiarlo sin que nadie toque el código. `numpy`,
+`httpx`, `websockets` y `pytest` siguen sin pinear — nada del contrato depende de ellos.
+
+**Red de seguridad armada.** `DerivAdapter.fetch_ohlcv()` llama a `validate_ohlcv_schema()`
+con `granularity_s` aunque `_to_dataframe()` ya corrió el filtro: es redundante a
+propósito, y en el camino normal no debería dispararse nunca. Si dispara, el filtro falló
+o alguien lo removió. Verificado por mutación: quitar el argumento del call site deja
+**64 de 65 tests en verde**; el único que lo detecta es
+`test_deriv_arma_la_red_de_seguridad_pasando_granularity_s`, que verifica el argumento y
+no el efecto justamente por eso.
+
+**Nomenclatura — cuatro términos que no son sinónimos:**
+
+| Término | Qué es | Ejemplo |
+|---|---|---|
+| `source` | el PROVEEDOR de los datos | `"deriv"`, `"twelvedata"` |
+| `symbol` | el INSTRUMENTO | `"EURUSD"`, `"VOL75"` |
+| `adapter_name` | qué adapter produjo el resultado (`AdapterResult`) | `"deriv"` |
+| `is_fallback` | vino de una fuente de respaldo — **distinto de `is_degraded`**: un respaldo puede funcionar perfecto | `True` + `is_degraded=False` |
+
+Ni `source` ni `symbol` deben recibir jamás algo derivado de un secreto: los dos se
+escriben en el log.
 
 ---
 
