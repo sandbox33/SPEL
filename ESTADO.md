@@ -31,7 +31,7 @@ FASE 6 — Motor streaming multi-timeframe   🟡 Infraestructura lista, señal 
 
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-242 → 364 tests desde el 17 ago (65 tests nuevos en un día de trabajo). Todo lo de
+242 → 392 tests desde el 17 ago (65 tests nuevos en un día de trabajo). Todo lo de
 abajo corrió en clon 100% ajeno, venv limpio desde `requirements.txt`, 10 corridas
 seguidas sin intermitencia.
 
@@ -40,7 +40,7 @@ seguidas sin intermitencia.
 | `core/scoring.py` | vitality_tesla, nash_frozen_7d, godel_active, gold_score_bma, classify_gdelt_event (+ fix EURUSD) | 116 | ✅ |
 | `core/monte_carlo.py` | Validación GBM — NO entrena, simulación pura en cada llamada | 22 | ✅ |
 | `core/price_signals.py` | te_score (proxy TE) + backbone_score (EMA20/63) | 12 | ✅ |
-| `ingestion/adapters.py` | DerivAdapter + contrato de datos (`drop_unclosed_candles`, `validate_ohlcv_schema`, `AdapterResult` con metadata de calidad) | 65 | ✅ |
+| `ingestion/adapters.py` | DerivAdapter + TwelveDataAdapter + contrato de datos (`drop_unclosed_candles`, `validate_ohlcv_schema`, `AdapterResult` con metadata de calidad) | 93 | ✅ |
 | `ingestion/gdelt.py` + `_aggregation` + `_series` | Pipeline GDELT completo, persistencia JSONL | 41 | ✅ |
 | `ingestion/training_dataset.py` | Une OHLCV + serie GDELT, forward-fill, coverage_ratio explícito | 7 | ✅ |
 | `orchestration/cycle.py` | Corre vitality/nash/godel sobre 5 activos a la vez | 10 | ✅ |
@@ -48,10 +48,39 @@ seguidas sin intermitencia.
 | `governance/persistence.py` + `secrets.py` | 4 streams, SecretKey único (13 claves) | 28 | ✅ |
 | `tools/heartbeat.py` + `.github/workflows/heartbeat.yml` | Trigger `schedule:` real — **desactivado a propósito**, ver Fase 6 | — | ✅ código, 🔴 apagado |
 
-**No existe todavía, confirmado por ausencia real (no supuesto):** ningún adapter de
-precio para NVDA/XAU/BTC/NIFTY50 (cero `AlpacaAdapter`, `TiingoAdapter` en el repo —
-grep de `class.*Adapter` en `ingestion/adapters.py` da un solo resultado: `DerivAdapter`).
-Ningún trainer de LSTM. Ningún ruteo de órdenes de ningún tipo.
+**No existe todavía, confirmado por ausencia real (no supuesto):** grep de
+`^class.*Adapter` en `ingestion/adapters.py` da **dos** implementaciones concretas de
+`BaseAdapter` — `DerivAdapter` y `TwelveDataAdapter` — más la base abstracta y las
+excepciones. Cero `AlpacaAdapter`, cero `TiingoAdapter`. De los 4 activos del legacy,
+TwelveData cubre BTC (`BTC/USD`) y abre la puerta a acciones (`AAPL` verificado); **XAU
+y NIFTY50 siguen sin fuente**, y XAU específicamente quedó fuera del mapa por falta de
+evidencia de que el plan gratuito lo cubra, no por olvido. Ningún trainer de LSTM.
+Ningún ruteo de órdenes de ningún tipo.
+
+**Los fixtures de TwelveData ya son capturas reales** (2026-08-23, literales): EUR/USD,
+BTC/USD y AAPL en 1day. Reemplazan a los sintéticos con los que se escribió el adapter, y
+**trajeron un hallazgo que desmiente el supuesto anterior: BTC/USD NO trae `volume`.** De
+los tres instrumentos, el único con volumen es AAPL — la regla intuitiva "forex no,
+cripto y acciones sí" es falsa.
+
+El adapter no necesitó ni un cambio, y eso no es suerte: `volume_available` se deriva de
+si la clave vino en la respuesta, nunca de una regla por clase de activo. Verificado por
+mutación —sustituir la derivación observada por una regla declarada deja **4 de 28 tests
+en rojo**, y el primero en caer es el que parsea la captura real de BTC. Una regla
+declarada habría marcado BTC con volumen disponible y el relleno `0.0` habría entrado al
+pipeline como si fuera un dato.
+
+Quedan dos fixtures sintéticos, marcados como tales y con motivo: un contrafáctico
+deliberado (forex *con* volumen — su valor está en que no puede existir en la realidad
+observada, y es el que atrapa la regla declarada en la dirección inversa) y uno intradía
+por necesidad (las tres capturas son diarias, y hay dos comportamientos intradía que
+probar que dependen del argumento `timeframe`, no del payload).
+
+🟡 **Sigue amarillo, no verde**, y por una razón más chica que antes: el test `live`
+(marker `live`, skipif sobre la credencial) todavía no corrió nunca con clave real. Lo que
+falta confirmar contra la API viva es el camino que ningún fixture ejercita — el cliente
+httpx que el adapter abre y cierra solo (los tests offline inyectan el suyo), la
+autenticación aceptada de verdad, y la forma intradía.
 
 **Hallazgo relacionado — no hay ningún punto de composición.** No es que falte un
 adapter: falta el lugar donde algo se arma y corre de verdad. Verificado por grep,

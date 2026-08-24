@@ -4,6 +4,114 @@ Auditoría de decisiones de arquitectura (stream `DECISION_LOG`, Decisión #14).
 
 ---
 
+## 2026-08-23 (PR-3) — TwelveDataAdapter: segunda fuente OHLCV, y primera prueba real del contrato
+
+**Fuente:** documentación oficial de TwelveData (endpoint `time_series`) y auditoría del
+contrato ya en `main` (PR-2). **No hay capturas reales de la API detrás de esta entrada**
+— ver "Validación pendiente", que es la parte más importante de este registro.
+
+**Hallazgo 1 — el vocabulario del proveedor no puede filtrarse aguas arriba.** TwelveData
+nombra los pares con barra (`EUR/USD`); el proyecto no (`EURUSD`). La barra es un detalle
+del proveedor: si se deja viajar, cada consumidor aguas abajo tiene que saber de qué
+fuente vino su símbolo para escribirlo bien. Muere en `_TWELVEDATA_SYMBOL_MAP`, igual que
+`frxEURUSD` muere en el mapa de Deriv.
+
+**Hallazgo 2 — si viene o no `volume` depende del INSTRUMENTO, no del plan.** Un par de
+forex no trae la clave; una acción sí. No es algo que se pueda saber de antemano por
+configuración, así que la bandera `volume_available` se deriva de lo que de verdad llegó
+(`any("volume" in v for v in values)`), no de una regla por tipo de símbolo. Una regla
+declarada se rompe en silencio con el primer instrumento que no encaje; una observación no.
+
+> **Corrección con evidencia, 2026-08-23 (mismo día, tras conseguir las capturas
+> reales):** la formulación de arriba —"forex no, acciones sí"— era una hipótesis
+> razonable y es **falsa**. La captura real de `BTC/USD` (exchange Binance, Digital
+> Currency) tampoco trae `volume`: de los tres instrumentos capturados, el único con
+> volumen es AAPL. No hay regla por clase de activo que sirva.
+>
+> Lo que importa acá no es que la hipótesis fuera equivocada, sino que **la decisión no
+> dependía de ella**: el código nunca declaró la regla, la observó. Verificado por
+> mutación — sustituir `any("volume" in v ...)` por una regla declarada deja 4 de 28
+> tests en rojo, y el primero en caer es el que parsea la captura real de BTC. Con una
+> regla declarada, BTC habría quedado marcado con volumen disponible y el relleno `0.0`
+> habría entrado al pipeline como si fuera un dato real, sin que nada lo señalara.
+
+**Hallazgo 3 — la barra diaria no tiene hora, y eso cambia dos cosas a la vez.** El
+`datetime` diario viene como fecha sola (`"2026-08-22"`). Primero: mandar `timezone` en un
+intervalo sin hora no reinterpreta nada e invita a que el proveedor corra la fecha un día.
+Segundo: ese timestamp es la CONVENCIÓN del día de mercado, no el instante real de nada —
+que es exactamente lo que `timestamp_is_convention` (PR-2) existe para marcar. El mismo
+`frozenset` decide las dos cosas, porque son la misma propiedad del dato.
+
+**Hallazgo 4 — TwelveData señaliza errores en el CUERPO, con HTTP 200.** Mirar el status
+HTTP deja pasar el error como si fuera un payload bueno. Y el mismo `code: 404` cubre dos
+causas que hay que tratar distinto: símbolo inexistente vs. símbolo real que el plan de la
+cuenta no cubre. El mensaje nombra el plan en el segundo caso.
+
+**Decisiones:**
+
+1. **Símbolos: solo los verificados.** `EURUSD`, `BTCUSD`, `AAPL`. **`XAU/USD` queda
+   afuera** — no se pudo confirmar que el plan gratuito lo cubra, y "probablemente esté"
+   no es evidencia. Un símbolo que el plan rechaza degrada la cadena en runtime por algo
+   que se sabía de antemano. Entra cuando haya una respuesta real que lo confirme.
+2. **Timeframes: las mismas 8 claves que Deriv**, ni una más. TwelveData ofrece
+   intervalos que Deriv no tiene (`45min`, `8h`), y Deriv no tiene `5h` ni TwelveData
+   tampoco: agregar de un lado lo que el otro no soporta rompe el fallback justo cuando
+   hace falta. `_TWELVEDATA_GRANULARITY_SECONDS` duplica los segundos de Deriv a
+   propósito en vez de importarlos — son dos proveedores independientes que hoy
+   coinciden, y si mañana uno cambia, el mapa del otro no debe moverse con él.
+3. **Observado > declarado** para `volume_available` (Hallazgo 2).
+4. **`timezone` condicional** vía `_INTERVALOS_SIN_TIMEZONE` (Hallazgo 3).
+5. **Errores por `code` del cuerpo**, no por status HTTP: 401→`AdapterAuthError`,
+   429→`AdapterConnectionError` (la cuota es transitoria por definición, así que el retry
+   y el fallback de `AdapterChain` deben tratarla como tal), 404 con "plan" en el
+   mensaje→`AdapterDataError` de límite de cuenta, 404 sin él→símbolo no encontrado.
+6. **La key va en el header `Authorization`, nunca como query param.** Un `?apikey=...`
+   termina escrito en logs de proxy, historiales de shell y en los mensajes de error de
+   httpx, que incluyen la URL. Y **la key se recibe por constructor**, no se lee de
+   `os.environ` dentro del adapter: la fuente única de credenciales es
+   `governance/secrets.py` (PR-1), y un adapter que lee el entorno por su cuenta es un
+   segundo lugar donde buscar cuando algo falla, además de intesteable sin ensuciar el
+   entorno del proceso.
+7. **`health_check()` gasta una vela real de EUR/USD** en vez de un endpoint de
+   referencia: la doc no confirma que `/stocks` o `/forex_pairs` tengan coste cero de
+   cuota, y en el plan gratuito una suposición equivocada ahí se paga con las peticiones
+   que necesita el motor. Una vela es el costo mínimo que sí se conoce.
+8. **`order=ASC` se pide Y se reordena localmente.** Pedirlo no es garantizarlo.
+
+**Descartado:** inferir `volume_available` del tipo de símbolo (Hallazgo 2); confiar en el
+status HTTP para detectar errores (Hallazgo 4); leer la key del entorno (Decisión 6);
+agregar `XAU/USD` sin evidencia (Decisión 1).
+
+**Fixtures — resuelto el mismo día, con capturas reales.** El adapter se escribió con
+fixtures sintéticos porque el entorno no podía capturar nada (sin `TWELVEDATA_API_KEY`, y
+`api.twelvedata.com` fuera de la política de red del sandbox: 403 al CONNECT, denegación
+de política, no error del servidor). Se dejaron rotulados como sintéticos en vez de
+firmarlos como reales. **Ya fueron reemplazados por las tres capturas del 2026-08-23**
+(EUR/USD, BTC/USD, AAPL en 1day, literales).
+
+La predicción que se dejó escrita entonces —"pegar las capturas reales debería dejar la
+suite en verde sin tocar una aserción"— **se cumplió a medias, y la mitad que falló es la
+más valiosa**: la forma de la petición y la traducción de errores no se movieron, pero uno
+de los dos supuestos de forma resultó falso (BTC sin volumen, ver la corrección en
+Hallazgo 2). El conteo no cambió: 28 offline + 1 live, antes y después.
+
+Sobreviven dos fixtures sintéticos, marcados y con motivo declarado:
+- **contrafáctico deliberado** (forex *con* volumen): su valor depende de que NO sea real
+  — es el que atrapa una regla por clase de activo en la dirección que las capturas
+  reales no cubren.
+- **intradía por necesidad**: las tres capturas son diarias y hay dos comportamientos
+  intradía que probar; ambos dependen del argumento `timeframe` y de la petición emitida,
+  no de los valores del payload. Se reemplaza cuando haya una captura intradía real.
+
+**Validación pendiente:** el test `live` (marker `live` + skipif sobre la credencial)
+**todavía no corrió nunca con clave real**. Lo que sigue sin confirmar contra la API viva
+es exactamente lo que ningún fixture puede cubrir, por real que sea: el cliente httpx que
+el adapter abre y cierra solo (los tests offline inyectan el suyo, así que esa rama de
+`_get()` nunca se ejecuta), la autenticación aceptada de verdad, y la forma intradía.
+Hasta entonces este adapter es 🟡 y no ✅.
+
+---
+
 ## 2026-08-23 (PR-1) — Convención de nombres de secretos por proveedor
 
 **Fuente:** documentación oficial de cada proveedor, y auditoría de `governance/secrets.py`
