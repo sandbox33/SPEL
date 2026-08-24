@@ -4,6 +4,90 @@ Auditoría de decisiones de arquitectura (stream `DECISION_LOG`, Decisión #14).
 
 ---
 
+## 2026-08-23 (PR-3) — TwelveDataAdapter: segunda fuente OHLCV, y primera prueba real del contrato
+
+**Fuente:** documentación oficial de TwelveData (endpoint `time_series`) y auditoría del
+contrato ya en `main` (PR-2). **No hay capturas reales de la API detrás de esta entrada**
+— ver "Validación pendiente", que es la parte más importante de este registro.
+
+**Hallazgo 1 — el vocabulario del proveedor no puede filtrarse aguas arriba.** TwelveData
+nombra los pares con barra (`EUR/USD`); el proyecto no (`EURUSD`). La barra es un detalle
+del proveedor: si se deja viajar, cada consumidor aguas abajo tiene que saber de qué
+fuente vino su símbolo para escribirlo bien. Muere en `_TWELVEDATA_SYMBOL_MAP`, igual que
+`frxEURUSD` muere en el mapa de Deriv.
+
+**Hallazgo 2 — si viene o no `volume` depende del INSTRUMENTO, no del plan.** Un par de
+forex no trae la clave; una acción sí. No es algo que se pueda saber de antemano por
+configuración, así que la bandera `volume_available` se deriva de lo que de verdad llegó
+(`any("volume" in v for v in values)`), no de una regla por tipo de símbolo. Una regla
+declarada se rompe en silencio con el primer instrumento que no encaje; una observación no.
+
+**Hallazgo 3 — la barra diaria no tiene hora, y eso cambia dos cosas a la vez.** El
+`datetime` diario viene como fecha sola (`"2026-08-22"`). Primero: mandar `timezone` en un
+intervalo sin hora no reinterpreta nada e invita a que el proveedor corra la fecha un día.
+Segundo: ese timestamp es la CONVENCIÓN del día de mercado, no el instante real de nada —
+que es exactamente lo que `timestamp_is_convention` (PR-2) existe para marcar. El mismo
+`frozenset` decide las dos cosas, porque son la misma propiedad del dato.
+
+**Hallazgo 4 — TwelveData señaliza errores en el CUERPO, con HTTP 200.** Mirar el status
+HTTP deja pasar el error como si fuera un payload bueno. Y el mismo `code: 404` cubre dos
+causas que hay que tratar distinto: símbolo inexistente vs. símbolo real que el plan de la
+cuenta no cubre. El mensaje nombra el plan en el segundo caso.
+
+**Decisiones:**
+
+1. **Símbolos: solo los verificados.** `EURUSD`, `BTCUSD`, `AAPL`. **`XAU/USD` queda
+   afuera** — no se pudo confirmar que el plan gratuito lo cubra, y "probablemente esté"
+   no es evidencia. Un símbolo que el plan rechaza degrada la cadena en runtime por algo
+   que se sabía de antemano. Entra cuando haya una respuesta real que lo confirme.
+2. **Timeframes: las mismas 8 claves que Deriv**, ni una más. TwelveData ofrece
+   intervalos que Deriv no tiene (`45min`, `8h`), y Deriv no tiene `5h` ni TwelveData
+   tampoco: agregar de un lado lo que el otro no soporta rompe el fallback justo cuando
+   hace falta. `_TWELVEDATA_GRANULARITY_SECONDS` duplica los segundos de Deriv a
+   propósito en vez de importarlos — son dos proveedores independientes que hoy
+   coinciden, y si mañana uno cambia, el mapa del otro no debe moverse con él.
+3. **Observado > declarado** para `volume_available` (Hallazgo 2).
+4. **`timezone` condicional** vía `_INTERVALOS_SIN_TIMEZONE` (Hallazgo 3).
+5. **Errores por `code` del cuerpo**, no por status HTTP: 401→`AdapterAuthError`,
+   429→`AdapterConnectionError` (la cuota es transitoria por definición, así que el retry
+   y el fallback de `AdapterChain` deben tratarla como tal), 404 con "plan" en el
+   mensaje→`AdapterDataError` de límite de cuenta, 404 sin él→símbolo no encontrado.
+6. **La key va en el header `Authorization`, nunca como query param.** Un `?apikey=...`
+   termina escrito en logs de proxy, historiales de shell y en los mensajes de error de
+   httpx, que incluyen la URL. Y **la key se recibe por constructor**, no se lee de
+   `os.environ` dentro del adapter: la fuente única de credenciales es
+   `governance/secrets.py` (PR-1), y un adapter que lee el entorno por su cuenta es un
+   segundo lugar donde buscar cuando algo falla, además de intesteable sin ensuciar el
+   entorno del proceso.
+7. **`health_check()` gasta una vela real de EUR/USD** en vez de un endpoint de
+   referencia: la doc no confirma que `/stocks` o `/forex_pairs` tengan coste cero de
+   cuota, y en el plan gratuito una suposición equivocada ahí se paga con las peticiones
+   que necesita el motor. Una vela es el costo mínimo que sí se conoce.
+8. **`order=ASC` se pide Y se reordena localmente.** Pedirlo no es garantizarlo.
+
+**Descartado:** inferir `volume_available` del tipo de símbolo (Hallazgo 2); confiar en el
+status HTTP para detectar errores (Hallazgo 4); leer la key del entorno (Decisión 6);
+agregar `XAU/USD` sin evidencia (Decisión 1).
+
+**Validación pendiente — el hueco real de este PR, declarado y no disimulado:** los
+fixtures de `tests/test_twelvedata_adapter.py` **no son capturas reales de la API**. Están
+construidos a partir de la forma documentada del endpoint, con valores inventados, y están
+marcados como tales en el docstring del archivo. El entorno donde se escribió esto no pudo
+capturarlas: sin `TWELVEDATA_API_KEY` configurada, y con `api.twelvedata.com` fuera de la
+política de red del sandbox (403 al CONNECT — denegación de política, no error del
+servidor). Firmar valores inventados como "respuesta real" habría sido exactamente el
+patrón que este proyecto prohíbe, así que se dejaron rotulados.
+
+Lo que los 28 tests offline sí prueban es la FORMA —qué campos se leen, cómo se traduce
+cada error, qué se manda en la petición—, y eso no depende de los valores: pegar las
+capturas reales debería dejar la suite en verde sin tocar una aserción. Los dos supuestos
+que una captura real podría desmentir están marcados `SUPUESTO DE FORMA` en el archivo
+(forex sin `volume`; cripto con `volume`). El test `live` (marker `live` + skipif sobre la
+credencial) es el que cierra el hueco de verdad — hasta que corra una vez con clave real,
+este adapter es 🟡 y no ✅.
+
+---
+
 ## 2026-08-23 (PR-1) — Convención de nombres de secretos por proveedor
 
 **Fuente:** documentación oficial de cada proveedor, y auditoría de `governance/secrets.py`

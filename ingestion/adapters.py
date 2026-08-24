@@ -556,6 +556,300 @@ class DerivAdapter(BaseAdapter):
 
 
 # ══════════════════════════════════════════════════════════════════════════
+#  TwelveDataAdapter — segunda fuente OHLCV, REST sobre HTTP (httpx async).
+#
+#  Es el primer adapter que NO es Deriv, y por eso es también la primera
+#  prueba real de que el contrato del módulo (drop_unclosed_candles +
+#  validate_ohlcv_schema + metadata por attrs) sirve para algo distinto de
+#  aquello con lo que se escribió. Todo lo específico del proveedor —
+#  vocabulario de símbolos, intervalos, vocabulario de errores — se traduce
+#  ACÁ al vocabulario común, y nada de eso se filtra aguas arriba.
+# ══════════════════════════════════════════════════════════════════════════
+
+TWELVEDATA_ENDPOINT = "https://api.twelvedata.com/time_series"
+
+#: Solo símbolos CONFIRMADOS en el plan gratuito. Misma regla que Deriv: no
+#: se agrega nada "por analogía". El vocabulario de TwelveData usa barra
+#: ("EUR/USD"), el del proyecto no ("EURUSD") — la barra es un detalle del
+#: proveedor y muere en este mapa, no viaja al resto del sistema.
+#:
+#: XAU/USD queda AFUERA a propósito: no se pudo confirmar que esté incluido
+#: en el plan gratuito. Un símbolo que el plan rechaza degrada la cadena
+#: entera en runtime por algo que se sabía de antemano — y "probablemente
+#: esté" no es evidencia. Entra cuando haya una respuesta real que lo
+#: confirme, no antes.
+_TWELVEDATA_SYMBOL_MAP: dict[str, str] = {
+    "EURUSD": "EUR/USD",
+    "BTCUSD": "BTC/USD",
+    "AAPL":   "AAPL",
+}
+
+#: Traducción de los timeframes del proyecto al vocabulario de TwelveData.
+#: Mismas 8 claves que Deriv, a propósito: un timeframe que una fuente
+#: soporta y la otra no rompe el fallback justo cuando hace falta.
+_TWELVEDATA_INTERVALS: dict[str, str] = {
+    "1m": "1min", "5m": "5min", "15m": "15min", "30m": "30min",
+    "1h": "1h", "2h": "2h", "4h": "4h", "1d": "1day",
+}
+
+#: Espejo exacto de _DERIV_GRANULARITY_SECONDS. Duplicar los segundos acá en
+#: vez de importar el de Deriv es deliberado: son dos proveedores
+#: independientes que hoy coinciden: si mañana uno agrega un timeframe que
+#: el otro no tiene, este mapa cambia solo, sin arrastrar al otro.
+_TWELVEDATA_GRANULARITY_SECONDS: dict[str, int] = {
+    "1m": 60, "5m": 300, "15m": 900, "30m": 1800,
+    "1h": 3600, "2h": 7200, "4h": 14400, "1d": 86400,
+}
+
+#: Intervalos a los que NO se les manda `timezone`. La barra diaria de
+#: TwelveData viene con `datetime` de solo fecha ("2026-08-22"): no hay hora
+#: que reinterpretar, y mandar una zona igual invita a que el proveedor
+#: corra la fecha un día. Estos son además los intervalos cuyo timestamp es
+#: una CONVENCIÓN (el día de mercado), no el instante real del evento —
+#: exactamente lo que `timestamp_is_convention` existe para marcar.
+_INTERVALOS_SIN_TIMEZONE: frozenset[str] = frozenset({"1d"})
+
+
+class TwelveDataAdapter(BaseAdapter):
+    """
+    Adapter OHLCV contra la API REST de TwelveData (endpoint `time_series`).
+
+    Solo lectura de mercado. La API key va SIEMPRE en el header
+    `Authorization`, nunca como query param: un `?apikey=...` termina escrito
+    en logs de proxy, historiales de shell y mensajes de error de httpx que
+    incluyen la URL. El header no aparece en ninguno de esos lugares.
+    """
+
+    source_name = "twelvedata"
+    SUPPORTED_SYMBOLS = frozenset(_TWELVEDATA_SYMBOL_MAP.keys())
+    SUPPORTED_TIMEFRAMES = frozenset(_TWELVEDATA_INTERVALS.keys())
+
+    def __init__(
+        self,
+        api_key: str,
+        client: Any = None,
+        timeout_s: float = 10.0,
+    ) -> None:
+        """
+        api_key: se recibe por constructor, NO se lee de os.environ acá
+        adentro. El adapter no decide de dónde vienen las credenciales —
+        eso es responsabilidad de governance/secrets.py, que ya es la fuente
+        única (SecretKey.TWELVEDATA_API_KEY). Un adapter que lee el entorno
+        por su cuenta es un segundo lugar donde buscar cuando algo falla, y
+        es imposible de testear sin ensuciar el entorno del proceso.
+
+        client: httpx.AsyncClient inyectable — los tests pasan uno con
+        MockTransport y nunca tocan la red. Si es None, cada llamada abre y
+        cierra el suyo.
+        """
+        if not api_key:
+            raise ValueError("TwelveDataAdapter requiere api_key no vacía")
+        self._api_key = api_key
+        self._client = client
+        self._timeout_s = timeout_s
+
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": f"apikey {self._api_key}"}
+
+    async def _get(self, params: dict[str, Any]) -> dict:
+        """Un solo lugar donde el transporte HTTP se traduce al vocabulario
+        de excepciones del módulo. Nadie más en esta clase toca httpx."""
+        import httpx
+
+        client = self._client
+        propio = client is None
+        if propio:
+            client = httpx.AsyncClient(timeout=self._timeout_s)
+        try:
+            resp = await client.get(
+                TWELVEDATA_ENDPOINT, params=params, headers=self._headers(),
+            )
+            try:
+                return resp.json()
+            except (ValueError, json.JSONDecodeError) as exc:
+                # HTTP 200 con cuerpo que no es JSON: pasa con páginas de
+                # error de un proxy o WAF intermedio. No es un fallo de
+                # transporte (la conexión funcionó), es contenido inválido.
+                raise AdapterDataError(
+                    f"[{self.source_name}] respuesta no es JSON válido "
+                    f"(HTTP {resp.status_code}): {exc}"
+                ) from exc
+        except httpx.TimeoutException as exc:
+            raise AdapterConnectionError(
+                f"[{self.source_name}] timeout tras {self._timeout_s}s"
+            ) from exc
+        except httpx.RequestError as exc:
+            # RequestError cubre DNS, conexión rechazada, TLS. El mensaje
+            # de httpx incluye la URL — que por eso NO lleva la key.
+            raise AdapterConnectionError(
+                f"[{self.source_name}] fallo de conexión: {exc}"
+            ) from exc
+        finally:
+            # Solo se cierra el cliente si lo abrió este método. Cerrar uno
+            # inyectado dejaría inservible al siguiente llamado del test o
+            # del orquestador que lo comparte.
+            if propio:
+                await client.aclose()
+
+    def _raise_if_error(self, body: dict, *, symbol: str) -> None:
+        """TwelveData señaliza fallos con `status: "error"` y un `code` en el
+        CUERPO, con HTTP 200 en muchos casos — mirar solo el status HTTP
+        deja pasar el error como si fuera un payload bueno. Este método es
+        el único punto donde ese vocabulario se traduce al del módulo."""
+        if body.get("status") != "error" and "code" not in body:
+            return
+
+        code = body.get("code")
+        message = str(body.get("message", body))
+
+        if code == 401:
+            raise AdapterAuthError(
+                f"[{self.source_name}] key rechazada (401): {message}"
+            )
+        if code == 429:
+            # Cuota agotada: es transitorio por definición (la ventana se
+            # renueva), así que va como ConnectionError para que el retry y
+            # el fallback de AdapterChain lo traten como tal.
+            raise AdapterConnectionError(
+                f"[{self.source_name}] límite de peticiones (429): {message}"
+            )
+        if code == 404:
+            # El MISMO código para dos causas distintas, y hay que
+            # distinguirlas: el símbolo no existe (error de uso, reintentar
+            # no sirve) vs. el símbolo existe pero el plan no lo cubre
+            # (decisión de cuenta, tampoco se arregla reintentando, pero se
+            # arregla distinto). TwelveData nombra el plan en el mensaje.
+            if "plan" in message.lower():
+                raise AdapterDataError(
+                    f"[{self.source_name}] '{symbol}' no está disponible en el "
+                    f"plan de esta cuenta (404): {message}. No es un fallo "
+                    f"transitorio — reintentar no lo arregla."
+                )
+            raise AdapterDataError(
+                f"[{self.source_name}] símbolo '{symbol}' no encontrado (404): "
+                f"{message}"
+            )
+        raise AdapterConnectionError(
+            f"[{self.source_name}] error {code}: {message}"
+        )
+
+    async def fetch_ohlcv(self, symbol: str, timeframe: str, limit: int) -> pd.DataFrame:
+        if symbol not in _TWELVEDATA_SYMBOL_MAP:
+            raise ValueError(
+                f"Símbolo '{symbol}' no está en el mapeo verificado de "
+                f"TwelveData. Soportados: {sorted(self.SUPPORTED_SYMBOLS)}. "
+                f"No se adivina un símbolo nuevo — confirmar contra una "
+                f"respuesta real del plan gratuito antes de agregarlo."
+            )
+        if timeframe not in _TWELVEDATA_INTERVALS:
+            raise ValueError(
+                f"Timeframe '{timeframe}' no reconocido. "
+                f"Soportados: {sorted(self.SUPPORTED_TIMEFRAMES)}."
+            )
+        if limit <= 0:
+            raise ValueError(f"limit debe ser positivo, recibido: {limit}")
+
+        td_symbol = _TWELVEDATA_SYMBOL_MAP[symbol]
+        interval = _TWELVEDATA_INTERVALS[timeframe]
+        granularity = _TWELVEDATA_GRANULARITY_SECONDS[timeframe]
+
+        params: dict[str, Any] = {
+            "symbol": td_symbol,
+            "interval": interval,
+            "outputsize": limit,
+            # El default de TwelveData es DESC (más reciente primero) y el
+            # contrato del módulo exige ascendente. Se pide ASC explícito Y
+            # se reordena localmente en _to_dataframe: pedirlo no es lo
+            # mismo que garantizarlo.
+            "order": "ASC",
+        }
+        if timeframe not in _INTERVALOS_SIN_TIMEZONE:
+            params["timezone"] = "UTC"
+
+        body = await self._get(params)
+        self._raise_if_error(body, symbol=symbol)
+
+        df = self._to_dataframe(body, timeframe=timeframe, symbol=symbol)
+        df = drop_unclosed_candles(
+            df, granularity, source=self.source_name, symbol=symbol,
+        )
+        validate_ohlcv_schema(
+            df, source=self.source_name, symbol=symbol,
+            require_closed=True, granularity_s=granularity,
+        )
+        return df
+
+    def _to_dataframe(self, body: dict, *, timeframe: str, symbol: str) -> pd.DataFrame:
+        values = body.get("values")
+        if not values:
+            raise AdapterDataError(
+                f"[{self.source_name}] respuesta sin campo 'values' o vacío "
+                f"para {symbol}: claves recibidas = {list(body.keys())}"
+            )
+
+        # OBSERVADO, no declarado: si `volume` viene o no depende del
+        # instrumento, no del plan ni de nada que se pueda saber de
+        # antemano — forex no trae volumen, una acción sí. Se mira lo que
+        # de verdad llegó en vez de asumirlo por tipo de símbolo, que sería
+        # una regla que se rompe en silencio con el primer símbolo nuevo.
+        trae_volumen = any("volume" in v for v in values)
+
+        try:
+            rows = [
+                {
+                    "timestamp": v["datetime"],
+                    "open": float(v["open"]),
+                    "high": float(v["high"]),
+                    "low": float(v["low"]),
+                    "close": float(v["close"]),
+                    # 0.0 explícito cuando la fuente no lo trae, igual que
+                    # Deriv — y marcado con volume_available=False para que
+                    # el relleno no se confunda con un cero real.
+                    "volume": float(v["volume"]) if trae_volumen else 0.0,
+                }
+                for v in values
+            ]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise AdapterDataError(
+                f"[{self.source_name}] vela con campos faltantes o de tipo "
+                f"incorrecto: {exc}. Primera vela recibida: {values[0]}"
+            ) from exc
+
+        df = pd.DataFrame(rows)
+        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+        # Reordenado LOCAL, además del order=ASC pedido: si el proveedor
+        # ignora el parámetro, el contrato se cumple igual.
+        df = df.sort_values("timestamp").reset_index(drop=True)
+
+        df.attrs["volume_available"] = trae_volumen
+        # La barra diaria trae solo la fecha: su timestamp es la convención
+        # del día de mercado, no el instante en que ocurrió nada.
+        df.attrs["timestamp_is_convention"] = timeframe in _INTERVALOS_SIN_TIMEZONE
+        return df
+
+    async def health_check(self) -> bool:
+        """
+        Gasta UNA petición real de datos (1 vela de EUR/USD) en vez de un
+        endpoint de referencia. Motivo explícito: la documentación no
+        confirma que los endpoints de referencia (`/stocks`, `/forex_pairs`)
+        tengan coste cero de cuota, y en el plan gratuito una suposición
+        equivocada ahí se paga con las peticiones que necesita el motor.
+        Una vela es el costo mínimo que sí se conoce.
+
+        Nunca lanza — cualquier fallo se traduce a False (contrato de
+        BaseAdapter.health_check).
+        """
+        try:
+            body = await self._get({
+                "symbol": "EUR/USD", "interval": "1day", "outputsize": 1,
+            })
+            return bool(body.get("values"))
+        except Exception as exc:
+            logger.warning("[%s] health_check falló: %s", self.source_name, exc)
+            return False
+
+
+# ══════════════════════════════════════════════════════════════════════════
 #  AdapterResult / AdapterChain — degradación elegante con fallback en cadena
 #
 #  Portado y adaptado desde infrastructure/adapters/base_adapter.py (linaje
