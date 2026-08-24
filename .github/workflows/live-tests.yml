@@ -1,0 +1,80 @@
+# .github/workflows/live-tests.yml
+# =================================
+# Los tests marcados `live` — los que tocan una API real y necesitan una
+# credencial de verdad. Es la tercera mitad del hueco que ESTADO.md
+# registró el 18 ago: nada instanciaba adapters, nada llamaba a
+# load_secret(), y ningún workflow inyectaba secretos. Las dos primeras las
+# cierra ingestion/sources.py; esta es la tercera.
+#
+# POR QUÉ ESTÁ SEPARADO DE tests.yml, y no es un job más ahí adentro:
+# tests.yml corre en `pull_request`, y un PR desde un FORK ejecuta el
+# workflow del fork con permisos del fork. Si los secretos estuvieran
+# declarados en ese workflow, bastaría con abrir un PR que cambie un paso
+# por `echo "$TWELVEDATA_API_KEY"` para exfiltrarlos. GitHub mitiga esto
+# no pasando secretos a PRs de forks, pero la mitigación es una política
+# del proveedor, no una propiedad de este repo — y el día que alguien
+# agregue `pull_request_target` "para que funcione", la mitigación
+# desaparece sin que nadie lo note. Mantener los secretos en un archivo
+# que NO se dispara por PR hace que ese error requiera editar este archivo
+# a propósito, en vez de ser un efecto colateral.
+#
+# tests.yml se queda sin credenciales, y así debe seguir: corre la suite
+# completa, y los tests `live` se saltean solos ahí por su propio skipif.
+# Un skip visible en el log es la señal de que el hueco sigue abierto.
+
+name: SPEL Live Tests
+
+on:
+  # Manual, a propósito. Cada corrida consume cuota real del plan gratuito
+  # de los proveedores, así que se dispara cuando alguien quiere la
+  # respuesta, no en cada push.
+  workflow_dispatch:
+
+  # Semanal, cuando haya un motivo para gastar cuota sin que nadie lo pida.
+  # Comentado y no borrado porque la decisión ya está pensada y el día que
+  # se active no hay que volver a razonarla: lo que este schedule detecta
+  # es que un proveedor cambie la forma de su respuesta sin avisar, que es
+  # un fallo que ningún test offline puede ver. Antes de descomentarlo hay
+  # que confirmar que la cuota semanal alcanza para el conjunto completo de
+  # tests live, que hoy es 2 y va a crecer.
+  # schedule:
+  #   - cron: "0 6 * * 1"   # lunes 06:00 UTC
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+
+    # A nivel de JOB, no de step: los tests live son varios y van a ser más,
+    # y repetir el bloque en cada step es la forma segura de que a uno se le
+    # olvide. Nunca como argumento de comando (`pytest --key=...`): los
+    # argumentos aparecen completos en el log del runner y en la lista de
+    # procesos; una variable de entorno no.
+    env:
+      TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+      # Le dice al guardián de tests/test_sources.py que en ESTE entorno la
+      # ausencia de credenciales no es lo esperado, sino una falla de
+      # plomería. Sin esto el guardián se saltea y un secreto mal escrito
+      # en el bloque de arriba pasaría desapercibido: todos los tests live
+      # se saltearían por su propio skipif y el workflow terminaría verde
+      # sin haber probado nada.
+      SPEL_EXPECT_SECRETS: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Instalar dependencias de desarrollo (solo para tests)
+        run: pip install -r requirements-dev.txt
+
+      # -m live selecciona exactamente los tests marcados. El marker está
+      # registrado en pytest.ini justamente para que un typo
+      # (`@pytest.mark.liv`) no deje un test fuera de esta selección en
+      # silencio.
+      - name: Correr solo los tests live
+        run: python -m pytest tests/ -m live -v
