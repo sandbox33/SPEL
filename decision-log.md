@@ -4,6 +4,91 @@ Auditoría de decisiones de arquitectura (stream `DECISION_LOG`, Decisión #14).
 
 ---
 
+## 2026-08-23 (PR-4) — Punto de composición: dónde se resuelven las credenciales, y una sola vez
+
+**Fuente:** el hallazgo de gobernanza registrado en `ESTADO.md` el 18 ago ("no hay ningún
+punto de composición"), verificado entonces por grep en tres mitades y re-verificado ahora
+antes de cerrarlo.
+
+**Hallazgo 1 — el hueco no era "falta un adapter", era "falta dónde armarlos".** Las tres
+mitades: nada instanciaba un adapter fuera de tests; `load_secret()` no se llamaba desde
+producción (los dos hits fuera de `tests/` eran docstrings de `persistence.py`); ningún
+workflow inyectaba secretos (cero `secrets.` y cero `env:` en `.github/workflows/`). Las
+piezas existían y estaban probadas, y nadie las conectaba. Es una brecha de otra clase que
+"faltan adapters", y se cierra con otra clase de trabajo.
+
+**Hallazgo 2 — la regla que hacía falta proteger ya existía, sin dueño.** Los adapters
+reciben credenciales por constructor y no leen el entorno (Decisión 6 de PR-3). Eso los
+hace testeables, pero deja abierta la pregunta de quién las lee — y una regla que nadie
+verifica se rompe con el primer adapter que "por comodidad" haga `os.environ.get()` en su
+`__init__`. Verificado hoy que el invariante se sostiene: `ingestion/adapters.py` no
+importa `governance.*` ni `os`.
+
+**Hallazgo 3 — offline no se puede distinguir "no hay secretos" de "los secretos no
+llegaron".** Sin credenciales, la ausencia es el estado esperado y todos los tests `live`
+se saltean por su propio `skipif`. Es decir: un secreto cargado en GitHub pero mal escrito
+en el `env:` del workflow produce un workflow **verde que no probó nada**. Ningún test
+offline puede ver eso, porque offline se ve idéntico a un entorno de desarrollo sano.
+
+**Decisiones:**
+
+1. **`ingestion/sources.py` es el punto de composición, y es UNO.** Único lugar de
+   producción donde se llama a `load_secret()` y se construyen adapters. Con tres lugares,
+   "¿por qué no arrancó tal fuente?" vuelve a ser una búsqueda en vez de una lectura.
+2. **Una fuente sin credencial es capacidad ausente, no error.** `build_price_sources()`
+   nunca lanza por una credencial faltante: devuelve `SourceInventory` con lo construible
+   y el motivo del resto. Un motor que se cae entero al arrancar porque falta una clave
+   opcional es peor que uno que arranca degradado y lo dice.
+3. **El motivo nombra la variable exacta.** `"falta DERIV_APP_ID"`, no "credenciales
+   incompletas". Deriv necesita dos credenciales y tener el token con el `app_id` faltante
+   es un caso real y frecuente (el token se rota, el `app_id` se olvida en el otro
+   entorno); un motivo genérico obliga a adivinar entre las dos.
+4. **`SourceInventory` es `frozen`.** Es una foto del momento en que se levantó, no un
+   registro al que se le agregan fuentes después. Si cambian las credenciales se vuelve a
+   llamar y se obtiene una foto nueva — parchear la vieja es como se llega a dos partes
+   del sistema creyendo cosas distintas sobre qué hay conectado.
+5. **El test de arquitectura usa AST, no grep.** Los docstrings de `adapters.py` hablan
+   explícitamente de `governance/secrets.py` y de `os.environ` (para decir que NO los usa),
+   así que un grep daría un falso positivo permanente y el test se terminaría borrando por
+   inútil. El AST solo ve imports reales.
+6. **`live-tests.yml` separado de `tests.yml`, no un job más adentro.** `tests.yml` corre
+   en `pull_request`, y un PR desde un fork ejecuta el workflow del fork: con los secretos
+   declarados ahí, bastaría un PR que cambie un paso por `echo "$TWELVEDATA_API_KEY"`.
+   GitHub mitiga esto no pasando secretos a PRs de forks, pero **la mitigación es una
+   política del proveedor, no una propiedad de este repo** — y el día que alguien agregue
+   `pull_request_target` "para que funcione", desaparece sin que nadie lo note. En un
+   archivo que no se dispara por PR, ese error requiere editar el archivo a propósito.
+7. **`SPEL_EXPECT_SECRETS=1` + un test guardián** (Hallazgo 3). El workflow afirma "acá los
+   secretos deberían estar", y el guardián falla si el inventario queda vacío. Invierte la
+   pregunta que offline no se puede hacer. Verificado en los dos sentidos: con la variable
+   en 1 y sin credenciales falla con un mensaje que nombra las variables faltantes; con
+   una credencial presente pasa.
+8. **Credenciales por `env:` de job, nunca como argumento de comando.** Los argumentos
+   aparecen completos en el log del runner y en la lista de procesos; una variable de
+   entorno no. A nivel de job y no de step porque los tests live van a ser más, y repetir
+   el bloque en cada step es la forma segura de que a uno se le olvide.
+9. **`workflow_dispatch` solamente; el `schedule:` queda comentado.** Cada corrida gasta
+   cuota real del plan gratuito. El schedule se deja escrito y razonado —lo que detecta es
+   que un proveedor cambie la forma de su respuesta sin avisar— para que el día que se
+   active no haya que volver a pensarlo; antes hay que confirmar que la cuota semanal
+   alcanza para el conjunto de tests live, que hoy es 2 y va a crecer.
+
+**Descartado:** capturar excepciones genéricas en `build_price_sources()` — un `ValueError`
+por pasarle una key vacía a un adapter es un bug de ese archivo, no una capacidad ausente,
+y taparlo lo convertiría en "esa fuente no estaba disponible", que es justo el fallo
+silencioso que `ingestion/` existe para no producir. También se descartó un `timeout_s` por
+proveedor: es una decisión de operación, y sin un motivo medido para diferenciarlos, uno
+solo.
+
+**Validación pendiente:** nada llama todavía a `build_price_sources()` desde un ciclo real
+— `orchestration/cycle.py` corre scoring sobre series ya persistidas (`read_series`), no
+sobre datos que va a buscar. El hueco que queda ya no es "no hay dónde armar las piezas"
+sino "las piezas armadas no se usan todavía". Y el workflow `live-tests.yml` **nunca
+corrió**: hasta que alguien cargue `TWELVEDATA_API_KEY` en los Secrets y lo dispare a mano,
+la tercera mitad está escrita pero no ejercitada.
+
+---
+
 ## 2026-08-23 (PR-3) — TwelveDataAdapter: segunda fuente OHLCV, y primera prueba real del contrato
 
 **Fuente:** documentación oficial de TwelveData (endpoint `time_series`) y auditoría del

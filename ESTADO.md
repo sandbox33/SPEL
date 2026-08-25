@@ -31,7 +31,7 @@ FASE 6 — Motor streaming multi-timeframe   🟡 Infraestructura lista, señal 
 
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-242 → 392 tests desde el 17 ago (65 tests nuevos en un día de trabajo). Todo lo de
+242 → 402 tests desde el 17 ago (65 tests nuevos en un día de trabajo). Todo lo de
 abajo corrió en clon 100% ajeno, venv limpio desde `requirements.txt`, 10 corridas
 seguidas sin intermitencia.
 
@@ -41,6 +41,7 @@ seguidas sin intermitencia.
 | `core/monte_carlo.py` | Validación GBM — NO entrena, simulación pura en cada llamada | 22 | ✅ |
 | `core/price_signals.py` | te_score (proxy TE) + backbone_score (EMA20/63) | 12 | ✅ |
 | `ingestion/adapters.py` | DerivAdapter + TwelveDataAdapter + contrato de datos (`drop_unclosed_candles`, `validate_ohlcv_schema`, `AdapterResult` con metadata de calidad) | 93 | ✅ |
+| `ingestion/sources.py` | **Punto de composición** — `build_price_sources()` resuelve credenciales y construye adapters; `SourceInventory` distingue capacidad ausente de error | 10 + 1 guardián | ✅ |
 | `ingestion/gdelt.py` + `_aggregation` + `_series` | Pipeline GDELT completo, persistencia JSONL | 41 | ✅ |
 | `ingestion/training_dataset.py` | Une OHLCV + serie GDELT, forward-fill, coverage_ratio explícito | 7 | ✅ |
 | `orchestration/cycle.py` | Corre vitality/nash/godel sobre 5 activos a la vez | 10 | ✅ |
@@ -82,16 +83,38 @@ falta confirmar contra la API viva es el camino que ningún fixture ejercita —
 httpx que el adapter abre y cierra solo (los tests offline inyectan el suyo), la
 autenticación aceptada de verdad, y la forma intradía.
 
-**Hallazgo relacionado — no hay ningún punto de composición.** No es que falte un
-adapter: falta el lugar donde algo se arma y corre de verdad. Verificado por grep,
-las tres mitades del mismo hueco: (1) nada instancia un adapter fuera de tests —
-`DerivAdapter(` no aparece en ningún archivo de producción, solo su propia definición
-de clase; (2) `load_secret()` no se llama desde producción — los únicos dos hits fuera
-de `tests/` son menciones en docstrings de `governance/persistence.py`, no llamadas;
-(3) los secretos de proveedores están registrados en `SecretKey` pero ningún workflow
-los inyecta — cero `secrets.` y cero `env:` en `.github/workflows/`. Es decir: las
-piezas existen y están probadas, pero nadie las conecta todavía. Eso es lo que
-`orchestration/` tiene que cerrar, y es una brecha distinta de "faltan adapters".
+**Desde PR-4 ya hay cómo correrlo:** cargar `TWELVEDATA_API_KEY` en los Secrets del repo
+y disparar `live-tests.yml` a mano (Actions → SPEL Live Tests → Run workflow). Es una
+acción de un minuto, y es lo único que separa a este adapter de ✅.
+
+**~~Hallazgo relacionado — no hay ningún punto de composición.~~ CERRADO (PR-4).** El
+hallazgo del 18 ago decía: no es que falte un adapter, falta el lugar donde algo se arma
+y corre de verdad. Eran tres mitades del mismo hueco, y las tres están cerradas:
+
+| Mitad del hueco | Cómo estaba | Cómo está |
+|---|---|---|
+| Nada instancia un adapter fuera de tests | `DerivAdapter(` solo en su propia definición | `ingestion/sources.py::build_price_sources()` construye los dos |
+| `load_secret()` no se llama desde producción | los 2 hits fuera de `tests/` eran docstrings | `sources.py` es el primer —y único— llamador real |
+| Ningún workflow inyecta secretos | cero `secrets.` y cero `env:` en `.github/workflows/` | `live-tests.yml` inyecta `TWELVEDATA_API_KEY` por `env:` de job |
+
+**El punto de composición es UNO, y hay un test que lo mantiene así.** Los adapters
+reciben credenciales por constructor y nunca leen el entorno; `test_sources.py` verifica
+**con AST** (no con grep, que daría falso positivo con los docstrings que hablan del tema)
+que `ingestion/adapters.py` no importe `governance.*` ni `os`. Si mañana hay tres lugares
+que resuelven credenciales, "¿por qué no arrancó tal fuente?" vuelve a ser una búsqueda en
+vez de una lectura.
+
+**Una fuente sin credencial es capacidad ausente, no error.** `build_price_sources()` nunca
+lanza por una credencial faltante: devuelve un `SourceInventory` con lo que sí se pudo
+construir y, para lo demás, el motivo nombrando la variable exacta
+(`"faltan DERIV_API_TOKEN, DERIV_APP_ID"`). Deriv necesita las dos credenciales y el motivo
+dice cuál falta — tener el token y que falte el `app_id` es un caso real, y un
+"credenciales incompletas" obligaría a adivinar entre las dos.
+
+**Lo que sigue faltando** es distinto y más chico: nada llama todavía a
+`build_price_sources()` desde un ciclo real. `orchestration/cycle.py` corre scoring sobre
+datos que recibe, no sobre datos que va a buscar. Esa es la conexión que falta ahora — ya
+no "no hay dónde armar las piezas", sino "las piezas armadas no se usan todavía".
 
 ---
 
