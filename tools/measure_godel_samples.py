@@ -119,6 +119,8 @@ class FoldMeasurement:
     p90_n_obs: int          # cuántos días de TRAIN alimentaron el P90
     n_total: int            # candidatos en validación (los que tienen i >= lookback)
     n_post_mask: int        # los que además pasan la máscara Gödel
+    n_post_propia: int      # de los post-máscara, con entropía DEL PROPIO DÍA
+    n_post_arrastrada: int  # de los post-máscara, con entropía forward-filled
     n_up: int               # de los post-máscara, cuántos con log_return > 0
     n_down: int
     estable: bool           # n_post_mask >= 100 Y min(clase) >= 20
@@ -144,11 +146,18 @@ class AssetMeasurement:
     # 3-4. folds y agregado
     folds: list[FoldMeasurement]
     oof_post_mask: int
+    oof_post_propia: int      # "n post-máscara sin arrastre"
+    oof_post_arrastrada: int
     oof_up: int
     oof_down: int
     # 5. veredicto
     verdict: str
     verdict_reason: str
+    #: Se llena SOLO cuando el n sin arrastre cae por debajo de un umbral
+    #: que el n total sí supera — es decir, cuando el veredicto depende de
+    #: muestras que entraron con entropía prestada. None significa que el
+    #: arrastre no cambia la lectura, no que no haya arrastre.
+    arrastre_warning: Optional[str] = None
     notes: list[str] = field(default_factory=list)
 
 
@@ -167,34 +176,123 @@ def default_ohlcv_root() -> Path:
     return drive_root().joinpath(*OHLCV_SUBDIR)
 
 
-def load_ohlcv(root: Path, asset: str) -> Optional[pd.DataFrame]:
-    """
-    Lee el OHLCV de un activo. Devuelve None si no hay archivo — que es un
-    resultado válido ("este activo no tiene precio persistido"), no un
-    error. Un error de verdad (archivo corrupto, ilegible) sí se propaga.
+#: Patrones de nombre por defecto. Conservan EXACTAMENTE el comportamiento
+#: anterior (se probaba .csv y después .parquet) para no romper nada que ya
+#: funcione. Los nombres reales del proyecto no siguen esta forma
+#: (`BTC_ohlcv_v5.parquet`), y por eso el patrón es un flag: el desajuste
+#: era el NOMBRE, no solo la carpeta, y ninguna cantidad de --ohlcv-root
+#: arregla un nombre distinto.
+DEFAULT_OHLCV_PATTERNS: tuple[str, ...] = ("{asset}.csv", "{asset}.parquet")
 
-    Acepta .csv y .parquet. pyarrow se importa de forma perezosa y solo si
-    hace falta: no está en requirements.txt (el motor no usa Parquet, ver
-    requirements-dev.txt), así que importarlo arriba rompería este módulo
-    en un entorno donde no está instalado.
-    """
-    for sufijo in (".csv", ".parquet"):
-        ruta = root / f"{asset}{sufijo}"
-        if not ruta.is_file():
-            continue
-        if sufijo == ".csv":
-            df = pd.read_csv(ruta)
-        else:
-            import pyarrow.parquet as pq  # lazy: ver docstring
-            df = pq.read_table(ruta).to_pandas()
+#: Nombres aceptados para la columna de fecha. `timestamp` es lo que produce
+#: el contrato de ingestion/adapters.py; `date` es lo que usan los parquets
+#: del data lake legacy (ver tools/audit_data_lake.py, que audita justamente
+#: la inconsistencia de esa columna). Se acepta cualquiera de las dos y se
+#: normaliza a `timestamp`, que es lo que espera validate_ohlcv_schema().
+DATE_COLUMNS: tuple[str, ...] = ("timestamp", "date")
 
-        if "timestamp" not in df.columns:
-            raise ValueError(
-                f"{ruta} no tiene columna 'timestamp'. Columnas: {list(df.columns)}"
-            )
-        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
-        return df.sort_values("timestamp").reset_index(drop=True)
-    return None
+
+@dataclass(frozen=True)
+class OhlcvLookup:
+    """Resultado de buscar el OHLCV de un activo.
+
+    `intentos` existe por un motivo concreto: sin él, "no encontré nada" y
+    "busqué en el lugar equivocado" se ven idénticos en el reporte, y no hay
+    forma de distinguirlos sin leer el código. Con la lista de rutas
+    intentadas, el reporte se explica solo."""
+    df: Optional[pd.DataFrame]
+    path: Optional[Path]
+    intentos: list[str]
+
+
+def _directorios_candidatos(root: Path, asset: str) -> list[Path]:
+    """
+    Dónde puede vivir el archivo de un activo. Plano en la raíz es el caso
+    que ya funcionaba; los tres siguientes cubren los layouts por activo
+    que usa el Drive real (una carpeta por activo, con o sin subcarpeta).
+    El orden importa: lo más específico primero, para que un archivo suelto
+    en la raíz no le gane a uno dentro de la carpeta del activo.
+    """
+    return [
+        root / asset / "ohlcv",
+        root / asset,
+        root / "ohlcv" / asset,
+        root,
+    ]
+
+
+def _leer_tabla(ruta: Path) -> pd.DataFrame:
+    """pyarrow se importa de forma perezosa y solo si hace falta: no está en
+    requirements.txt (el motor no usa Parquet, ver requirements-dev.txt), así
+    que importarlo arriba rompería este módulo donde no esté instalado."""
+    if ruta.suffix == ".parquet":
+        import pyarrow.parquet as pq  # lazy: ver docstring
+        return pq.read_table(ruta).to_pandas()
+    return pd.read_csv(ruta)
+
+
+def _normalizar_fecha(df: pd.DataFrame, ruta: Path) -> pd.DataFrame:
+    """
+    Acepta `timestamp` o `date` y normaliza a `timestamp`. Si no hay
+    ninguna, el error lista las columnas que SÍ vinieron — sin eso, un
+    parquet con la fecha bajo otro nombre produce un fallo que no dice qué
+    hacer al respecto.
+    """
+    presentes = [c for c in DATE_COLUMNS if c in df.columns]
+    if not presentes:
+        raise ValueError(
+            f"{ruta} no tiene ninguna columna de fecha reconocida "
+            f"{list(DATE_COLUMNS)}. Columnas encontradas: {list(df.columns)}"
+        )
+    col = presentes[0]
+    if col != "timestamp":
+        # Renombrar, no duplicar: dejar las dos columnas invita a que aguas
+        # abajo alguien lea la que no se normalizó.
+        df = df.rename(columns={col: "timestamp"})
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+    return df.sort_values("timestamp").reset_index(drop=True)
+
+
+def load_ohlcv(
+    root: Path,
+    asset: str,
+    *,
+    patterns: Sequence[str] = DEFAULT_OHLCV_PATTERNS,
+) -> OhlcvLookup:
+    """
+    Busca y lee el OHLCV de un activo. Devuelve `df=None` si no hay archivo
+    — resultado válido ("este activo no tiene precio persistido"), no un
+    error. Un error de verdad (archivo corrupto, columna de fecha ausente)
+    sí se propaga.
+
+    Cada patrón lleva `{asset}` como placeholder y se prueba en cada
+    directorio candidato. Como último recurso hace una búsqueda recursiva
+    desde la raíz, para no fallar por una diferencia de profundidad que no
+    cambia nada. Todo lo intentado queda en `OhlcvLookup.intentos`.
+    """
+    intentos: list[str] = []
+
+    for patron in patterns:
+        nombre = patron.format(asset=asset)
+        for directorio in _directorios_candidatos(root, asset):
+            ruta = directorio / nombre
+            intentos.append(str(ruta))
+            if ruta.is_file():
+                return OhlcvLookup(_normalizar_fecha(_leer_tabla(ruta), ruta),
+                                   ruta, intentos)
+
+    # Último recurso: el archivo existe con ese nombre pero a otra
+    # profundidad. Se reporta como intento aparte para que quede claro que
+    # el match no vino de un directorio esperado.
+    for patron in patterns:
+        nombre = patron.format(asset=asset)
+        intentos.append(f"{root}/**/{nombre} (búsqueda recursiva)")
+        for ruta in sorted(root.rglob(nombre)):
+            if ruta.is_file():
+                return OhlcvLookup(_normalizar_fecha(_leer_tabla(ruta), ruta),
+                                   ruta, intentos)
+
+    return OhlcvLookup(None, None, intentos)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -203,14 +301,22 @@ def load_ohlcv(root: Path, asset: str) -> Optional[pd.DataFrame]:
 
 @dataclass(frozen=True)
 class SerieDerivada:
-    """Las tres series que la máscara y el target necesitan, alineadas al
-    mismo índice de día. `log_return[0]` es NaN por definición (no hay día
+    """Las series que la máscara y el target necesitan, alineadas al mismo
+    índice de día. `log_return[0]` es NaN por definición (no hay día
     previo), y por eso el primer índice usable siempre es >= 1 — aparte del
-    piso que impone el lookback."""
+    piso que impone el lookback.
+
+    `forward_filled[i]` marca que la entropía de ese día NO es suya: viene
+    arrastrada de un día GDELT anterior (`build_training_dataset` hace
+    forward-fill). Importa porque la máscara dispara sobre
+    `entropy >= P90`, así que un día puede entrar al conteo por una
+    entropía que no le pertenece. Un n de 700 con 400 arrastradas no es
+    700, y sin este desglose no hay forma de saberlo."""
     fechas: list[date]
     entropy: np.ndarray
     vitality: np.ndarray
     log_return: np.ndarray
+    forward_filled: np.ndarray
 
 
 def _log_returns(closes: Sequence[float]) -> np.ndarray:
@@ -256,6 +362,9 @@ def build_serie_derivada(result: BuildDatasetResult) -> SerieDerivada:
 
     return SerieDerivada(
         fechas=fechas, entropy=entropy, vitality=vitality, log_return=log_return,
+        forward_filled=np.array(
+            [r.entropy_is_forward_filled for r in filas], dtype=bool
+        ),
     )
 
 
@@ -315,6 +424,7 @@ def measure_folds(
         )
 
         n_total = n_post = n_up = n_down = 0
+        n_propia = n_arrastrada = 0
         for i in range(val_ini, val_fin):
             # Piso del legacy: `for i in range(lookback, len(arr))`. Un
             # índice por debajo no tiene ventana completa hacia atrás.
@@ -330,6 +440,12 @@ def measure_folds(
             ):
                 continue
             n_post += 1
+            # La muestra entró a la máscara; ahora, ¿entró con entropía
+            # propia o con una arrastrada de un día GDELT anterior?
+            if bool(serie.forward_filled[i]):
+                n_arrastrada += 1
+            else:
+                n_propia += 1
             if serie.log_return[i] > 0:
                 n_up += 1
             else:
@@ -345,12 +461,45 @@ def measure_folds(
             p90_n_obs=p90.n_obs,
             n_total=n_total,
             n_post_mask=n_post,
+            n_post_propia=n_propia,
+            n_post_arrastrada=n_arrastrada,
             n_up=n_up,
             n_down=n_down,
             estable=n_post >= FOLD_MIN_N and min(n_up, n_down) >= FOLD_MIN_CLASE,
         ))
 
     return mediciones
+
+
+def evaluar_arrastre(oof: int, oof_propia: int) -> Optional[str]:
+    """
+    Detecta el caso en que el veredicto se sostiene sobre muestras que
+    entraron a la máscara con entropía prestada.
+
+    El veredicto SIGUE calculándose sobre el n total — ese criterio no se
+    cambia acá. Lo que esta función agrega es la advertencia: si el n sin
+    arrastre no alcanza un umbral que el n total sí supera, el número que
+    manda es frágil, y el reporte tiene que decirlo en vez de dejar que
+    alguien lea "700" y suponga 700 días con entropía propia.
+
+    Devuelve None cuando el arrastre no cambia en qué banda cae el
+    resultado — que no es lo mismo que "no hay arrastre".
+    """
+    for umbral, etiqueta in (
+        (OOF_MIN_DEFENDIBLE, "DEFENDIBLE"),
+        (OOF_MIN_PARA_CORRER, "el mínimo para correr el experimento"),
+    ):
+        if oof >= umbral > oof_propia:
+            arrastradas = oof - oof_propia
+            pct = 100.0 * arrastradas / oof if oof else 0.0
+            return (
+                f"El veredicto se apoya en entropía arrastrada: el n total "
+                f"({oof}) supera {umbral} ({etiqueta}), pero el n SIN arrastre "
+                f"({oof_propia}) no. {arrastradas} de {oof} muestras "
+                f"({pct:.1f}%) entraron a la máscara con una entropía que no "
+                f"es del día. Tratar este resultado como frágil."
+            )
+    return None
 
 
 def dictaminar(oof: int, folds: Sequence[FoldMeasurement]) -> tuple[str, str]:
@@ -399,6 +548,7 @@ def measure_asset(
     lookback: int,
     n_folds: int,
     p90_global_default: float,
+    patterns: Sequence[str] = DEFAULT_OHLCV_PATTERNS,
 ) -> AssetMeasurement:
     """Mide un activo de punta a punta. Nunca lanza por ausencia de datos:
     devuelve la medición con los ceros que correspondan y una nota."""
@@ -413,23 +563,34 @@ def measure_asset(
             f"insufficient_events=True excluidos del conteo de profundidad."
         )
 
-    ohlcv = load_ohlcv(ohlcv_root, asset)
-    if ohlcv is None:
+    lookup = load_ohlcv(ohlcv_root, asset, patterns=patterns)
+    if lookup.df is None:
+        # Enumerar lo intentado: "no hay datos" y "busqué en el lugar
+        # equivocado" se ven idénticos sin esto, y son problemas distintos
+        # con soluciones distintas.
         notas.append(
-            f"Sin OHLCV en {ohlcv_root} para '{asset}' (se buscó {asset}.csv "
-            f"y {asset}.parquet). Sin precio no hay target: medición en cero."
+            f"Sin OHLCV para '{asset}'. Patrones probados: "
+            f"{list(patterns)}. Rutas intentadas, en orden:"
+        )
+        notas.extend(f"    {ruta}" for ruta in lookup.intentos)
+        notas.append(
+            "Si el archivo existe con otro nombre, pasar --ohlcv-pattern "
+            "(ej: --ohlcv-pattern '{asset}_ohlcv_v5.parquet')."
         )
         return AssetMeasurement(
             asset=asset,
             gdelt_days=len(dias_gdelt), gdelt_first=g_ini, gdelt_last=g_fin,
             ohlcv_days=0, ohlcv_first=None, ohlcv_last=None, overlap_days=0,
             joined_rows=0, coverage_ratio=0.0, n_dropped_no_entropy=0,
-            folds=[], oof_post_mask=0, oof_up=0, oof_down=0,
+            folds=[], oof_post_mask=0, oof_post_propia=0, oof_post_arrastrada=0,
+            oof_up=0, oof_down=0,
             verdict=VerdictLevel.SIN_DATOS,
             verdict_reason="Sin OHLCV persistido para este activo.",
             notes=notas,
         )
 
+    ohlcv = lookup.df
+    notas.append(f"OHLCV leído de: {lookup.path}")
     dias_ohlcv = sorted({ts.date() for ts in ohlcv["timestamp"]})
     o_ini, o_fin = _rango(dias_ohlcv)
     solapamiento = len(set(dias_ohlcv) & set(dias_gdelt))
@@ -449,7 +610,8 @@ def measure_asset(
             joined_rows=len(resultado.rows),
             coverage_ratio=resultado.coverage_ratio,
             n_dropped_no_entropy=resultado.n_dropped_no_entropy,
-            folds=[], oof_post_mask=0, oof_up=0, oof_down=0,
+            folds=[], oof_post_mask=0, oof_post_propia=0, oof_post_arrastrada=0,
+            oof_up=0, oof_down=0,
             verdict=VerdictLevel.SIN_DATOS,
             verdict_reason="Join sin filas suficientes para derivar un target.",
             notes=notas,
@@ -467,7 +629,11 @@ def measure_asset(
         p90_global_default=p90_global_default,
     )
     oof = sum(f.n_post_mask for f in folds)
+    oof_propia = sum(f.n_post_propia for f in folds)
+    # El veredicto se calcula sobre el n TOTAL — ese criterio no cambia.
+    # El aviso de arrastre es información adicional, no un veredicto nuevo.
     veredicto, motivo = dictaminar(oof, folds)
+    aviso = evaluar_arrastre(oof, oof_propia)
 
     return AssetMeasurement(
         asset=asset,
@@ -479,9 +645,12 @@ def measure_asset(
         n_dropped_no_entropy=resultado.n_dropped_no_entropy,
         folds=folds,
         oof_post_mask=oof,
+        oof_post_propia=oof_propia,
+        oof_post_arrastrada=sum(f.n_post_arrastrada for f in folds),
         oof_up=sum(f.n_up for f in folds),
         oof_down=sum(f.n_down for f in folds),
-        verdict=veredicto, verdict_reason=motivo, notes=notas,
+        verdict=veredicto, verdict_reason=motivo,
+        arrastre_warning=aviso, notes=notas,
     )
 
 
@@ -514,13 +683,14 @@ def render_text(mediciones: Sequence[AssetMeasurement], *, lookback: int) -> str
             out.append("")
             out.append(
                 "  fold  train  validación                  P90      "
-                "n_tot  n_mask   sube   baja  estable"
+                "n_tot  n_mask  propia  arrast   sube   baja  estable"
             )
             for f in m.folds:
                 out.append(
                     f"  {f.fold:>4}  {f.n_train_days:>5}  "
                     f"{str(f.val_start):>10}..{str(f.val_end):<10}  "
                     f"{f.p90_used:>7.4f}  {f.n_total:>5}  {f.n_post_mask:>6}  "
+                    f"{f.n_post_propia:>6}  {f.n_post_arrastrada:>6}  "
                     f"{f.n_up:>5}  {f.n_down:>5}  {'sí' if f.estable else 'no':>7}"
                 )
         out.append("")
@@ -528,7 +698,13 @@ def render_text(mediciones: Sequence[AssetMeasurement], *, lookback: int) -> str
             f"  OOF agregado post-máscara: {m.oof_post_mask} "
             f"(sube={m.oof_up}, baja={m.oof_down})"
         )
+        out.append(
+            f"  OOF sin arrastre (entropía propia): {m.oof_post_propia}"
+            f"   ·   con entropía arrastrada: {m.oof_post_arrastrada}"
+        )
         out.append(f"  VEREDICTO: {m.verdict} — {m.verdict_reason}")
+        if m.arrastre_warning:
+            out.append(f"  ⚠️  {m.arrastre_warning}")
         for nota in m.notes:
             out.append(f"  · {nota}")
         out.append("")
@@ -544,8 +720,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--assets", nargs="+", required=True,
                    help="Activos a medir, ej: BTC XAU NVDA NIFTY50")
     p.add_argument("--ohlcv-root", type=Path, default=None,
-                   help="Directorio con {asset}.csv o {asset}.parquet. "
-                        "Default: drive_root()/metrics/ohlcv")
+                   help="Raíz donde buscar el OHLCV. Se prueba plano y en "
+                        "subdirectorio por activo ({asset}/, {asset}/ohlcv/, "
+                        "ohlcv/{asset}/), más búsqueda recursiva como último "
+                        "recurso. Default: drive_root()/metrics/ohlcv")
+    p.add_argument("--ohlcv-pattern", nargs="+", default=list(DEFAULT_OHLCV_PATTERNS),
+                   metavar="PATRON",
+                   help="Patrón(es) de nombre de archivo con placeholder "
+                        "{asset}. Se prueban en orden. "
+                        "Default: %(default)s (conserva el comportamiento "
+                        "anterior). Ejemplo real: "
+                        "--ohlcv-pattern '{asset}_ohlcv_v5.parquet'")
     p.add_argument("--lookback", type=int, default=LOOKBACK_DEFAULT,
                    help=f"Ventana de features. Default {LOOKBACK_DEFAULT} "
                         f"(_LOOKBACK_DEFAULT del legacy).")
@@ -580,6 +765,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         measure_asset(
             a, ohlcv_root=root, lookback=args.lookback, n_folds=args.n_folds,
             p90_global_default=args.p90_global_default,
+            patterns=args.ohlcv_pattern,
         )
         for a in args.assets
     ]
@@ -587,7 +773,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.format == "json":
         print(json.dumps(
             {"lookback": args.lookback, "n_folds": args.n_folds,
-             "ohlcv_root": str(root),
+             "ohlcv_root": str(root), "ohlcv_pattern": list(args.ohlcv_pattern),
              "assets": [asdict(m) for m in mediciones]},
             indent=2, ensure_ascii=False,
         ))
