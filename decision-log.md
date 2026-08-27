@@ -4,6 +4,137 @@ Auditoría de decisiones de arquitectura (stream `DECISION_LOG`, Decisión #14).
 
 ---
 
+## 2026-08-24 — Deprecación de los 14 checkpoints LSTM legacy
+
+**Fuente:** ramas `archive/*` (código legacy real, leído para esta entrada, no citado de
+memoria), `tools/audit_data_lake.py` y `ESTADO.md` del repo nuevo.
+
+**Estado de facto que esto formaliza:** el repo nuevo **nunca** referenció los `.pt` ni
+`torch`. Verificado por grep en `core/`, `ingestion/`, `orchestration/`, `governance/`,
+`tools/` y `execution/`: los dos únicos hits son prosa en docstrings, ninguna importación
+ni ruta de código. `requirements.txt` lo dice explícito ("NO incluye PyTorch/ML —
+Decisión #7: sin ML en F1"). Esta entrada no cambia código: pone por escrito una decisión
+que Git ya venía sosteniendo en silencio, para que no se revierta por inercia el día que
+alguien encuentre los `.pt` en Drive y los tome por una base disponible.
+
+### La decisión, en cuatro puntos
+
+1. Los 14 checkpoints `.pt` **salen del flujo activo** de entrenamiento e inferencia.
+2. **No se usan como baseline operativo** ni como término de comparación entre modelos.
+3. **Se preservan como histórico/auditoría**, fuera de cualquier ruta activa (Principio #3:
+   archivar, nunca borrar).
+4. Toda comparación futura de modelos parte de **modelos reentrenados desde cero**.
+
+El movimiento físico de los archivos lo hace Altair en Colab — viven en Drive, no en el
+repo. Acá queda el registro, que es lo que sobrevive a la sesión.
+
+### Las razones (independientes: cada una alcanza por sí sola)
+
+**(a) Entrenados sobre el parquet canónico v4, con columnas de fecha en formatos
+inconsistentes (`'/'` vs `'-'`).** Es la causa raíz documentada el 2026-08-18, y está
+registrada en el repo nuevo, no solo en la memoria de una sesión: `ESTADO.md:196` y
+`tools/audit_data_lake.py:8-9` y `:336`. Unos pesos entrenados sobre ese defecto lo
+propagan: el modelo aprendió lo que el defecto le mostró.
+
+**(b) Su lista de features no es auditable desde el código.**
+`04_GOLD_MODULES/capa_c_inference.py:252` la lee de `meta["feature_columns"]`, y si esa
+clave falta cae a un fallback que toma **todas las columnas numéricas del parquet**
+(excluyendo `date`/`symbol`) truncadas a `_INPUT_SIZE`. O sea: qué 20 features vio
+realmente cada checkpoint depende de un JSON externo que puede no estar, y el
+comportamiento sin él es silencioso, no un error. No se puede reproducir un entrenamiento
+cuyo espacio de entrada no se puede reconstruir.
+
+> **Corrección de la línea citada:** la tarea indicaba `capa_c_inference.py:295`. El
+> mecanismo es exactamente el descrito, pero está en la **línea 252** (la 295 es
+> `_obtener_p90`). Se corrige acá para que la cita sirva a quien la vaya a buscar.
+
+**(c) — NO SE PUDO VERIFICAR COMO SE ENUNCIÓ; ver más abajo.** La razón propuesta era que
+el P90 de la máscara Gödel salía de `SHA_REGISTRY.json`, calculado sobre el dataset
+completo, con leakage en la selección de muestras. Dos cosas no cierran contra el archivo
+real:
+
+- **`SHA_REGISTRY.json` no guarda umbrales, guarda hashes.** Es un manifiesto de
+  integridad (ruta → `sha256`/`size`/`ts_validated`). Los valores del P90 viven en
+  `00_VAULT/godel_thresholds_v2.json`, que el registry únicamente *hashea*. Es la misma
+  distinción que el propio legacy advierte en `spel_meta_guardian.py`: *"el SHA256 de
+  SPEL_META.json es el hash del ARCHIVO meta, NO de los checkpoints. Son entidades
+  distintas."*
+- **El script que calcula esos percentiles usa corte temporal, no el dataset completo.**
+  `04_GOLD_MODULES/spel_p90_recalibrate.py` imprime *"Calculando percentiles con datos
+  <= 2023-12-31"*, opera sobre `n_filas_train` y reporta qué porcentaje del total usó. Eso
+  es exactamente lo contrario de calcular sobre todo el dataset.
+
+Lo que **sí** queda como sospecha razonable y sin resolver: el nombre del archivo
+(`_v2`) y el del script (`recalibrate`) sugieren que hubo una versión anterior de los
+umbrales que se recalibró justamente para arreglar algo. Si los 14 `.pt` se entrenaron
+contra los umbrales *previos*, el leakage habría sido real para ellos. **No se pudo
+determinar cuál de las dos versiones vieron los checkpoints**, y no se registra como
+hecho lo que no se verificó.
+
+**Esto no debilita la decisión:** las razones son independientes y (a) y (b) están
+confirmadas contra el código. La deprecación se sostiene sobre esas dos.
+
+### Consecuencia 1 — el canon de 20 features queda ABIERTO
+
+`01_HOLMES_OPS/spel_meta_guardian.py` declara su propia condición de vigencia, textual:
+
+> `# TOPOLOGÍA CANÓNICA (Regla 13 — inamovible mientras existan los 14 .pt):`
+> `#   input_size  = 20  ← 20 features del parquet canónico v4`
+> `#   hidden_size = 64  ← capacidad representacional calibrada en COVID test`
+> `#   num_layers  = 1   ← single-layer LSTM; stack invalida gradientes`
+
+El guardián se ató a la existencia de los checkpoints, no a una verdad sobre el problema.
+Al salir los `.pt` del flujo activo, **la condición que hacía inamovible a `input_size=20`
+deja de cumplirse por su propia letra** — no hay que derogar nada, se derogó solo.
+
+El canon de 20 features queda **abierto a redefinición**. La decisión de con cuántas y
+cuáles se trabaja es de Altair, y es **posterior a la medición de `n`**: elegir el ancho
+del espacio de entrada antes de saber cuántas muestras hay es lo que produce un modelo que
+no puede aprender nada. `enforce_lstm_architecture()` **no se porta** al repo nuevo.
+
+### Consecuencia 2 — las accuracies históricas dejan de ser baseline
+
+BTC 0.528, XAU 0.547, NVDA 0.550, NIFTY50 0.625 **no son un baseline**. El baseline pasa a
+ser el trivial: la clase mayoritaria.
+
+Con el umbral de aborto del legacy (`n_val < 5`), ninguna de las cuatro tuvo la evidencia
+necesaria para ser distinguible del azar. Cuántas muestras de validación habrían hecho
+falta para detectar esa ventaja sobre 0.5, con α=0.05 y potencia 80%:
+
+| Activo | Accuracy | Binomial exacto, 2 colas | Binomial exacto, 1 cola |
+|---|---:|---:|---:|
+| BTC | 0.528 | 2563 | 2034 |
+| XAU | 0.547 | 919 | 730 |
+| NVDA | 0.550 | 820 | 654 |
+| NIFTY50 | 0.625 | 134 | 111 |
+
+> **Corrección de las cifras:** la tarea daba 1991 / 705 / 620 / 102 rotuladas como
+> "binomial exacto". Recalculadas de cero para esta entrada, esos valores **no** son el
+> binomial exacto: corresponden a una **aproximación normal de una cola** (que da
+> 1969 / 698 / 616 / 97, dentro del ~1%). El binomial exacto a dos colas —el default
+> conservador— pide bastante más: 2563 para BTC, un 29% por encima de la cifra original.
+>
+> **La conclusión no se mueve ni un poco:** bajo cualquiera de los cuatro métodos, el
+> requisito está en los cientos o los miles, y el umbral que el legacy aceptaba era
+> `n_val < 5`. La brecha es de dos a tres órdenes de magnitud. Se corrigen las cifras
+> porque van a un registro permanente, no porque cambien nada.
+
+### Lo que esto NO hace
+
+No agrega `torch` a `requirements.txt`. No porta `enforce_lstm_architecture()` ni ningún
+guardián de arquitectura. No escribe código de modelos. No toca
+`execution/circuit_breaker.py` ni `execution_guard.py` (congelados hasta F4). El stream
+`MODELS` de `governance/persistence.py` sigue existiendo y apuntando a Drive: lo que
+cambia no es dónde pueden vivir unos pesos, sino que **ningún camino activo lee estos**.
+
+**Validación pendiente:** el movimiento físico de los 14 `.pt` a su ubicación de archivo lo
+hace Altair en Colab — hasta que ocurra, la deprecación está registrada pero no ejecutada.
+Y queda sin resolver cuál versión de los umbrales Gödel vieron los checkpoints (ver (c)):
+si alguien quiere cerrarlo, el rastro empieza comparando `godel_thresholds_v2.json` con lo
+que haya de la versión anterior en el historial de la rama archive.
+
+---
+
 ## 2026-08-23 (PR-4) — Punto de composición: dónde se resuelven las credenciales, y una sola vez
 
 **Fuente:** el hallazgo de gobernanza registrado en `ESTADO.md` el 18 ago ("no hay ningún

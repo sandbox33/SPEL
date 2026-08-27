@@ -128,6 +128,38 @@ depende parcialmente de que exista algo de ingestion GDELT real
 (Fase 1 incompleta) o de reusar el dataset legacy ya generado, si
 sigue siendo válido — a confirmar antes de arrancar.
 
+### Los checkpoints legacy NO son base operativa (2026-08-24)
+
+Los 14 `.pt` del legacy están **deprecados**: fuera del flujo activo de
+entrenamiento e inferencia, sin valor como baseline ni como término de
+comparación. Se preservan solo como histórico. **Cualquier port futuro
+parte de modelos reentrenados desde cero** — entrada completa, con las
+razones verificadas contra el código, en `decision-log.md` (2026-08-24).
+
+Tres cosas de esta fase cambian por eso:
+
+- **La hipótesis 2 ya no arrastra `64 hidden units, 1 capa` como dado.**
+  Esa topología era canónica por el guardián `enforce_lstm_architecture()`,
+  que declaraba su vigencia textual como *"inamovible mientras existan los
+  14 .pt"*. Al salir los checkpoints, la condición deja de cumplirse por su
+  propia letra. El guardián **no se porta**.
+- **La hipótesis 3 ya no da por fijas "esas 20 columnas".** El canon de 20
+  features queda abierto a redefinición, y esa decisión es **posterior a la
+  medición de `n`**: elegir el ancho del espacio de entrada antes de saber
+  cuántas muestras hay es precisamente cómo se llega a un modelo que no
+  puede aprender nada.
+- **El `~0.50` de arriba deja de tener un baseline histórico contra el cual
+  compararse.** Las accuracies legacy (BTC 0.528, XAU 0.547, NVDA 0.550,
+  NIFTY50 0.625) no son baseline: con el umbral de aborto del legacy
+  (`n_val < 5`) ninguna tuvo la evidencia para distinguirse del azar —
+  habrían hecho falta entre 134 y 2563 muestras de validación (binomial
+  exacto, dos colas, α=0.05, potencia 80%). El baseline pasa a ser el
+  trivial: la clase mayoritaria.
+
+Sigue en pie lo que ya decía esta fase: **sin `torch` en `requirements.txt`**
+(Decisión #7, sin ML en F1) y sin código de modelos hasta que el
+diagnóstico tenga causa identificada con evidencia.
+
 ## Fase 3 — Visualización (después de Fase 1 y 2, no antes)
 
 Grafo con un nodo por fuente de dato, score de confianza visible (0-100).
