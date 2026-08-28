@@ -41,14 +41,21 @@ from tools.measure_godel_samples import (
 D0 = date(2024, 1, 1)
 
 
-def _serie(n: int, *, entropy=None, vitality=None, log_return=None) -> SerieDerivada:
-    """Serie derivada sintética con control total de las tres columnas."""
+def _serie(
+    n: int, *, entropy=None, vitality=None, log_return=None, forward_filled=None
+) -> SerieDerivada:
+    """Serie derivada sintética con control total de cada columna.
+    `forward_filled` default en False: sin arrastre salvo que el test lo
+    pida explícitamente."""
     return SerieDerivada(
         fechas=[D0 + timedelta(days=k) for k in range(n)],
         entropy=np.array(entropy if entropy is not None else [1.0] * n, dtype=float),
         vitality=np.array(vitality if vitality is not None else [3] * n, dtype=int),
         log_return=np.array(
             log_return if log_return is not None else [0.01] * n, dtype=float
+        ),
+        forward_filled=np.array(
+            forward_filled if forward_filled is not None else [False] * n, dtype=bool
         ),
     )
 
@@ -57,7 +64,8 @@ def _fold(**kw) -> FoldMeasurement:
     base = dict(
         fold=1, n_train_days=10, val_start="2024-01-01", val_end="2024-02-01",
         p90_used=1.0, p90_source="GLOBAL", p90_n_obs=10,
-        n_total=0, n_post_mask=0, n_up=0, n_down=0, estable=False,
+        n_total=0, n_post_mask=0, n_post_propia=0, n_post_arrastrada=0,
+        n_up=0, n_down=0, estable=False,
     )
     base.update(kw)
     return FoldMeasurement(**base)
@@ -444,3 +452,265 @@ def test_el_tool_no_importa_torch_sklearn_ni_archive():
     prohibidos = {"torch", "sklearn", "tensorflow", "keras"}
     assert not (prohibidos & {m.split(".")[0] for m in importados}), importados
     assert not any(m.startswith("archive") for m in importados), importados
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  ARREGLO 1 — descubrimiento de archivos: patrón + subdirectorios
+#
+#  Los nombres reales del proyecto (BTC_ohlcv_v5.parquet, en carpeta por
+#  activo) no coinciden con el patrón que el tool buscaba. El desajuste era
+#  el NOMBRE, no solo la carpeta: ninguna cantidad de --ohlcv-root lo
+#  arregla sola.
+# ══════════════════════════════════════════════════════════════════════════
+
+def _csv_minimo(destino, n: int = 10) -> None:
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    ts = pd.date_range("2024-01-01", periods=n, freq="1D", tz="UTC")
+    close = np.linspace(100, 110, n)
+    pd.DataFrame({
+        "timestamp": ts, "open": close, "high": close, "low": close,
+        "close": close, "volume": 0.0,
+    }).to_csv(destino, index=False)
+
+
+def test_patron_por_defecto_conserva_el_comportamiento_anterior(tmp_path):
+    """Default = {asset}.csv y {asset}.parquet, plano en la raíz. Lo que ya
+    funcionaba tiene que seguir funcionando sin pasar ningún flag nuevo."""
+    _csv_minimo(tmp_path / "BTC.csv")
+
+    lookup = mod.load_ohlcv(tmp_path, "BTC")
+
+    assert lookup.df is not None
+    assert lookup.path == tmp_path / "BTC.csv"
+
+
+def test_patron_personalizado_encuentra_el_nombre_real_del_proyecto(tmp_path):
+    """El caso que motivó el arreglo: BTC_ohlcv_v5.parquet."""
+    _csv_minimo(tmp_path / "BTC_ohlcv_v5.csv")
+
+    sin_patron = mod.load_ohlcv(tmp_path, "BTC")
+    con_patron = mod.load_ohlcv(tmp_path, "BTC", patterns=["{asset}_ohlcv_v5.csv"])
+
+    assert sin_patron.df is None, "el patrón default no debe encontrarlo"
+    assert con_patron.df is not None
+    assert con_patron.path.name == "BTC_ohlcv_v5.csv"
+
+
+@pytest.mark.parametrize("subdir", ["BTC", "BTC/ohlcv", "ohlcv/BTC"])
+def test_encuentra_el_archivo_en_subdirectorio_por_activo(tmp_path, subdir):
+    """En Drive cada activo vive en su carpeta, no plano en la raíz."""
+    _csv_minimo(tmp_path / subdir / "BTC_ohlcv_v5.csv")
+
+    lookup = mod.load_ohlcv(tmp_path, "BTC", patterns=["{asset}_ohlcv_v5.csv"])
+
+    assert lookup.df is not None
+    assert lookup.path.parent.name == subdir.split("/")[-1]
+
+
+def test_busqueda_recursiva_como_ultimo_recurso(tmp_path):
+    """Una profundidad inesperada no debería hacer fallar la medición."""
+    _csv_minimo(tmp_path / "a" / "b" / "c" / "BTC_ohlcv_v5.csv")
+
+    lookup = mod.load_ohlcv(tmp_path, "BTC", patterns=["{asset}_ohlcv_v5.csv"])
+
+    assert lookup.df is not None
+    assert any("recursiva" in i for i in lookup.intentos)
+
+
+def test_el_subdirectorio_del_activo_le_gana_al_archivo_suelto_en_la_raiz(tmp_path):
+    """Orden de precedencia: lo más específico primero."""
+    _csv_minimo(tmp_path / "BTC.csv")
+    _csv_minimo(tmp_path / "BTC" / "BTC.csv")
+
+    lookup = mod.load_ohlcv(tmp_path, "BTC")
+
+    assert lookup.path == tmp_path / "BTC" / "BTC.csv"
+
+
+def test_cuando_no_encuentra_nada_reporta_donde_busco(tmp_path):
+    """'No hay datos' y 'busqué en el lugar equivocado' son problemas
+    distintos con soluciones distintas, y sin la lista de intentos se ven
+    idénticos en el reporte."""
+    lookup = mod.load_ohlcv(tmp_path, "BTC", patterns=["{asset}_ohlcv_v5.parquet"])
+
+    assert lookup.df is None
+    assert lookup.path is None
+    assert lookup.intentos, "tiene que decir qué intentó"
+    assert all("BTC_ohlcv_v5.parquet" in i for i in lookup.intentos)
+    assert any(str(tmp_path / "BTC") in i for i in lookup.intentos)
+
+
+def test_el_reporte_de_no_encontrado_lista_rutas_y_patron(tmp_path, monkeypatch, capsys):
+    """Extremo a extremo: lo intentado tiene que llegar a la salida."""
+    monkeypatch.setenv("SPEL_DRIVE_ROOT", str(tmp_path / "drive"))
+    (tmp_path / "drive").mkdir()
+    vacio = tmp_path / "vacio"
+    vacio.mkdir()
+
+    codigo = main([
+        "--assets", "BTC", "--p90-global-default", "1.19",
+        "--ohlcv-root", str(vacio),
+        "--ohlcv-pattern", "{asset}_ohlcv_v5.parquet",
+    ])
+
+    salida = capsys.readouterr().out
+    assert codigo == 0
+    assert "BTC_ohlcv_v5.parquet" in salida
+    assert str(vacio) in salida
+    assert "--ohlcv-pattern" in salida
+
+
+def test_el_reporte_dice_de_donde_leyo_cuando_si_encuentra(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("SPEL_DRIVE_ROOT", str(tmp_path / "drive"))
+    (tmp_path / "drive").mkdir()
+    root = tmp_path / "ohlcv"
+    _csv_minimo(root / "BTC" / "BTC_ohlcv_v5.csv", n=120)
+
+    main([
+        "--assets", "BTC", "--p90-global-default", "1.19",
+        "--ohlcv-root", str(root), "--ohlcv-pattern", "{asset}_ohlcv_v5.csv",
+    ])
+
+    assert "OHLCV leído de:" in capsys.readouterr().out
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  ARREGLO 2 — la columna de fecha puede llamarse "date"
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_acepta_la_columna_date_y_la_normaliza_a_timestamp(tmp_path):
+    """Los parquets del data lake usan 'date'; el contrato de adapters usa
+    'timestamp'. Se acepta cualquiera y se normaliza a una sola."""
+    n = 10
+    close = np.linspace(100, 110, n)
+    pd.DataFrame({
+        "date": pd.date_range("2024-01-01", periods=n, freq="1D", tz="UTC"),
+        "open": close, "high": close, "low": close, "close": close, "volume": 0.0,
+    }).to_csv(tmp_path / "BTC.csv", index=False)
+
+    lookup = mod.load_ohlcv(tmp_path, "BTC")
+
+    assert lookup.df is not None
+    assert "timestamp" in lookup.df.columns
+    assert "date" not in lookup.df.columns, "se renombra, no se duplica"
+    assert str(lookup.df["timestamp"].dt.tz) == "UTC"
+
+
+def test_timestamp_sigue_funcionando_igual_que_antes(tmp_path):
+    _csv_minimo(tmp_path / "BTC.csv")
+
+    lookup = mod.load_ohlcv(tmp_path, "BTC")
+
+    assert "timestamp" in lookup.df.columns
+
+
+def test_sin_columna_de_fecha_el_error_lista_las_columnas_que_si_vinieron(tmp_path):
+    pd.DataFrame({"fecha_rara": [1, 2], "close": [1.0, 2.0]}).to_csv(
+        tmp_path / "BTC.csv", index=False
+    )
+
+    with pytest.raises(ValueError) as excinfo:
+        mod.load_ohlcv(tmp_path, "BTC")
+
+    mensaje = str(excinfo.value)
+    assert "fecha_rara" in mensaje and "close" in mensaje
+    assert "timestamp" in mensaje and "date" in mensaje
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  ARREGLO 3 — desglose de forward-fill
+#
+#  La máscara dispara sobre (entropy >= P90), así que un día puede entrar
+#  por una entropía ARRASTRADA que no es suya. Un n de 700 con 400
+#  arrastradas no es 700.
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_desglosa_propias_y_arrastradas_por_fold():
+    n = 200
+    # Alterna arrastrada/propia: el desglose tiene que partir el total.
+    serie = _serie(
+        n, vitality=[9] * n,
+        forward_filled=[bool(i % 2) for i in range(n)],
+    )
+
+    folds = measure_folds(serie, lookback=0, n_folds=3, p90_global_default=99.0)
+
+    for f in folds:
+        assert f.n_post_propia + f.n_post_arrastrada == f.n_post_mask
+        assert f.n_post_propia > 0 and f.n_post_arrastrada > 0
+
+
+def test_sin_arrastre_todo_cuenta_como_propia():
+    n = 100
+    serie = _serie(n, vitality=[9] * n, forward_filled=[False] * n)
+
+    folds = measure_folds(serie, lookback=0, n_folds=1, p90_global_default=99.0)
+
+    assert sum(f.n_post_arrastrada for f in folds) == 0
+    assert sum(f.n_post_propia for f in folds) == sum(f.n_post_mask for f in folds)
+
+
+def test_todo_arrastrado_deja_el_n_sin_arrastre_en_cero():
+    n = 100
+    serie = _serie(n, vitality=[9] * n, forward_filled=[True] * n)
+
+    folds = measure_folds(serie, lookback=0, n_folds=1, p90_global_default=99.0)
+
+    assert sum(f.n_post_propia for f in folds) == 0
+    assert sum(f.n_post_arrastrada for f in folds) == sum(f.n_post_mask for f in folds)
+
+
+def test_avisa_cuando_el_veredicto_se_apoya_en_entropia_arrastrada():
+    """El caso exacto del brief: un n total que supera el umbral y un n sin
+    arrastre que no."""
+    aviso = mod.evaluar_arrastre(oof=700, oof_propia=300)
+
+    assert aviso is not None
+    assert "700" in aviso and "300" in aviso
+    assert "400" in aviso  # cuántas arrastradas
+    assert "frágil" in aviso
+
+
+def test_no_avisa_cuando_el_arrastre_no_cambia_la_banda():
+    """None significa 'el arrastre no cambia la lectura', no 'no hay
+    arrastre': acá hay 50 arrastradas y las dos cifras superan 620."""
+    assert mod.evaluar_arrastre(oof=700, oof_propia=650) is None
+
+
+def test_avisa_tambien_en_el_umbral_de_no_correr():
+    aviso = mod.evaluar_arrastre(oof=OOF_MIN_PARA_CORRER + 10, oof_propia=10)
+
+    assert aviso is not None
+    assert str(OOF_MIN_PARA_CORRER) in aviso
+
+
+def test_el_veredicto_se_sigue_calculando_sobre_el_n_total():
+    """El criterio acordado NO cambia: el aviso es información adicional,
+    no un veredicto nuevo. Mismo n total -> mismo veredicto, haya o no
+    arrastre."""
+    con, _ = dictaminar(OOF_MIN_DEFENDIBLE, [_fold(n_post_propia=0,
+                                                   n_post_arrastrada=OOF_MIN_DEFENDIBLE)])
+    sin, _ = dictaminar(OOF_MIN_DEFENDIBLE, [_fold(n_post_propia=OOF_MIN_DEFENDIBLE,
+                                                   n_post_arrastrada=0)])
+
+    assert con == sin == VerdictLevel.DEFENDIBLE
+
+
+def test_el_agregado_oof_desglosado_aparece_en_el_json(tmp_path, monkeypatch, capsys):
+    import json
+    monkeypatch.setenv("SPEL_DRIVE_ROOT", str(tmp_path / "drive"))
+    (tmp_path / "drive").mkdir()
+    root = tmp_path / "ohlcv"
+    _csv_minimo(root / "BTC.csv", n=200)
+    _escribir_gdelt("BTC", n=200)
+
+    main([
+        "--assets", "BTC", "--p90-global-default", "1.19",
+        "--ohlcv-root", str(root), "--format", "json",
+    ])
+
+    a = json.loads(capsys.readouterr().out)["assets"][0]
+    assert a["oof_post_propia"] + a["oof_post_arrastrada"] == a["oof_post_mask"]
+    assert "arrastre_warning" in a
+    for f in a["folds"]:
+        assert f["n_post_propia"] + f["n_post_arrastrada"] == f["n_post_mask"]
