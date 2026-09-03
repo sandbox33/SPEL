@@ -98,6 +98,53 @@ FOLD_MIN_N = 100
 FOLD_MIN_CLASE = 20
 
 
+class PercentileMode:
+    """
+    Cómo se calcula el umbral de entropía. ESTE TOOL NO CAMBIA EL CRITERIO
+    DEL SISTEMA — lo mide. `core/scoring.py` y `godel_active()` quedan
+    intactos; acá solo se elige QUÉ historia se le pasa a
+    `compute_adaptive_percentile()`, que se llama igual en los tres modos.
+
+    Por qué hace falta poder compararlos: la primera medición real dio OOF
+    de 284 (BTC) y 68 (XAU), y el diagnóstico mostró que la causa no es
+    escasez de señal sino un umbral inalcanzable. La entropía deriva a la
+    baja de forma monótona, y un percentil ACUMULADO arrastra la cola de
+    2015-2018 para siempre: en XAU, el P90 de cuatro años consecutivos queda
+    por debajo del umbral global, y quedan 1.077 días recientes sin una sola
+    muestra en ambos activos. Cambiar el criterio sin medir el impacto sobre
+    `n` sería tocar el corazón del sistema a ciegas.
+    """
+    #: Lo que el sistema hace HOY: un percentil sobre toda la historia
+    #: previa al fold. Es el default y no cambia nada.
+    ACUMULADO = "ACUMULADO"
+    #: Ventana de N días que TERMINA EN EL DÍA ANTERIOR: para el día `i` se
+    #: usa `entropy[i-N : i]`. El desplazamiento de un día es lo que impide
+    #: que un día se evalúe contra un percentil que lo incluye.
+    MOVIL = "MOVIL"
+    #: Normaliza cada día por la media y desviación de sus N días previos, y
+    #: aplica el percentil sobre la serie NORMALIZADA de todo lo anterior al
+    #: fold. Ataca la deriva sin tirar la historia: al quitar el nivel, los
+    #: días de 2015 vuelven a ser comparables con los de 2025.
+    ZSCORE = "ZSCORE"
+
+    @classmethod
+    def todos(cls) -> tuple[str, ...]:
+        return (cls.ACUMULADO, cls.MOVIL, cls.ZSCORE)
+
+
+#: Ventana de los modos móviles. 252 = días hábiles de un año.
+ROLLING_WINDOW_DEFAULT = 252
+
+#: Default global para el modo ZSCORE. El `--p90-global-default` del usuario
+#: está en unidades de entropía y no sirve en espacio z, así que hace falta
+#: uno propio: Φ⁻¹(0.90) = 1.2815515655, el percentil 90 de la normal
+#: estándar. NO es un número inventado — es una constante matemática,
+#: verificada por bisección sobre la CDF (Φ(1.2815515655) = 0.90000000).
+#: Es el valor correcto si la entropía normalizada fuera normal; que lo sea
+#: o no es precisamente una de las cosas que la comparación deja ver.
+ZSCORE_P90_GLOBAL_DEFAULT = 1.2815515655
+
+
 class VerdictLevel:
     """Veredictos posibles. Ninguno significa 'falló el proceso' — los
     cuatro son mediciones completadas con éxito."""
@@ -124,6 +171,21 @@ class FoldMeasurement:
     n_up: int               # de los post-máscara, cuántos con log_return > 0
     n_down: int
     estable: bool           # n_post_mask >= 100 Y min(clase) >= 20
+    #: Qué criterio de percentil produjo estos números. Default ACUMULADO =
+    #: el comportamiento de siempre.
+    percentile_mode: str = PercentileMode.ACUMULADO
+    # ── DESGLOSE DE LAS DOS RAMAS DEL OR ─────────────────────────────────
+    # La máscara es (entropy >= P90) OR (vitality == 9). Los tres campos de
+    # abajo suman exactamente n_post_mask y dicen cuál rama sostuvo cada
+    # disparo. Importa para interpretar cualquier comparación de criterios:
+    # si el percentil solo mueve la rama de entropía y esa rama aporta el
+    # 7% de los disparos, cambiarlo no puede arreglar el problema.
+    n_solo_entropia: int = 0    # entropía sobre el umbral, vitality != 9
+    n_solo_vitality: int = 0    # vitality == 9, entropía bajo el umbral
+    n_ambas_ramas: int = 0      # las dos a la vez
+    #: n_post_mask / n_total. Un fold con 2 de 714 y otro con 172 de 710 son
+    #: problemas distintos, y mirando solo el conteo se ven parecidos.
+    tasa_disparo: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -153,6 +215,14 @@ class AssetMeasurement:
     # 5. veredicto
     verdict: str
     verdict_reason: str
+    #: Criterio de percentil usado en esta medición.
+    percentile_mode: str = PercentileMode.ACUMULADO
+    #: Agregado OOF del desglose por rama del OR. Suman oof_post_mask.
+    oof_solo_entropia: int = 0
+    oof_solo_vitality: int = 0
+    oof_ambas_ramas: int = 0
+    #: Tasa de disparo agregada: oof_post_mask / candidatos totales.
+    tasa_disparo_oof: float = 0.0
     #: Se llena SOLO cuando el n sin arrastre cae por debajo de un umbral
     #: que el n total sí supera — es decir, cuando el veredicto depende de
     #: muestras que entraron con entropía prestada. None significa que el
@@ -398,12 +468,164 @@ def walk_forward_splits(n: int, n_folds: int) -> list[tuple[int, int]]:
     ]
 
 
+def _zscores_causales(
+    entropy: np.ndarray, window: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Para cada día, la media y desviación de sus `window` días PREVIOS (sin
+    incluirlo) y su z-score contra ellos.
+
+    Todo lo que devuelve es causal por construcción: el día `i` se normaliza
+    con `entropy[i-window : i]`, que termina en el día anterior. Un día que
+    entrara en su propio cálculo se estaría comparando contra un estadístico
+    que él mismo movió.
+
+    Días sin ventana suficiente, o con desviación nula (una ventana de
+    valores idénticos), quedan en NaN: no se inventa un z-score donde no hay
+    dispersión que lo defina.
+    """
+    n = len(entropy)
+    mu = np.full(n, np.nan)
+    sigma = np.full(n, np.nan)
+    z = np.full(n, np.nan)
+    for i in range(n):
+        ini = max(0, i - window)
+        ventana = entropy[ini:i]
+        ventana = ventana[~np.isnan(ventana)]
+        if len(ventana) < 2:
+            continue
+        m = float(np.mean(ventana))
+        s = float(np.std(ventana))
+        mu[i], sigma[i] = m, s
+        if s > 0 and not math.isnan(entropy[i]):
+            z[i] = (float(entropy[i]) - m) / s
+    return mu, sigma, z
+
+
+@dataclass(frozen=True)
+class Umbrales:
+    """Los umbrales de un fold, ya resueltos. `por_dia` es un dict porque en
+    los modos móviles cada día tiene el suyo; en ACUMULADO todos comparten
+    valor.
+
+    `representativo` es la MEDIANA de `por_dia`, siempre en unidades de
+    entropía. En ACUMULADO eso es exactamente el único valor, así que la
+    columna P90 del reporte no cambia. En los modos móviles es lo que hace
+    que esa misma columna siga siendo comparable entre criterios: reportar
+    el z crudo del modo ZSCORE ahí pondría un número de otra escala (y de
+    otro signo) al lado de umbrales de entropía."""
+    por_dia: dict[int, float]
+    representativo: float
+    fuente: str
+    n_obs: int
+
+
+def _mediana(valores: Sequence[float], respaldo: float) -> float:
+    finitos = sorted(v for v in valores if not math.isnan(v))
+    if not finitos:
+        return respaldo
+    mitad = len(finitos) // 2
+    if len(finitos) % 2:
+        return finitos[mitad]
+    return 0.5 * (finitos[mitad - 1] + finitos[mitad])
+
+
+def resolver_umbrales(
+    serie: SerieDerivada, val_ini: int, val_fin: int, *,
+    mode: str, window: int, p90_global_default: float,
+    z_global_default: float = ZSCORE_P90_GLOBAL_DEFAULT,
+) -> Umbrales:
+    """
+    Calcula el umbral de entropía de cada día de validación según el modo.
+
+    LOS TRES LLAMAN A `compute_adaptive_percentile()` — no la reimplementan
+    ni la modifican. Lo único que cambia entre modos es QUÉ historia se le
+    pasa, que es exactamente donde vive la diferencia que se quiere medir.
+
+    FRONTERA TEMPORAL, y una precisión que importa: ningún modo usa jamás un
+    valor posterior al día que evalúa.
+      · ACUMULADO usa `entropy[:val_ini]` — toda la historia previa al fold.
+      · MOVIL y ZSCORE usan, para el día `i`, `entropy[i-window : i]`. Esa
+        ventana CRUZA la frontera del fold cuando `i > val_ini`, y eso NO es
+        fuga: en producción, al decidir sobre el día `i` ya se conocen los
+        días `i-1`, `i-2`... Congelar la ventana en `val_ini` sería más
+        conservador que la realidad y volvería el criterio cada vez más
+        viejo a lo largo de la validación — justo el defecto que se quiere
+        medir. Lo que nunca se toca es `entropy[i]` y posteriores.
+    """
+    if mode not in PercentileMode.todos():
+        raise ValueError(
+            f"Modo de percentil desconocido: {mode!r}. "
+            f"Válidos: {list(PercentileMode.todos())}"
+        )
+
+    if mode == PercentileMode.ACUMULADO:
+        # Comportamiento de HOY, sin un solo cambio.
+        historia = [float(v) for v in serie.entropy[:val_ini] if not math.isnan(v)]
+        p = compute_adaptive_percentile(
+            history=historia, percentile=90.0, global_default=p90_global_default,
+        )
+        return Umbrales(
+            por_dia={i: p.value for i in range(val_ini, val_fin)},
+            representativo=p.value,
+            fuente=getattr(p.source, "name", str(p.source)), n_obs=p.n_obs,
+        )
+
+    if mode == PercentileMode.MOVIL:
+        por_dia: dict[int, float] = {}
+        ultimo = None
+        for i in range(val_ini, val_fin):
+            ini = max(0, i - window)
+            # [i-window, i) — termina en el día ANTERIOR. Ese desplazamiento
+            # de un día es la diferencia entre medir y hacer trampa.
+            historia = [float(v) for v in serie.entropy[ini:i] if not math.isnan(v)]
+            ultimo = compute_adaptive_percentile(
+                history=historia, percentile=90.0,
+                global_default=p90_global_default,
+            )
+            por_dia[i] = ultimo.value
+        return Umbrales(
+            por_dia=por_dia,
+            representativo=_mediana(list(por_dia.values()), p90_global_default),
+            fuente=getattr(ultimo.source, "name", "GLOBAL") if ultimo else "GLOBAL",
+            n_obs=ultimo.n_obs if ultimo else 0,
+        )
+
+    # ZSCORE: el percentil se calcula sobre la serie NORMALIZADA previa al
+    # fold, y después se devuelve a unidades de entropía con la media y la
+    # desviación del propio día. Así `godel_active()` sigue comparando
+    # entropía contra entropía y no hace falta tocarlo.
+    mu, sigma, z = _zscores_causales(serie.entropy, window)
+    historia_z = [float(v) for v in z[:val_ini] if not math.isnan(v)]
+    p = compute_adaptive_percentile(
+        history=historia_z, percentile=90.0, global_default=z_global_default,
+    )
+    por_dia = {}
+    for i in range(val_ini, val_fin):
+        if math.isnan(mu[i]) or math.isnan(sigma[i]):
+            # Sin ventana utilizable, no se inventa un umbral: se usa el
+            # global en unidades de entropía, que es lo que haría el modo
+            # acumulado en frío.
+            por_dia[i] = p90_global_default
+            continue
+        por_dia[i] = float(mu[i]) + p.value * float(sigma[i])
+    return Umbrales(
+        por_dia=por_dia,
+        # Mediana de los umbrales YA devueltos a unidades de entropía. El
+        # percentil en espacio z (p.value) no va acá: es de otra escala.
+        representativo=_mediana(list(por_dia.values()), p90_global_default),
+        fuente=getattr(p.source, "name", str(p.source)), n_obs=p.n_obs,
+    )
+
+
 def measure_folds(
     serie: SerieDerivada,
     *,
     lookback: int,
     n_folds: int,
     p90_global_default: float,
+    percentile_mode: str = PercentileMode.ACUMULADO,
+    rolling_window: int = ROLLING_WINDOW_DEFAULT,
 ) -> list[FoldMeasurement]:
     """
     Mide cada fold. El P90 de cada uno sale SOLO de la entropía de los días
@@ -415,16 +637,17 @@ def measure_folds(
 
     for k, (val_ini, val_fin) in enumerate(walk_forward_splits(n, n_folds), start=1):
         # ── LA LÍNEA QUE NO SE CRUZA ──────────────────────────────────
-        # entropy[:val_ini] y nada más. Nunca serie.entropy completo.
-        historia_train = [float(v) for v in serie.entropy[:val_ini] if not math.isnan(v)]
-        p90 = compute_adaptive_percentile(
-            history=historia_train,
-            percentile=90.0,
-            global_default=p90_global_default,
+        # Ningún modo usa un valor posterior al día que evalúa. Ver
+        # `resolver_umbrales()` para por qué la ventana móvil puede cruzar
+        # la frontera del fold sin que eso sea fuga.
+        umbrales = resolver_umbrales(
+            serie, val_ini, val_fin, mode=percentile_mode,
+            window=rolling_window, p90_global_default=p90_global_default,
         )
 
         n_total = n_post = n_up = n_down = 0
         n_propia = n_arrastrada = 0
+        n_solo_ent = n_solo_vit = n_ambas = 0
         for i in range(val_ini, val_fin):
             # Piso del legacy: `for i in range(lookback, len(arr))`. Un
             # índice por debajo no tiene ventana completa hacia atrás.
@@ -433,13 +656,29 @@ def measure_folds(
             if math.isnan(serie.log_return[i]) or math.isnan(serie.entropy[i]):
                 continue
             n_total += 1
+            umbral = umbrales.por_dia[i]
             if not godel_active(
                 entropy_shannon=float(serie.entropy[i]),
-                p90_entropy=p90.value,
+                p90_entropy=umbral,
                 vitality_tesla=int(serie.vitality[i]),
             ):
                 continue
             n_post += 1
+            # DESGLOSE DE LAS DOS RAMAS DEL OR. La máscara es
+            # (entropy >= P90) OR (vitality == 9), y sobre los datos reales
+            # vitality participa en el 93% de los disparos de BTC mientras
+            # la entropía pura aporta el 6.7%. Sin este desglose, comparar
+            # criterios de percentil es comparar el 7% del problema y creer
+            # que se comparó todo. La decisión la sigue tomando
+            # godel_active(); acá solo se mira cuál rama la sostuvo.
+            ent = float(serie.entropy[i]) >= umbral
+            vit = int(serie.vitality[i]) == 9
+            if ent and vit:
+                n_ambas += 1
+            elif ent:
+                n_solo_ent += 1
+            else:
+                n_solo_vit += 1
             # La muestra entró a la máscara; ahora, ¿entró con entropía
             # propia o con una arrastrada de un día GDELT anterior?
             if bool(serie.forward_filled[i]):
@@ -456,15 +695,22 @@ def measure_folds(
             n_train_days=val_ini,
             val_start=str(serie.fechas[val_ini]) if val_ini < n else None,
             val_end=str(serie.fechas[val_fin - 1]) if val_fin - 1 < n else None,
-            p90_used=round(p90.value, 6),
-            p90_source=getattr(p90.source, "name", str(p90.source)),
-            p90_n_obs=p90.n_obs,
+            p90_used=round(umbrales.representativo, 6),
+            p90_source=umbrales.fuente,
+            p90_n_obs=umbrales.n_obs,
+            percentile_mode=percentile_mode,
             n_total=n_total,
             n_post_mask=n_post,
             n_post_propia=n_propia,
             n_post_arrastrada=n_arrastrada,
             n_up=n_up,
             n_down=n_down,
+            n_solo_entropia=n_solo_ent,
+            n_solo_vitality=n_solo_vit,
+            n_ambas_ramas=n_ambas,
+            # Tasa, no solo conteo: 2 de 714 y 172 de 710 son problemas
+            # distintos y en la tabla se ven parecidos si solo se mira n.
+            tasa_disparo=(n_post / n_total) if n_total else 0.0,
             estable=n_post >= FOLD_MIN_N and min(n_up, n_down) >= FOLD_MIN_CLASE,
         ))
 
@@ -549,6 +795,8 @@ def measure_asset(
     n_folds: int,
     p90_global_default: float,
     patterns: Sequence[str] = DEFAULT_OHLCV_PATTERNS,
+    percentile_mode: str = PercentileMode.ACUMULADO,
+    rolling_window: int = ROLLING_WINDOW_DEFAULT,
 ) -> AssetMeasurement:
     """Mide un activo de punta a punta. Nunca lanza por ausencia de datos:
     devuelve la medición con los ceros que correspondan y una nota."""
@@ -627,6 +875,7 @@ def measure_asset(
     folds = measure_folds(
         serie, lookback=lookback, n_folds=n_folds,
         p90_global_default=p90_global_default,
+        percentile_mode=percentile_mode, rolling_window=rolling_window,
     )
     oof = sum(f.n_post_mask for f in folds)
     oof_propia = sum(f.n_post_propia for f in folds)
@@ -649,6 +898,12 @@ def measure_asset(
         oof_post_arrastrada=sum(f.n_post_arrastrada for f in folds),
         oof_up=sum(f.n_up for f in folds),
         oof_down=sum(f.n_down for f in folds),
+        percentile_mode=percentile_mode,
+        oof_solo_entropia=sum(f.n_solo_entropia for f in folds),
+        oof_solo_vitality=sum(f.n_solo_vitality for f in folds),
+        oof_ambas_ramas=sum(f.n_ambas_ramas for f in folds),
+        tasa_disparo_oof=(oof / sum(f.n_total for f in folds))
+                         if sum(f.n_total for f in folds) else 0.0,
         verdict=veredicto, verdict_reason=motivo,
         arrastre_warning=aviso, notes=notas,
     )
@@ -657,6 +912,53 @@ def measure_asset(
 # ══════════════════════════════════════════════════════════════════════════
 #  Reporte (stdout — este tool NO escribe archivos)
 # ══════════════════════════════════════════════════════════════════════════
+
+def render_comparison(
+    por_modo: dict[str, Sequence[AssetMeasurement]], *, lookback: int,
+) -> str:
+    """
+    Los tres criterios sobre los mismos datos, lado a lado.
+
+    Muestra tasa y no solo conteo, y desglosa las dos ramas del OR: si un
+    criterio de percentil mueve el n pero la rama de entropía sigue
+    aportando una fracción mínima de los disparos, el cuello está en otro
+    lado y la comparación lo deja ver en vez de esconderlo.
+    """
+    out = [
+        "═══ COMPARACIÓN DE CRITERIOS DE PERCENTIL ═══",
+        f"lookback={lookback} · máscara: (entropy >= P90) OR (vitality == 9)",
+        "Ningún modo cambia core/scoring.py: los tres llaman a",
+        "compute_adaptive_percentile() con distinta historia.",
+        "",
+    ]
+    activos = [m.asset for m in next(iter(por_modo.values()))]
+    for activo in activos:
+        out.append(f"── {activo} " + "─" * max(0, 58 - len(activo)))
+        out.append("  modo         OOF   tasa    solo_ent  solo_vit  ambas   "
+                   "veredicto")
+        for modo, mediciones in por_modo.items():
+            m = next((x for x in mediciones if x.asset == activo), None)
+            if m is None:
+                continue
+            out.append(
+                f"  {modo:<11} {m.oof_post_mask:>4}  "
+                f"{m.tasa_disparo_oof * 100:>5.1f}%  "
+                f"{m.oof_solo_entropia:>8}  {m.oof_solo_vitality:>8}  "
+                f"{m.oof_ambas_ramas:>5}   {m.verdict}"
+            )
+        base = next((x for x in por_modo[PercentileMode.ACUMULADO]
+                     if x.asset == activo), None)
+        if base is not None and base.oof_post_mask:
+            por_ent = base.oof_solo_entropia + base.oof_ambas_ramas
+            pct = 100.0 * por_ent / base.oof_post_mask
+            out.append(
+                f"  · En ACUMULADO, la entropía participa en {pct:.1f}% de los "
+                f"disparos. Un criterio de percentil solo puede mover esa "
+                f"fracción."
+            )
+        out.append("")
+    return "\n".join(out)
+
 
 def render_text(mediciones: Sequence[AssetMeasurement], *, lookback: int) -> str:
     out: list[str] = [
@@ -683,7 +985,8 @@ def render_text(mediciones: Sequence[AssetMeasurement], *, lookback: int) -> str
             out.append("")
             out.append(
                 "  fold  train  validación                  P90      "
-                "n_tot  n_mask  propia  arrast   sube   baja  estable"
+                "n_tot  n_mask  propia  arrast   tasa  s_ent  s_vit  ambas"
+                "   sube   baja  estable"
             )
             for f in m.folds:
                 out.append(
@@ -691,6 +994,8 @@ def render_text(mediciones: Sequence[AssetMeasurement], *, lookback: int) -> str
                     f"{str(f.val_start):>10}..{str(f.val_end):<10}  "
                     f"{f.p90_used:>7.4f}  {f.n_total:>5}  {f.n_post_mask:>6}  "
                     f"{f.n_post_propia:>6}  {f.n_post_arrastrada:>6}  "
+                    f"{f.tasa_disparo * 100:>4.1f}%  {f.n_solo_entropia:>5}  "
+                    f"{f.n_solo_vitality:>5}  {f.n_ambas_ramas:>5}  "
                     f"{f.n_up:>5}  {f.n_down:>5}  {'sí' if f.estable else 'no':>7}"
                 )
         out.append("")
@@ -701,6 +1006,11 @@ def render_text(mediciones: Sequence[AssetMeasurement], *, lookback: int) -> str
         out.append(
             f"  OOF sin arrastre (entropía propia): {m.oof_post_propia}"
             f"   ·   con entropía arrastrada: {m.oof_post_arrastrada}"
+        )
+        out.append(
+            f"  Tasa de disparo OOF: {m.tasa_disparo_oof * 100:.1f}%"
+            f"   ·   ramas del OR: solo_entropía={m.oof_solo_entropia}, "
+            f"solo_vitality={m.oof_solo_vitality}, ambas={m.oof_ambas_ramas}"
         )
         out.append(f"  VEREDICTO: {m.verdict} — {m.verdict_reason}")
         if m.arrastre_warning:
@@ -741,6 +1051,18 @@ def build_parser() -> argparse.ArgumentParser:
                         "por defecto a propósito: compute_adaptive_percentile() "
                         "documenta que para P90 no hay default legacy "
                         "confirmado y debe proveerse explícitamente.")
+    p.add_argument("--percentile-mode", choices=PercentileMode.todos(),
+                   default=PercentileMode.ACUMULADO,
+                   help="Cómo se calcula el umbral de entropía. ACUMULADO "
+                        "(default) es el comportamiento actual y no cambia "
+                        "nada. Este tool MIDE criterios, no los cambia: "
+                        "core/scoring.py queda intacto.")
+    p.add_argument("--rolling-window", type=int, default=ROLLING_WINDOW_DEFAULT,
+                   help=f"Ventana de los modos MOVIL y ZSCORE. Default "
+                        f"{ROLLING_WINDOW_DEFAULT} (días hábiles de un año).")
+    p.add_argument("--compare-modes", action="store_true",
+                   help="Corre los tres criterios sobre los mismos datos y "
+                        "los compara fold a fold. Ignora --percentile-mode.")
     p.add_argument("--format", choices=("text", "json"), default="text")
     return p
 
@@ -761,22 +1083,44 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         return 2
 
-    mediciones = [
-        measure_asset(
-            a, ohlcv_root=root, lookback=args.lookback, n_folds=args.n_folds,
-            p90_global_default=args.p90_global_default,
-            patterns=args.ohlcv_pattern,
-        )
-        for a in args.assets
-    ]
+    if args.rolling_window < 2:
+        print("ERROR: --rolling-window debe ser >= 2 (una ventana de 1 día "
+              "no tiene dispersión que normalizar)", file=sys.stderr)
+        return 2
+
+    modos = (list(PercentileMode.todos()) if args.compare_modes
+             else [args.percentile_mode])
+
+    por_modo: dict[str, list[AssetMeasurement]] = {}
+    for modo in modos:
+        por_modo[modo] = [
+            measure_asset(
+                a, ohlcv_root=root, lookback=args.lookback,
+                n_folds=args.n_folds,
+                p90_global_default=args.p90_global_default,
+                patterns=args.ohlcv_pattern,
+                percentile_mode=modo, rolling_window=args.rolling_window,
+            )
+            for a in args.assets
+        ]
+    mediciones = por_modo[modos[0]]
 
     if args.format == "json":
-        print(json.dumps(
-            {"lookback": args.lookback, "n_folds": args.n_folds,
-             "ohlcv_root": str(root), "ohlcv_pattern": list(args.ohlcv_pattern),
-             "assets": [asdict(m) for m in mediciones]},
-            indent=2, ensure_ascii=False,
-        ))
+        reporte = {
+            "lookback": args.lookback, "n_folds": args.n_folds,
+            "ohlcv_root": str(root), "ohlcv_pattern": list(args.ohlcv_pattern),
+            "rolling_window": args.rolling_window,
+            "percentile_modes": modos,
+            "assets": [asdict(m) for m in mediciones],
+        }
+        # `por_modo` solo con --compare-modes: sin el flag sería una copia
+        # literal de "assets" y duplicaría el reporte sin agregar nada.
+        if args.compare_modes:
+            reporte["por_modo"] = {m: [asdict(x) for x in v]
+                                   for m, v in por_modo.items()}
+        print(json.dumps(reporte, indent=2, ensure_ascii=False))
+    elif args.compare_modes:
+        print(render_comparison(por_modo, lookback=args.lookback))
     else:
         print(render_text(mediciones, lookback=args.lookback))
 
