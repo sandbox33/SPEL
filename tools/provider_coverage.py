@@ -57,6 +57,7 @@ import json
 import logging
 import sys
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, Sequence
 
@@ -64,17 +65,26 @@ from typing import Any, Optional, Sequence
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from governance.secrets import SecretKey, load_secret  # noqa: E402
+# Vocabulario de profundidad COMPARTIDO con el registro (PR #12), no uno
+# nuevo: el registro se actualiza a mano con lo que sale de este tool, y dos
+# vocabularios para lo mismo divergen en cuanto alguien edita uno solo.
+from ingestion.source_registry import DepthKind  # noqa: E402
 from ingestion.adapters import (  # noqa: E402
+    DERIV_WS_ENDPOINT,
     REQUIRED_COLUMNS,
     TWELVEDATA_ENDPOINT,
-    AdapterAuthError,
-    AdapterConnectionError,
-    AdapterException,
     DerivAdapter,
     TwelveDataAdapter,
+    _DERIV_GRANULARITY_SECONDS,
+    _DERIV_SYMBOL_MAP,
     _TWELVEDATA_INTERVALS,
     _TWELVEDATA_SYMBOL_MAP,
 )
+
+#: Etiqueta legible del endpoint de Deriv para el reporte. El `app_id` va en
+#: la URI real y NO se publica: aunque no es un secreto, tampoco hace falta
+#: en un reporte, y la regla de este repo es no imprimir credenciales.
+DERIV_PROBE_ENDPOINT = "wss://ws.derivws.com (ticks_history, sin authorize)"
 
 logger = logging.getLogger("spel.tools.provider_coverage")
 
@@ -112,9 +122,17 @@ class ProviderSpec:
     el código.
     """
     name: str
+    #: La credencial que este proveedor REALMENTE necesita para el sondeo de
+    #: lectura. Para Deriv es el app_id, no el token: `ticks_history` está
+    #: documentado como "No auth".
     secret_key: str
     rate_limit_doc: str
     min_interval_s: float
+    #: Cuántas peticiones consume medir la profundidad de UN activo. Importa
+    #: para planificar el barrido contra la cuota: con Alpha Vantage en 25
+    #: peticiones/día, seis activos a una petición cada uno son 6 de 25, y
+    #: correr el barrido cuatro veces en un día agota el plan.
+    requests_per_asset: str = "1"
 
 
 PROVIDERS: dict[str, ProviderSpec] = {
@@ -123,6 +141,7 @@ PROVIDERS: dict[str, ProviderSpec] = {
         secret_key=SecretKey.TWELVEDATA_API_KEY,
         rate_limit_doc="plan gratuito: 8 peticiones/minuto, 800/día",
         min_interval_s=8.0,   # 8/min -> 7.5s; se redondea hacia arriba
+        requests_per_asset="1 (outputsize=5000 en una sola petición)",
     ),
     "alphavantage": ProviderSpec(
         name="alphavantage",
@@ -130,19 +149,26 @@ PROVIDERS: dict[str, ProviderSpec] = {
         rate_limit_doc="plan gratuito: cuota diaria estrecha (25 req/día en "
                        "la doc vigente al escribir esto)",
         min_interval_s=15.0,  # el cuello es la cuota DIARIA, no la tasa
+        requests_per_asset="1 (outputsize=full). BARRIDO COMPLETO = 6 de las "
+                           "25 peticiones diarias del plan gratuito",
     ),
     "tiingo": ProviderSpec(
         name="tiingo",
         secret_key=SecretKey.TIINGO_API_TOKEN,
         rate_limit_doc="plan gratuito: 50 símbolos/hora, 1000 peticiones/día",
         min_interval_s=2.0,
+        requests_per_asset="1 (startDate=1900-01-01, sin tope de conteo)",
     ),
     "deriv": ProviderSpec(
         name="deriv",
-        secret_key=SecretKey.DERIV_API_TOKEN,
-        rate_limit_doc="WebSocket; sin límite REST documentado. Se espacia "
-                       "igual, por prudencia",
+        # app_id, NO el token: ticks_history está documentado como "No auth".
+        # Exigir el token era la causa del 401 observado.
+        secret_key=SecretKey.DERIV_APP_ID,
+        rate_limit_doc="WebSocket; 5.000 velas por petición. Sin límite REST "
+                       "documentado, pero se espacia igual por prudencia",
         min_interval_s=2.0,
+        requests_per_asset="hasta --deriv-max-pages peticiones (default "
+                           "12 = 60.000 velas) — es el único que pagina",
     ),
 }
 
@@ -178,6 +204,36 @@ class ProbeResult:
     adapter_mapped: Optional[bool] = None
     detail: str = ""
 
+    # ── PROFUNDIDAD ──────────────────────────────────────────────────────
+    # Los tres campos de abajo existen porque `first_date`/`last_date`/
+    # `n_points` NO miden lo que parecen si uno no sabe qué se pidió. La
+    # versión anterior de este tool mandaba `outputsize: 30` fijo, así que
+    # los seis activos de TwelveData salieron con 30 puntos — no porque el
+    # proveedor tuviera 30, sino porque se pidieron 30. El rango reportado
+    # era la ventana del tool, no la del proveedor.
+
+    #: Qué se pidió, en las palabras del proveedor ("outputsize=full",
+    #: "count=5000 × N páginas"). Sin esto, un rango no se puede interpretar.
+    window_requested: Optional[str] = None
+    #: Cuántos puntos se pidieron, cuando la API lo expresa como número.
+    #: None cuando el proveedor no acepta un conteo (Alpha Vantage pide
+    #: `outputsize=full`, no una cantidad).
+    points_requested: Optional[int] = None
+    #: Si el proveedor CORTÓ. True = lo recibido llegó justo al tope, así que
+    #: la historia real es mayor y sigue sin conocerse. False = el tope no
+    #: fue el límite. None = no se pudo determinar.
+    provider_truncated: Optional[bool] = None
+    #: COMPLETA / TOPE_DE_PETICION / NO_MEDIDA — mismo vocabulario que
+    #: `ingestion/source_registry.py`, para que actualizar el registro con
+    #: esta salida no requiera traducir nada.
+    depth_kind: str = DepthKind.NO_MEDIDA
+    #: Cuántas peticiones consumió este sondeo. Importa: Alpha Vantage da 25
+    #: por día en plan gratuito, y medir profundidad gasta más que sondear
+    #: existencia.
+    requests_used: int = 0
+    #: Páginas recorridas (solo Deriv, que es el único que pagina).
+    pages_fetched: Optional[int] = None
+
 
 # ══════════════════════════════════════════════════════════════════════════
 #  Rutas CANDIDATAS — no son cobertura declarada
@@ -201,6 +257,47 @@ _TWELVEDATA_CANDIDATOS: dict[str, str] = {
     "USDJPY": "USD/JPY",
 }
 
+# ══════════════════════════════════════════════════════════════════════════
+#  CÓMO PIDE CADA API SU PROFUNDIDAD MÁXIMA
+#
+#  Cada proveedor lo expresa distinto, y por eso no hay un parámetro único
+#  que sirva para los cuatro. Lo de abajo sale de la documentación de cada
+#  uno; lo que NO está verificado contra una respuesta real queda marcado
+#  como tal, y el sondeo lo confirma o lo desmiente en la corrida.
+# ══════════════════════════════════════════════════════════════════════════
+
+#: TwelveData: `outputsize` acepta hasta 5000 por petición según su doc.
+#: Se pide el máximo; si vuelven exactamente 5000, el tope fue la petición.
+TWELVEDATA_MAX_OUTPUTSIZE = 5000
+
+#: Tiingo: no acepta un conteo, acepta `startDate`. Se pide desde una fecha
+#: anterior a cualquier serie financiera diaria para que el límite lo ponga
+#: el proveedor y no la petición.
+TIINGO_START_DATE = "1900-01-01"
+
+#: Deriv: `count` tope 5000 por petición (VERIFICADO en el sondeo previo).
+#: Es el único de los cuatro que necesita paginación para llegar al fondo.
+DERIV_MAX_COUNT = 5000
+
+#: Tope de páginas de Deriv por activo. Existe para que una serie muy
+#: profunda —o una API que nunca deja de responder— no cuelgue la corrida.
+#: Al toparlo, el resultado dice TOPE_DE_PETICION y no "esto es todo".
+DERIV_MAX_PAGES_DEFAULT = 12
+
+#: Topes OBSERVADOS por endpoint de Alpha Vantage. Alpha Vantage no acepta
+#: un conteo —solo `outputsize=full`—, así que la única forma de detectar
+#: que cortó es reconocer su tope. El de FX_DAILY (5000) se observó en el
+#: sondeo anterior: los tres pares salieron con exactamente 5000 filas, que
+#: es un número demasiado redondo para ser el fondo del archivo.
+#: `None` = no se conoce tope para ese endpoint; entonces no se puede
+#: afirmar truncamiento y el resultado lo dice en vez de suponerlo.
+_ALPHAVANTAGE_TOPE_OBSERVADO: dict[str, Optional[int]] = {
+    "FX_DAILY": 5000,
+    "TIME_SERIES_DAILY_ADJUSTED": None,
+    "DIGITAL_CURRENCY_DAILY": None,
+    "GOLD_SILVER_HISTORY": None,
+}
+
 ALPHAVANTAGE_ENDPOINT = "https://www.alphavantage.co/query"
 
 #: Alpha Vantage rutea por CLASE de activo, no por un símbolo único: cada
@@ -209,12 +306,17 @@ ALPHAVANTAGE_ENDPOINT = "https://www.alphavantage.co/query"
 #: coefficient) y para oro (GOLD_SILVER_HISTORY, que devuelve solo
 #: date+price, sin OHLC ni volumen). Las de forex y cripto son candidatas.
 _ALPHAVANTAGE_RUTAS: dict[str, dict[str, str]] = {
+    # outputsize=full, no `compact`: `compact` devuelve 100 puntos y el rango
+    # reportado sería la ventana del tool otra vez.
     "NVDA":   {"function": "TIME_SERIES_DAILY_ADJUSTED", "symbol": "NVDA",
-               "outputsize": "compact"},
+               "outputsize": "full"},
     "XAUUSD": {"function": "GOLD_SILVER_HISTORY", "interval": "daily"},
-    "EURUSD": {"function": "FX_DAILY", "from_symbol": "EUR", "to_symbol": "USD"},
-    "GBPUSD": {"function": "FX_DAILY", "from_symbol": "GBP", "to_symbol": "USD"},
-    "USDJPY": {"function": "FX_DAILY", "from_symbol": "USD", "to_symbol": "JPY"},
+    "EURUSD": {"function": "FX_DAILY", "from_symbol": "EUR", "to_symbol": "USD",
+               "outputsize": "full"},
+    "GBPUSD": {"function": "FX_DAILY", "from_symbol": "GBP", "to_symbol": "USD",
+               "outputsize": "full"},
+    "USDJPY": {"function": "FX_DAILY", "from_symbol": "USD", "to_symbol": "JPY",
+               "outputsize": "full"},
     "BTCUSD": {"function": "DIGITAL_CURRENCY_DAILY", "symbol": "BTC",
                "market": "USD"},
 }
@@ -415,12 +517,15 @@ async def probe_twelvedata(client, asset: str, key: str) -> ProbeResult:
     payload, code = await _get_json(
         client, TWELVEDATA_ENDPOINT,
         params={"symbol": simbolo, "interval": _TWELVEDATA_INTERVALS["1d"],
-                "outputsize": 30, "order": "ASC"},
+                "outputsize": TWELVEDATA_MAX_OUTPUTSIZE, "order": "ASC"},
         headers={"Authorization": f"apikey {key}"},
     )
     return _resultado(
         "twelvedata", asset, simbolo, TWELVEDATA_ENDPOINT, payload, code,
         adapter_mapped=asset in TwelveDataAdapter.SUPPORTED_SYMBOLS,
+        window_requested=f"outputsize={TWELVEDATA_MAX_OUTPUTSIZE} (máximo de la API)",
+        points_requested=TWELVEDATA_MAX_OUTPUTSIZE,
+        requests_used=1,
     )
 
 
@@ -442,10 +547,19 @@ async def probe_alphavantage(client, asset: str, key: str) -> ProbeResult:
         params={**ruta, "apikey": key}, headers={},
     )
     etiqueta = ruta.get("symbol") or f"{ruta.get('from_symbol','')}{ruta.get('to_symbol','')}"
+    tope = _ALPHAVANTAGE_TOPE_OBSERVADO.get(ruta["function"])
+    pedido = ruta.get("outputsize")
     return _resultado(
         "alphavantage", asset, etiqueta or asset,
         f"{ALPHAVANTAGE_ENDPOINT}?function={ruta['function']}",
         payload, code, adapter_mapped=None,  # no hay adapter de AV en el repo
+        window_requested=(f"outputsize={pedido}" if pedido
+                          else f"{ruta['function']} (sin parámetro de tamaño; "
+                               f"devuelve lo que tenga)"),
+        # Alpha Vantage no acepta un conteo: no hay "puntos pedidos".
+        points_requested=None,
+        tope_observado=tope,
+        requests_used=1,
     )
 
 
@@ -458,25 +572,47 @@ async def probe_tiingo(client, asset: str, key: str) -> ProbeResult:
                            detail="sin ruta candidata para este activo")
 
     url, ticker = ruta
-    params = {"tickers": ticker} if "/crypto/" in url else {}
+    # Tiingo no acepta un conteo: acepta `startDate`. Se pide desde una fecha
+    # anterior a cualquier serie diaria para que el límite lo ponga el
+    # proveedor y no la petición.
+    params: dict[str, Any] = {"startDate": TIINGO_START_DATE}
+    if "/crypto/" in url:
+        params["tickers"] = ticker
     payload, code = await _get_json(
         client, url, params=params,
         headers={"Authorization": f"Token {key}", "Content-Type": "application/json"},
     )
     return _resultado("tiingo", asset, ticker, url, payload, code,
-                      adapter_mapped=None)  # no hay adapter de Tiingo en el repo
+                      adapter_mapped=None,  # no hay adapter de Tiingo en el repo
+                      window_requested=f"startDate={TIINGO_START_DATE} (sin tope de conteo)",
+                      points_requested=None, requests_used=1)
 
 
-async def probe_deriv(asset: str, token: str, app_id: str) -> ProbeResult:
+async def probe_deriv(
+    asset: str, app_id: str, *,
+    max_pages: int = DERIV_MAX_PAGES_DEFAULT, connector: Any = None,
+) -> ProbeResult:
     """
-    Deriv es WebSocket: se usa el `DerivAdapter` del repo en vez de
-    reimplementar el handshake (authorize -> ticks_history), que sería
-    duplicar conocimiento ya auditado y probado.
+    Mide la profundidad de Deriv PAGINANDO hacia atrás.
 
-    Consecuencia de usar el adapter: para un símbolo que su mapa verificado
-    no incluye, `fetch_ohlcv()` lanza `ValueError` ANTES de tocar la red. Eso
-    no es "el proveedor no lo cubre" — es "el adapter no lo mapea todavía", y
-    se reporta como SIN_RUTA para no afirmar algo que la API nunca dijo.
+    POR QUÉ NO SE USA `DerivAdapter` ACÁ, y por qué eso no contradice
+    "port, don't rewrite": el adapter expone `fetch_ohlcv(symbol, timeframe,
+    limit)` y fija `end: "latest"` internamente. Paginar exige controlar
+    `end` en cada vuelta, y eso no se puede expresar por su API. Lo que sí se
+    reusa es todo lo demás: `DERIV_WS_ENDPOINT`, `_DERIV_SYMBOL_MAP`,
+    `_DERIV_GRANULARITY_SECONDS` y hasta `DerivAdapter._default_connector`
+    con su import perezoso de `websockets`. No se duplica ningún
+    conocimiento: se agrega el bucle que el adapter no ofrece.
+
+    Y una consecuencia que ARREGLA un fallo real: el adapter siempre llama a
+    `authorize` antes de pedir datos. `ticks_history` está documentado como
+    "No auth" y solo necesita el `app_id` de la URI, así que ese `authorize`
+    con un token ausente era la causa del HTTP 401 observado. Acá no se
+    autoriza.
+
+    Para un símbolo fuera del mapa verificado se reporta SIN_RUTA sin tocar
+    la red: no es "el proveedor no lo cubre", es "no sabemos cómo se llama
+    ahí", y la API nunca dijo nada al respecto.
     """
     if asset not in DerivAdapter.SUPPORTED_SYMBOLS:
         return ProbeResult(
@@ -486,65 +622,208 @@ async def probe_deriv(asset: str, token: str, app_id: str) -> ProbeResult:
                    f"{sorted(DerivAdapter.SUPPORTED_SYMBOLS)}",
         )
 
-    adapter = DerivAdapter(api_token=token, app_id=app_id)
-    try:
-        df = await adapter.fetch_ohlcv(asset, "1d", 30)
-    except AdapterAuthError as exc:
-        return ProbeResult("deriv", asset, CoverageStatus.CLAVE_RECHAZADA,
-                           adapter_mapped=True, detail=str(exc))
-    except AdapterConnectionError as exc:
-        return ProbeResult("deriv", asset, CoverageStatus.ERROR,
-                           adapter_mapped=True, detail=str(exc))
-    except AdapterException as exc:
-        return ProbeResult("deriv", asset, CoverageStatus.NO_CUBIERTO,
-                           adapter_mapped=True, detail=str(exc))
+    deriv_symbol = _DERIV_SYMBOL_MAP[asset]
+    granularity = _DERIV_GRANULARITY_SECONDS["1d"]
+    uri = DERIV_WS_ENDPOINT.format(app_id=app_id)
+    abrir = connector or DerivAdapter._default_connector  # reuso del lazy import
 
-    fechas = [str(t.date()) for t in df["timestamp"]] if not df.empty else []
+    epochs: list[int] = []
+    columnas: set[str] = set()
+    paginas = 0
+    fin: Any = "latest"
+    corte = ""
+
+    try:
+        async with abrir(uri) as ws:
+            # SIN `authorize`: ticks_history está documentado como "No auth" y
+            # solo necesita el app_id de la URI. La versión anterior pasaba
+            # por DerivAdapter, que SIEMPRE autoriza — y ese authorize con un
+            # token ausente o inválido es la causa del HTTP 401 observado.
+            while paginas < max_pages:
+                await ws.send(json.dumps({
+                    "ticks_history": deriv_symbol, "adjust_start_time": 1,
+                    "end": fin, "count": DERIV_MAX_COUNT,
+                    "style": "candles", "granularity": granularity,
+                }))
+                resp = json.loads(await ws.recv())
+                paginas += 1
+
+                err = resp.get("error")
+                if err:
+                    codigo = err.get("code", "")
+                    mensaje = err.get("message", str(err))
+                    if codigo in ("AuthorizationRequired", "InvalidToken", "InvalidAppID"):
+                        return ProbeResult(
+                            "deriv", asset, CoverageStatus.CLAVE_RECHAZADA,
+                            asset, DERIV_PROBE_ENDPOINT, adapter_mapped=True,
+                            pages_fetched=paginas, requests_used=paginas,
+                            detail=f"{codigo}: {mensaje}")
+                    if not epochs:
+                        return ProbeResult(
+                            "deriv", asset, CoverageStatus.NO_CUBIERTO, asset,
+                            DERIV_PROBE_ENDPOINT, adapter_mapped=True,
+                            pages_fetched=paginas, requests_used=paginas,
+                            detail=f"{codigo}: {mensaje}")
+                    corte = f"la API dejó de responder datos ({codigo}: {mensaje})"
+                    break
+
+                velas = resp.get("candles") or []
+                if not velas:
+                    corte = "la API devolvió una página vacía: se llegó al fondo"
+                    break
+
+                columnas.update(k for v in velas for k in v)
+                nuevos = [int(v["epoch"]) for v in velas if "epoch" in v]
+                if not nuevos:
+                    corte = "página sin epoch legible"
+                    break
+
+                anterior = min(epochs) if epochs else None
+                epochs.extend(nuevos)
+                mas_viejo = min(nuevos)
+
+                if anterior is not None and mas_viejo >= anterior:
+                    # Sin progreso hacia atrás: seguir pidiendo repetiría la
+                    # misma página para siempre.
+                    corte = "la API dejó de retroceder: se llegó al fondo"
+                    break
+                if len(velas) < DERIV_MAX_COUNT:
+                    corte = (f"la última página trajo {len(velas)} < "
+                             f"{DERIV_MAX_COUNT}: se llegó al fondo")
+                    break
+                fin = mas_viejo - 1
+    except (ConnectionError, OSError, TimeoutError) as exc:
+        return ProbeResult("deriv", asset, CoverageStatus.ERROR, asset,
+                           DERIV_PROBE_ENDPOINT, adapter_mapped=True,
+                           pages_fetched=paginas, requests_used=paginas,
+                           detail=f"{type(exc).__name__}: {exc}")
+
+    if not epochs:
+        return ProbeResult("deriv", asset, CoverageStatus.NO_CUBIERTO, asset,
+                           DERIV_PROBE_ENDPOINT, adapter_mapped=True,
+                           pages_fetched=paginas, requests_used=paginas,
+                           detail="ninguna página trajo velas")
+
+    topado = paginas >= max_pages and not corte
+    if topado:
+        corte = (f"se alcanzó el tope de {max_pages} páginas SIN llegar al "
+                 f"fondo: la historia es más profunda y sigue sin medirse. "
+                 f"Subir --deriv-max-pages para llegar más atrás.")
+
+    fechas = sorted(
+        datetime.fromtimestamp(e, tz=timezone.utc).date().isoformat()
+        for e in set(epochs)
+    )
     return ProbeResult(
         provider="deriv", asset=asset, status=CoverageStatus.CUBIERTO,
-        symbol_used=asset, endpoint="wss://ws.derivws.com (ticks_history)",
-        columns_returned=list(df.columns),
-        missing_from_contract=[c for c in REQUIRED_COLUMNS if c not in df.columns],
-        first_date=fechas[0] if fechas else None,
-        last_date=fechas[-1] if fechas else None,
-        n_points=len(df),
-        # El adapter normaliza: rellena `volume` con 0.0 y lo marca en attrs.
-        # Se lee la bandera, no la presencia de la columna, que siempre está.
-        has_volume=bool(df.attrs.get("volume_available", True)),
+        symbol_used=deriv_symbol, endpoint=DERIV_PROBE_ENDPOINT,
+        columns_returned=sorted(columnas),
+        # Deriv entrega open/high/low/close/epoch y NUNCA volumen (doc
+        # oficial). `epoch` cumple el rol de `timestamp` del contrato.
+        missing_from_contract=[c for c in REQUIRED_COLUMNS
+                               if c not in ("timestamp",) and c not in columnas],
+        first_date=fechas[0], last_date=fechas[-1],
+        n_points=len(set(epochs)),
+        has_volume="volume" in columnas,
         has_adjusted_close=False,
         adapter_mapped=True,
-        detail="vía DerivAdapter (contrato ya validado por el adapter)",
+        window_requested=f"count={DERIV_MAX_COUNT} × hasta {max_pages} páginas "
+                         f"hacia atrás con `end`",
+        points_requested=DERIV_MAX_COUNT * max_pages,
+        provider_truncated=topado,
+        depth_kind=DepthKind.TOPE_DE_PETICION if topado else DepthKind.COMPLETA,
+        requests_used=paginas, pages_fetched=paginas,
+        detail=corte,
     )
+
+
+def clasificar_profundidad(
+    n_points: int, *, points_requested: Optional[int],
+    tope_observado: Optional[int] = None,
+) -> tuple[str, Optional[bool], str]:
+    """
+    Las TRES cosas que el reporte anterior confundía, separadas: la ventana
+    pedida, la recibida, y si el proveedor cortó.
+
+    Devuelve (depth_kind, provider_truncated, nota).
+
+    La regla es simple y deliberadamente conservadora:
+      · recibido == pedido (o == un tope conocido del endpoint) → CORTÓ. Lo
+        recibido es un PISO, no la historia: pedir 5.000 y recibir 5.000
+        exactos no dice cuánto hay, dice cuánto deja pedir.
+      · recibido < pedido → el tope de la petición NO fue el límite. Eso es
+        lo más cerca de "esto es todo" que una sola respuesta permite estar.
+      · sin pedido ni tope conocido → NO se puede afirmar nada. Se devuelve
+        NO_MEDIDA en vez de estimar, que es lo que pide el brief: si no se
+        puede saber sin agotar la cuota, se reporta como no medible.
+
+    OJO con el segundo caso: "el tope de la petición no fue el límite" NO es
+    lo mismo que "esta es toda la historia del instrumento". Puede ser un
+    tope del PLAN, invisible en la respuesta. Distinguirlos requiere una
+    segunda petición con una fecha de inicio anterior, y eso cuesta cuota;
+    la nota lo dice para que nadie lea COMPLETA como una garantía.
+    """
+    limite = points_requested if points_requested is not None else tope_observado
+
+    if limite is None:
+        return (DepthKind.NO_MEDIDA, None,
+                "el proveedor no acepta un conteo y no se le conoce tope: no "
+                "se puede afirmar si cortó. No medible sin gastar más cuota.")
+
+    if n_points >= limite:
+        return (DepthKind.TOPE_DE_PETICION, True,
+                f"cortó en {limite}: lo recibido es un PISO, no la historia. "
+                f"Para llegar más atrás hace falta paginar o acotar por fecha.")
+
+    return (DepthKind.COMPLETA, False,
+            f"el tope ({limite}) no fue el límite: llegaron {n_points}. "
+            f"Puede ser toda la historia o un tope del PLAN invisible en la "
+            f"respuesta — distinguirlo cuesta otra petición.")
 
 
 def _resultado(
     provider: str, asset: str, simbolo: str, endpoint: str,
     payload: Any, code: int, *, adapter_mapped: Optional[bool],
+    window_requested: Optional[str] = None,
+    points_requested: Optional[int] = None,
+    tope_observado: Optional[int] = None,
+    requests_used: int = 0,
 ) -> ProbeResult:
     """Convierte (payload, status) en un ProbeResult. Un payload sin serie
     reconocible es NO_CUBIERTO, no ERROR: el proveedor contestó, simplemente
     no tenía nada que dar para ese símbolo."""
+    comun = dict(adapter_mapped=adapter_mapped,
+                 window_requested=window_requested,
+                 points_requested=points_requested,
+                 requests_used=requests_used)
+
     if payload is None:
         return ProbeResult(provider, asset, CoverageStatus.ERROR, simbolo,
-                           endpoint, adapter_mapped=adapter_mapped,
-                           detail=f"respuesta no-JSON (HTTP {code})")
+                           endpoint, detail=f"respuesta no-JSON (HTTP {code})",
+                           **comun)
 
     fallo = _clasificar_error(payload, code)
     if fallo is not None:
         estado, detalle = fallo
         return ProbeResult(provider, asset, estado, simbolo, endpoint,
-                           adapter_mapped=adapter_mapped, detail=detalle)
+                           detail=detalle, **comun)
 
     desc = describir_payload(payload)
     if not desc["n_points"]:
         return ProbeResult(provider, asset, CoverageStatus.NO_CUBIERTO, simbolo,
-                           endpoint, adapter_mapped=adapter_mapped,
-                           detail="respondió sin serie de datos")
+                           endpoint, detail="respondió sin serie de datos",
+                           **comun)
+
+    profundidad, truncado, nota = clasificar_profundidad(
+        desc["n_points"], points_requested=points_requested,
+        tope_observado=tope_observado,
+    )
+    comun["depth_kind"] = profundidad
+    comun["provider_truncated"] = truncado
 
     return ProbeResult(
         provider=provider, asset=asset, status=CoverageStatus.CUBIERTO,
-        symbol_used=simbolo, endpoint=endpoint,
-        adapter_mapped=adapter_mapped, detail="", **desc,
+        symbol_used=simbolo, endpoint=endpoint, detail=nota, **comun, **desc,
     )
 
 
@@ -553,7 +832,9 @@ def _resultado(
 # ══════════════════════════════════════════════════════════════════════════
 
 async def probe_provider(
-    provider: str, assets: Sequence[str], *, min_interval_s: Optional[float] = None,
+    provider: str, assets: Sequence[str], *,
+    min_interval_s: Optional[float] = None,
+    deriv_max_pages: int = DERIV_MAX_PAGES_DEFAULT,
 ) -> list[ProbeResult]:
     """
     Sondea un proveedor sobre varios activos, EN SERIE y con espaciado.
@@ -568,6 +849,31 @@ async def probe_provider(
     spec = PROVIDERS[provider]
     espera = spec.min_interval_s if min_interval_s is None else min_interval_s
 
+    if provider == "deriv":
+        # CORRECCIÓN DE UN FALLO REAL. Antes se exigía `spec.secret_key`
+        # (= DERIV_API_TOKEN) para TODOS los proveedores por igual, y ese
+        # `return` temprano devolvía SIN_CLAVE para los seis activos de Deriv
+        # antes siquiera de mirar el app_id. Pero `ticks_history` está
+        # documentado como "No auth": solo necesita el app_id de la URI. El
+        # token es para operar, no para leer historia — y exigirlo era lo que
+        # producía el 401.
+        app_id = load_secret(SecretKey.DERIV_APP_ID, required=False)
+        if not app_id:
+            return [
+                ProbeResult(provider, a, CoverageStatus.SIN_CLAVE,
+                            detail=f"falta {SecretKey.DERIV_APP_ID}. "
+                                   f"ticks_history NO necesita "
+                                   f"{SecretKey.DERIV_API_TOKEN}: solo app_id.")
+                for a in assets
+            ]
+        salida: list[ProbeResult] = []
+        for i, activo in enumerate(assets):
+            if i:
+                await asyncio.sleep(espera)
+            salida.append(await probe_deriv(
+                activo, app_id, max_pages=deriv_max_pages))
+        return salida
+
     clave = load_secret(spec.secret_key, required=False)
     if not clave:
         return [
@@ -575,22 +881,6 @@ async def probe_provider(
                         detail=f"falta {spec.secret_key}; no se sondeó nada")
             for a in assets
         ]
-
-    if provider == "deriv":
-        app_id = load_secret(SecretKey.DERIV_APP_ID, required=False)
-        if not app_id:
-            return [
-                ProbeResult(provider, a, CoverageStatus.SIN_CLAVE,
-                            detail=f"falta {SecretKey.DERIV_APP_ID} (Deriv "
-                                   f"necesita token Y app_id)")
-                for a in assets
-            ]
-        salida: list[ProbeResult] = []
-        for i, activo in enumerate(assets):
-            if i:
-                await asyncio.sleep(espera)
-            salida.append(await probe_deriv(activo, clave, app_id))
-        return salida
 
     sondas = {"twelvedata": probe_twelvedata,
               "alphavantage": probe_alphavantage,
@@ -614,11 +904,13 @@ async def probe_provider(
 async def run_inventory(
     providers: Sequence[str], assets: Sequence[str],
     *, min_interval_s: Optional[float] = None,
+    deriv_max_pages: int = DERIV_MAX_PAGES_DEFAULT,
 ) -> list[ProbeResult]:
     resultados: list[ProbeResult] = []
     for p in providers:
         resultados.extend(
-            await probe_provider(p, assets, min_interval_s=min_interval_s)
+            await probe_provider(p, assets, min_interval_s=min_interval_s,
+                                 deriv_max_pages=deriv_max_pages)
         )
     return resultados
 
@@ -644,17 +936,23 @@ def render_text(resultados: Sequence[ProbeResult]) -> str:
         out.append(f"── {proveedor} " + "─" * max(0, 58 - len(proveedor)))
         if spec:
             out.append(f"  Límite documentado: {spec.rate_limit_doc}")
+            out.append(f"  Costo por activo:   {spec.requests_per_asset}")
         out.append("")
         out.append("  activo    estado           símbolo      pts  desde       hasta"
-                   "        vol   adj  falta del contrato")
+                   "        vol   adj  profundidad        ¿cortó?  falta del contrato")
         for r in filas:
             out.append(
                 f"  {r.asset:<9} {r.status:<16} {str(r.symbol_used or '-'):<12} "
                 f"{str(r.n_points if r.n_points is not None else '-'):>4}  "
                 f"{str(r.first_date or '-'):<11} {str(r.last_date or '-'):<11} "
                 f"{_si_no(r.has_volume):>4}  {_si_no(r.has_adjusted_close):>4}  "
+                f"{r.depth_kind:<18} {_si_no(r.provider_truncated):>7}  "
                 f"{','.join(r.missing_from_contract) or '-'}"
             )
+            if r.window_requested:
+                pag = f", {r.pages_fetched} página(s)" if r.pages_fetched else ""
+                out.append(f"            · pedido: {r.window_requested}"
+                           f"  ({r.requests_used} petición(es){pag})")
             if r.detail:
                 out.append(f"            └─ {r.detail}")
         out.append("")
@@ -662,6 +960,18 @@ def render_text(resultados: Sequence[ProbeResult]) -> str:
     cubiertos = [r for r in resultados if r.status == CoverageStatus.CUBIERTO]
     out.append(f"RESUMEN: {len(cubiertos)}/{len(resultados)} pares "
                f"(proveedor, activo) con datos reales en esta corrida.")
+    out.append(f"  Peticiones consumidas en total: "
+               f"{sum(r.requests_used for r in resultados)}.")
+    topados = [r for r in cubiertos if r.provider_truncated]
+    if topados:
+        out.append(f"  ⚠️  {len(topados)} par(es) CORTARON en el tope: su "
+                   f"profundidad reportada es un PISO, no la historia. "
+                   f"{', '.join(f'{r.asset}/{r.provider}' for r in topados)}")
+    no_medibles = [r for r in cubiertos if r.depth_kind == DepthKind.NO_MEDIDA]
+    if no_medibles:
+        out.append(f"  {len(no_medibles)} par(es) con profundidad NO MEDIBLE "
+                   f"sin gastar más cuota: "
+                   f"{', '.join(f'{r.asset}/{r.provider}' for r in no_medibles)}")
     sin_clave = {r.provider for r in resultados if r.status == CoverageStatus.SIN_CLAVE}
     if sin_clave:
         out.append(f"  Sin credencial, no sondeados: {', '.join(sorted(sin_clave))}. "
@@ -687,6 +997,12 @@ def build_parser() -> argparse.ArgumentParser:
                         "defecto, el que corresponde al límite documentado de "
                         "cada uno. Subirlo si el sondeo real devuelve "
                         "RATE_LIMITED antes de lo esperado.")
+    p.add_argument("--deriv-max-pages", type=int, default=DERIV_MAX_PAGES_DEFAULT,
+                   help=f"Páginas de {DERIV_MAX_COUNT} velas que Deriv pagina "
+                        f"hacia atrás por activo. Default "
+                        f"{DERIV_MAX_PAGES_DEFAULT}. Existe para que una serie "
+                        f"muy profunda no cuelgue la corrida: al toparlo, el "
+                        f"resultado dice TOPE_DE_PETICION, no 'esto es todo'.")
     p.add_argument("--format", choices=("text", "json"), default="text")
     return p
 
@@ -700,13 +1016,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("ERROR: hay activos vacíos en --assets", file=sys.stderr)
         return 2
 
+    if args.deriv_max_pages < 1:
+        print("ERROR: --deriv-max-pages debe ser >= 1", file=sys.stderr)
+        return 2
+
     resultados = asyncio.run(run_inventory(
         args.providers, args.assets, min_interval_s=args.min_interval_s,
+        deriv_max_pages=args.deriv_max_pages,
     ))
 
     if args.format == "json":
         print(json.dumps(
             {"contract": list(REQUIRED_COLUMNS),
+             "deriv_max_pages": args.deriv_max_pages,
+             "total_requests_used": sum(r.requests_used for r in resultados),
              "providers": {p: asdict(PROVIDERS[p]) for p in args.providers},
              "results": [asdict(r) for r in resultados]},
             indent=2, ensure_ascii=False,
