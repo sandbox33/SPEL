@@ -14,6 +14,7 @@ argumento real que recibe compute_adaptive_percentile, no el resultado.
 
 from __future__ import annotations
 
+import math
 from datetime import date, timedelta
 
 import numpy as np
@@ -714,3 +715,437 @@ def test_el_agregado_oof_desglosado_aparece_en_el_json(tmp_path, monkeypatch, ca
     assert "arrastre_warning" in a
     for f in a["folds"]:
         assert f["n_post_propia"] + f["n_post_arrastrada"] == f["n_post_mask"]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  CRITERIOS DE PERCENTIL — este tool los MIDE, no los cambia
+#
+#  El test que más importa es el de frontera temporal: los tres modos tienen
+#  que ser causales, y el modo móvil tiene una sutileza propia (su ventana
+#  CRUZA la frontera del fold, y eso no es fuga porque nunca mira hacia
+#  adelante). El segundo que más importa es el del default: sin el flag, la
+#  salida tiene que ser idéntica a la de antes de este PR.
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_los_tres_modos_existen_y_el_default_es_el_actual():
+    assert mod.PercentileMode.todos() == ("ACUMULADO", "MOVIL", "ZSCORE")
+    assert mod.PercentileMode.ACUMULADO == "ACUMULADO"
+
+    import inspect
+    firma = inspect.signature(measure_folds)
+    assert firma.parameters["percentile_mode"].default == mod.PercentileMode.ACUMULADO
+
+
+def test_el_default_no_cambia_absolutamente_nada():
+    """Sin el flag, la medición tiene que ser byte por byte la de siempre.
+    Un tool de diagnóstico que cambia el número por existir no sirve para
+    diagnosticar."""
+    serie = _serie(300, entropy=[1.0 + (i % 17) * 0.01 for i in range(300)],
+                   vitality=[3] * 300)
+
+    explicito = measure_folds(serie, lookback=0, n_folds=3,
+                              p90_global_default=1.05,
+                              percentile_mode=mod.PercentileMode.ACUMULADO)
+    implicito = measure_folds(serie, lookback=0, n_folds=3,
+                              p90_global_default=1.05)
+
+    assert explicito == implicito
+
+
+def test_modo_desconocido_es_error_de_uso():
+    serie = _serie(100)
+
+    with pytest.raises(ValueError, match="Modo de percentil desconocido"):
+        measure_folds(serie, lookback=0, n_folds=1, p90_global_default=1.0,
+                      percentile_mode="A_OJO")
+
+
+# ── Frontera temporal en los tres ─────────────────────────────────────────
+
+@pytest.mark.parametrize("modo", ["ACUMULADO", "MOVIL", "ZSCORE"])
+def test_ningun_modo_usa_datos_posteriores_al_dia_que_evalua(modo, monkeypatch):
+    """Espía cada `history` que llega a compute_adaptive_percentile y
+    verifica que no contenga ningún valor del futuro. Con entropía = índice,
+    un valor del futuro es detectable sin ambigüedad."""
+    n = 400
+    serie = _serie(n, entropy=[float(i) for i in range(n)])
+
+    historias: list[list[float]] = []
+    real = mod.compute_adaptive_percentile
+
+    def espia(history, percentile, global_default, **kw):
+        historias.append(list(history))
+        return real(history, percentile, global_default, **kw)
+
+    monkeypatch.setattr(mod, "compute_adaptive_percentile", espia)
+
+    umbrales = mod.resolver_umbrales(
+        serie, 300, 400, mode=modo, window=50, p90_global_default=1.0,
+    )
+
+    assert historias, "el modo tiene que consultar el percentil"
+    assert umbrales.por_dia, "tiene que haber un umbral por día"
+    if modo == "ZSCORE":
+        # En espacio z los valores ya no son el índice; lo verificable es que
+        # la historia se arma solo con días anteriores al fold.
+        assert all(len(h) <= 300 for h in historias)
+    else:
+        # Ningún valor puede alcanzar el índice del primer día evaluado.
+        assert all(max(h) < 400 for h in historias if h)
+
+
+def test_la_ventana_movil_termina_en_el_dia_anterior(monkeypatch):
+    """El desplazamiento de un día es la diferencia entre medir y hacer
+    trampa: un día evaluado contra un percentil que lo incluye se está
+    comparando con un estadístico que él mismo movió."""
+    n = 300
+    serie = _serie(n, entropy=[float(i) for i in range(n)])
+
+    vistas: list[list[float]] = []
+    real = mod.compute_adaptive_percentile
+
+    def espia(history, percentile, global_default, **kw):
+        vistas.append(list(history))
+        return real(history, percentile, global_default, **kw)
+
+    monkeypatch.setattr(mod, "compute_adaptive_percentile", espia)
+
+    mod.resolver_umbrales(serie, 250, 253, mode=mod.PercentileMode.MOVIL,
+                          window=100, p90_global_default=1.0)
+
+    # Tres días evaluados (250, 251, 252), una historia por día.
+    assert len(vistas) == 3
+    for offset, historia in enumerate(vistas):
+        dia = 250 + offset
+        assert max(historia) == float(dia - 1), "termina en el día anterior"
+        assert float(dia) not in historia, "el propio día NO entra"
+
+
+def test_la_ventana_movil_avanza_con_el_dia(monkeypatch):
+    """Que sea MÓVIL: cada día mira su propia ventana, no una congelada al
+    inicio del fold."""
+    n = 300
+    serie = _serie(n, entropy=[float(i) for i in range(n)])
+
+    vistas: list[list[float]] = []
+    real = mod.compute_adaptive_percentile
+    def espia(history, percentile, global_default, **kw):
+        vistas.append(list(history))
+        return real(history, percentile, global_default, **kw)
+
+    monkeypatch.setattr(mod, "compute_adaptive_percentile", espia)
+
+    mod.resolver_umbrales(serie, 250, 254, mode=mod.PercentileMode.MOVIL,
+                          window=100, p90_global_default=1.0)
+
+    minimos = [min(h) for h in vistas]
+    assert minimos == sorted(minimos) and len(set(minimos)) == len(minimos), (
+        "la ventana arrastra su borde inferior: no está congelada")
+
+
+def test_el_zscore_normaliza_solo_con_dias_previos():
+    """`_zscores_causales` no puede incluir el propio día: si lo hiciera, el
+    día movería el estadístico contra el que se lo compara."""
+    entropy = np.array([float(i) for i in range(100)])
+
+    mu, sigma, z = mod._zscores_causales(entropy, window=10)
+
+    # Para el día 50, la media de [40..49] es 44.5.
+    assert mu[50] == pytest.approx(44.5)
+    assert 50.0 not in entropy[40:50]
+    # Sin ventana suficiente, no se inventa nada.
+    assert math.isnan(mu[0]) and math.isnan(z[0])
+
+
+def test_el_zscore_no_inventa_donde_no_hay_dispersion():
+    """Una ventana de valores idénticos no define un z-score."""
+    entropy = np.array([1.0] * 50)
+
+    _, sigma, z = mod._zscores_causales(entropy, window=10)
+
+    assert sigma[30] == 0.0
+    assert math.isnan(z[30]), "sin dispersión no hay z-score que inventar"
+
+
+# ── Los modos producen resultados distintos ───────────────────────────────
+
+def test_con_deriva_a_la_baja_el_movil_rescata_dias_que_el_acumulado_pierde():
+    """El caso real: la entropía deriva a la baja y el percentil acumulado
+    arrastra la cola vieja para siempre, dejando días recientes sin una sola
+    muestra."""
+    n = 600
+    # Deriva monótona a la baja, como BTC (1.1726 -> 0.9970) y XAU, con picos
+    # periódicos: son los días que el criterio debería seleccionar y que el
+    # acumulado deja de ver a medida que la serie se aleja de su propia cola.
+    entropy = [1.40 - 0.0008 * i + (0.20 if i % 20 == 0 else 0.0)
+               for i in range(n)]
+    serie = _serie(n, entropy=entropy, vitality=[3] * n)
+
+    acumulado = measure_folds(serie, lookback=0, n_folds=3,
+                              p90_global_default=1.30,
+                              percentile_mode=mod.PercentileMode.ACUMULADO)
+    movil = measure_folds(serie, lookback=0, n_folds=3,
+                          p90_global_default=1.30,
+                          percentile_mode=mod.PercentileMode.MOVIL,
+                          rolling_window=100)
+
+    n_acum = sum(f.n_post_mask for f in acumulado)
+    n_movil = sum(f.n_post_mask for f in movil)
+
+    assert n_movil > n_acum, (
+        f"el móvil tiene que rescatar días: acumulado={n_acum}, movil={n_movil}")
+
+
+def test_los_tres_modos_se_pueden_comparar_en_una_corrida():
+    n = 400
+    entropy = [1.30 - 0.0006 * i for i in range(n)]
+    serie = _serie(n, entropy=entropy, vitality=[3] * n)
+
+    resultados = {
+        modo: sum(f.n_post_mask for f in measure_folds(
+            serie, lookback=0, n_folds=3, p90_global_default=1.20,
+            percentile_mode=modo, rolling_window=100))
+        for modo in mod.PercentileMode.todos()
+    }
+
+    assert set(resultados) == set(mod.PercentileMode.todos())
+
+
+def test_el_p90_reportado_esta_en_unidades_de_entropia_en_los_tres_modos():
+    """La columna P90 se compara entre modos. Reportar ahí el z crudo del
+    modo ZSCORE pondría un número de otra escala (y de otro signo) al lado de
+    umbrales de entropía, y la comparación dejaría de significar nada."""
+    # Nivel 100 a propósito: en espacio z el percentil vale ~1.28, así que si
+    # algún modo reportara el z crudo el test lo ve sin ambigüedad. El umbral
+    # NO tiene por qué ser un valor observado (mu + z*sigma puede quedar
+    # apenas fuera del rango), por eso el margen de una amplitud entera.
+    n = 500
+    entropy = [100.0 + 1.0 * ((i % 7) - 3) for i in range(n)]
+    lo, hi = min(entropy), max(entropy)
+    amplitud = hi - lo
+    serie = _serie(n, entropy=entropy, vitality=[3] * n)
+
+    for modo in mod.PercentileMode.todos():
+        folds = measure_folds(serie, lookback=0, n_folds=3,
+                              p90_global_default=99.0,
+                              percentile_mode=modo, rolling_window=100)
+        for f in folds:
+            assert lo - amplitud <= f.p90_used <= hi + amplitud, (
+                f"{modo}: P90={f.p90_used} no está en unidades de entropía "
+                f"(rango observado {lo}..{hi})")
+
+
+def test_la_mediana_de_umbrales_no_se_deja_arrastrar_por_un_dia():
+    """`representativo` es mediana, no último día: un único umbral atípico al
+    final del fold no puede reescribir lo que reporta la columna."""
+    assert mod._mediana([1.0, 2.0, 3.0], 9.9) == 2.0
+    assert mod._mediana([1.0, 2.0, 3.0, 400.0], 9.9) == 2.5
+    assert mod._mediana([], 9.9) == 9.9
+    assert mod._mediana([float("nan"), 2.0], 9.9) == 2.0
+
+
+# ── Tasa de disparo ───────────────────────────────────────────────────────
+
+def test_se_reporta_la_tasa_no_solo_el_conteo():
+    """2 de 714 y 172 de 710 son problemas distintos y con solo el conteo se
+    ven parecidos en la tabla."""
+    n = 400
+    serie = _serie(n, vitality=[9 if i % 4 == 0 else 3 for i in range(n)],
+                   entropy=[2.0 - 0.001 * i for i in range(n)])
+
+    folds = measure_folds(serie, lookback=0, n_folds=3,
+                          p90_global_default=99.0)
+
+    for f in folds:
+        assert f.n_total > 0
+        assert f.tasa_disparo == pytest.approx(f.n_post_mask / f.n_total)
+        assert 0.0 <= f.tasa_disparo <= 1.0
+
+
+def test_la_tasa_es_cero_sin_disparos_y_no_lanza():
+    # Entropía estrictamente decreciente: cada día está por debajo de TODA su
+    # historia, así que ningún P90 de historia puede quedar por debajo de él.
+    # (Un valor constante NO sirve: con >=100 obs el percentil es ROLLING, el
+    # P90 de una constante es esa constante y `>=` dispararía todos los días.)
+    serie = _serie(200, entropy=[2.0 - 0.001 * i for i in range(200)],
+                   vitality=[3] * 200)
+
+    folds = measure_folds(serie, lookback=0, n_folds=2,
+                          p90_global_default=99.0)
+
+    assert all(f.n_post_mask == 0 for f in folds)
+    assert all(f.tasa_disparo == 0.0 for f in folds)
+
+
+# ── Desglose de las dos ramas del OR ──────────────────────────────────────
+
+def test_las_tres_categorias_suman_exactamente_el_total():
+    n = 400
+    serie = _serie(n, entropy=[float(i % 7) for i in range(n)],
+                   vitality=[9 if i % 3 == 0 else 3 for i in range(n)])
+
+    folds = measure_folds(serie, lookback=0, n_folds=3, p90_global_default=3.0)
+
+    for f in folds:
+        assert (f.n_solo_entropia + f.n_solo_vitality + f.n_ambas_ramas
+                == f.n_post_mask)
+
+
+def test_vitality_sola_se_distingue_de_entropia_sola():
+    """Sobre los datos reales, vitality participa en el 93% de los disparos
+    de BTC y la entropía pura aporta el 6.7%. Si el desglose no separara las
+    ramas, comparar criterios de percentil sería comparar el 7% del problema
+    creyendo que se comparó todo."""
+    n = 300
+    # Entropía siempre bajo su propio umbral (decreciente estricta): todo
+    # disparo viene de vitality.
+    serie = _serie(n, entropy=[2.0 - 0.001 * i for i in range(n)],
+                   vitality=[9 if i % 5 == 0 else 3 for i in range(n)])
+
+    folds = measure_folds(serie, lookback=0, n_folds=2, p90_global_default=99.0)
+
+    assert sum(f.n_solo_vitality for f in folds) > 0
+    assert sum(f.n_solo_entropia for f in folds) == 0
+    assert sum(f.n_ambas_ramas for f in folds) == 0
+
+
+def test_entropia_sola_cuando_vitality_nunca_dispara():
+    n = 300
+    serie = _serie(n, entropy=[5.0] * n, vitality=[3] * n)
+
+    folds = measure_folds(serie, lookback=0, n_folds=2, p90_global_default=0.0)
+
+    assert sum(f.n_solo_entropia for f in folds) > 0
+    assert sum(f.n_solo_vitality for f in folds) == 0
+
+
+def test_ambas_ramas_a_la_vez_se_cuentan_aparte():
+    n = 300
+    serie = _serie(n, entropy=[5.0] * n, vitality=[9] * n)
+
+    folds = measure_folds(serie, lookback=0, n_folds=2, p90_global_default=0.0)
+
+    assert sum(f.n_ambas_ramas for f in folds) > 0
+    assert sum(f.n_solo_entropia for f in folds) == 0
+    assert sum(f.n_solo_vitality for f in folds) == 0
+
+
+def test_el_desglose_se_agrega_al_nivel_oof(entorno, capsys):
+    import json
+    lake, ohlcv = entorno
+    _escribir_ohlcv(ohlcv, "BTC", n=300)
+    _escribir_gdelt("BTC", n=300)
+
+    main(["--assets", "BTC", "--p90-global-default", "1.19",
+          "--ohlcv-root", str(ohlcv), "--format", "json"])
+
+    a = json.loads(capsys.readouterr().out)["assets"][0]
+    assert (a["oof_solo_entropia"] + a["oof_solo_vitality"]
+            + a["oof_ambas_ramas"] == a["oof_post_mask"])
+    assert 0.0 <= a["tasa_disparo_oof"] <= 1.0
+
+
+# ── CLI ───────────────────────────────────────────────────────────────────
+
+def test_compare_modes_corre_los_tres(entorno, capsys):
+    lake, ohlcv = entorno
+    _escribir_ohlcv(ohlcv, "BTC", n=300)
+    _escribir_gdelt("BTC", n=300)
+
+    codigo = main(["--assets", "BTC", "--p90-global-default", "1.19",
+                   "--ohlcv-root", str(ohlcv), "--compare-modes",
+                   "--rolling-window", "60"])
+
+    salida = capsys.readouterr().out
+    assert codigo == 0
+    for modo in mod.PercentileMode.todos():
+        assert modo in salida
+    assert "COMPARACIÓN DE CRITERIOS" in salida
+
+
+def test_compare_modes_en_json_trae_los_tres(entorno, capsys):
+    import json
+    lake, ohlcv = entorno
+    _escribir_ohlcv(ohlcv, "BTC", n=300)
+    _escribir_gdelt("BTC", n=300)
+
+    main(["--assets", "BTC", "--p90-global-default", "1.19",
+          "--ohlcv-root", str(ohlcv), "--compare-modes",
+          "--rolling-window", "60", "--format", "json"])
+
+    rep = json.loads(capsys.readouterr().out)
+    assert set(rep["por_modo"]) == set(mod.PercentileMode.todos())
+    assert rep["rolling_window"] == 60
+
+
+def test_las_columnas_nuevas_no_desplazan_al_desglose_de_arrastre(entorno,
+                                                                  capsys):
+    """El desglose propia/arrastrada es la razón por la que el n es
+    interpretable. Agregar tasa y ramas del OR no puede costarlo: sin él, el
+    número vuelve a ser el que no se podía leer."""
+    lake, ohlcv = entorno
+    _escribir_ohlcv(ohlcv, "BTC", n=300)
+    _escribir_gdelt("BTC", n=300)
+
+    main(["--assets", "BTC", "--p90-global-default", "1.19",
+          "--ohlcv-root", str(ohlcv)])
+
+    salida = capsys.readouterr().out
+    for columna in ("propia", "arrast", "tasa", "s_ent", "s_vit", "ambas"):
+        assert columna in salida, f"falta la columna {columna}"
+
+
+def test_sin_el_flag_el_json_no_carga_por_modo(entorno, capsys):
+    """Sin --compare-modes, `por_modo` sería una copia literal de `assets`.
+    Duplicar el reporte por defecto encarece cada corrida sin agregar nada."""
+    import json
+    lake, ohlcv = entorno
+    _escribir_ohlcv(ohlcv, "BTC", n=300)
+    _escribir_gdelt("BTC", n=300)
+
+    main(["--assets", "BTC", "--p90-global-default", "1.19",
+          "--ohlcv-root", str(ohlcv), "--format", "json"])
+
+    rep = json.loads(capsys.readouterr().out)
+    assert "por_modo" not in rep
+    assert rep["percentile_modes"] == [mod.PercentileMode.ACUMULADO]
+
+
+def test_rolling_window_invalida_es_fallo_de_invocacion(entorno, capsys):
+    lake, ohlcv = entorno
+
+    codigo = main(["--assets", "BTC", "--p90-global-default", "1.19",
+                   "--ohlcv-root", str(ohlcv), "--rolling-window", "1"])
+
+    assert codigo == 2
+    assert "rolling-window" in capsys.readouterr().err
+
+
+# ── El tool no toca producción ────────────────────────────────────────────
+
+def test_los_modos_llaman_a_compute_adaptive_percentile_no_la_reimplementan():
+    """Port, don't rewrite: los criterios viven en el tool y LLAMAN a la
+    función de core/scoring.py; no la copian ni la modifican."""
+    assert mod.compute_adaptive_percentile is not None
+
+    import ast
+    import inspect
+    from pathlib import Path as _P
+
+    arbol = ast.parse(_P(inspect.getfile(mod)).read_text())
+    llamadas = {n.func.id for n in ast.walk(arbol)
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+    assert "compute_adaptive_percentile" in llamadas
+
+    # Y no se define una versión local que la sombree.
+    definidas = {n.name for n in ast.walk(arbol)
+                 if isinstance(n, ast.FunctionDef)}
+    assert "compute_adaptive_percentile" not in definidas
+
+
+def test_el_zscore_default_es_el_percentil_90_de_la_normal():
+    """Φ⁻¹(0.90). No es un número inventado: se verifica contra la CDF."""
+    z = mod.ZSCORE_P90_GLOBAL_DEFAULT
+    phi = 0.5 * (1 + math.erf(z / math.sqrt(2)))
+
+    assert phi == pytest.approx(0.90, abs=1e-9)
