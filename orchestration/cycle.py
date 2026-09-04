@@ -38,6 +38,23 @@ recién empieza a acumularse esta semana) es un caso VÁLIDO, no un error
 inventado. `compute_vitality_tesla` ya tiene su propia cascada para
 degradar con poca historia (Tier C); este módulo no reimplementa esa
 lógica, la usa.
+
+CRITERIO DEL P90 (GODEL_CRITERIA_VERSION 2.0.0-rolling_252d): desde este
+patch el umbral de la máscara Gödel es un percentil de VENTANA MÓVIL de
+252 observaciones -- ver core.scoring.compute_godel_p90() para la
+medición que lo motivó. Hasta la versión 1.x este ciclo le pasaba a
+compute_adaptive_percentile() TODA la historia previa, que es el criterio
+acumulado que dejó 1.077 días recientes sin una sola muestra.
+
+UNA PRECISIÓN SOBRE ESAS 252 OBSERVACIONES, para que el número no se lea
+como algo que no es: acá la historia son días de CALENDARIO de la serie
+GDELT (`read_series`), así que 252 observaciones son ~252 días corridos
+(~8,3 meses). La medición que fijó el 252 corrió sobre el join con OHLCV,
+indexado por días de MERCADO, donde 252 es un año hábil. La ventana es la
+misma en observaciones y el port es fiel; el tramo de calendario que
+abarca no lo es. Si en algún momento se quiere "un año" en ambos lados,
+eso es una recalibración del número -- con su medición -- y no un ajuste
+que corresponda hacer acá en silencio.
 """
 
 from __future__ import annotations
@@ -47,9 +64,10 @@ from dataclasses import dataclass
 from typing import Sequence
 
 from core.scoring import (
+    GODEL_CRITERIA_VERSION,
     NashFrozenResult,
     VitalityResult,
-    compute_adaptive_percentile,
+    compute_godel_p90,
     compute_nash_frozen_7d,
     compute_vitality_tesla,
     godel_active,
@@ -86,6 +104,22 @@ class AssetCycleResult:
     godel_is_active: bool | None
     gold_score: None
     gold_score_blocked_reason: str
+    #: Con qué criterio de percentil se calculó `godel_is_active`, SELLADO
+    #: en el momento del cálculo (core.scoring.GODEL_CRITERIA_VERSION).
+    #:
+    #: LA COMPROBACIÓN NO EXISTE TODAVÍA, y decirlo importa: un campo
+    #: sellado que nadie verifica da falsa sensación de protección. Este
+    #: campo solo DEJA CONSTANCIA de con qué criterio salió el número.
+    #: Comparar la versión leída de un artefacto contra la del módulo, y
+    #: recalcular si difieren, es trabajo de la capa que persista estos
+    #: resultados -- que hoy no existe: `run_scoring_cycle` devuelve un
+    #: dict en memoria y nada escribe un AssetCycleResult a disco. Cuando
+    #: esa capa nazca, la comprobación vive ahí, no acá.
+    #:
+    #: En cold start (`godel_is_active is None`) no se aplicó ningún
+    #: criterio: el campo trae la versión de este build, no la de un
+    #: cálculo que no ocurrió.
+    godel_criteria_version: str = GODEL_CRITERIA_VERSION
 
 
 def _build_windows(asset: str) -> tuple[list, list[float], list[float], float | None]:
@@ -133,6 +167,8 @@ def run_scoring_cycle(
             explícitamente". Inventar uno acá sería exactamente el tipo
             de certeza fabricada que este proyecto evita. El caller debe
             proveerlo de forma consciente (y documentar de dónde salió).
+            Sigue siendo el default de arranque en frío: con la ventana
+            móvil se usa en los primeros días, no en régimen.
 
     Raises:
         ValueError: si algún asset en `assets` no tiene
@@ -170,9 +206,14 @@ def run_scoring_cycle(
         # nash_frozen_7d usa toda la ventana disponible (incluye el punto
         # actual) como referencia -- ver docstring de compute_nash_frozen_7d.
         nash = compute_nash_frozen_7d(entropy_window=entropy_hist + [current_entropy])
-        p90 = compute_adaptive_percentile(
-            history=entropy_hist, percentile=90.0,
-            global_default=p90_entropy_global_default,
+        # VENTANA MÓVIL, no acumulado (GODEL_CRITERIA_VERSION 2.0.0):
+        # `entropy_hist` es toda la historia sin el día actual, y
+        # compute_godel_p90() se queda con sus últimas 252 observaciones.
+        # Pasarle la historia entera -- que es lo que este ciclo hacía
+        # hasta la versión 1.x -- arrastra la cola vieja y deja días
+        # recientes sin muestra. Ver compute_godel_p90() para la medición.
+        p90 = compute_godel_p90(
+            entropy_hist, global_default=p90_entropy_global_default,
         )
         godel = godel_active(
             entropy_shannon=current_entropy,
@@ -184,6 +225,9 @@ def run_scoring_cycle(
             asset=asset, data_status="ok", n_days_history=len(valid_days),
             vitality_tesla=vitality, nash_frozen=nash, godel_is_active=godel,
             gold_score=None, gold_score_blocked_reason=GOLD_SCORE_BLOCKED_REASON,
+            # Sellado en el momento del cálculo, no heredado del default:
+            # es este godel el que se calculó con este criterio.
+            godel_criteria_version=GODEL_CRITERIA_VERSION,
         )
         logger.info(
             "cycle: %s vitality=%d(%s) nash_frozen=%s godel_active=%s (%d días)",

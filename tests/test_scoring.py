@@ -37,10 +37,13 @@ from core.scoring import (
     compute_entropy_delta_lags,
     compute_entropy_fibonacci_lags,
     compute_gold_score_bma,
+    compute_godel_p90,
     compute_mass_panic_index,
     compute_nash_frozen_7d,
     compute_vitality_tesla,
     godel_active,
+    GODEL_CRITERIA_VERSION,
+    GODEL_ROLLING_WINDOW_DAYS,
 )
 
 
@@ -1016,3 +1019,311 @@ def test_benchmark_abc_c_nunca_dispara_menos_que_a_o_b_por_separado():
         ).kill_signal
         if a or b:
             assert c is True, f"entropy={entropy} p90={p90} vit={vitality}: A={a} B={b} pero C=False"
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  compute_godel_p90 -- percentil de ventana móvil (GODEL_CRITERIA_VERSION 2)
+#
+#  Los dos tests que sostienen todo lo demás son
+#  `test_godel_p90_solo_mira_la_ventana_de_252_dias` y
+#  `test_godel_p90_nunca_ve_el_dia_que_se_evalua`: ventana y
+#  desplazamiento son las DOS mitades del contrato. Sin la ventana el
+#  criterio vuelve a ser el acumulado que dejó 1.077 días sin muestra;
+#  sin el desplazamiento hay fuga temporal y el número que salga no
+#  significa nada.
+# ══════════════════════════════════════════════════════════════════════════
+
+# ─── La ventana: 252 observaciones, ni una más ────────────────────────────
+
+def test_godel_p90_solo_mira_la_ventana_de_252_dias():
+    """Historia vieja alta + ventana reciente baja: si el percentil viera
+    más de 252 observaciones, la cola vieja lo arrastraría hacia arriba.
+    Ese arrastre es exactamente lo que dejó 1.077 días recientes sin una
+    sola muestra en BTC y XAU."""
+    vieja = [10.0] * 3000            # 2015-2018, entropía alta
+    reciente = [1.0] * GODEL_ROLLING_WINDOW_DAYS   # el último año
+
+    p90 = compute_godel_p90(vieja + reciente, global_default=1.19)
+
+    assert p90.n_obs == GODEL_ROLLING_WINDOW_DAYS
+    assert p90.value == pytest.approx(1.0), (
+        "la cola vieja se filtró en la ventana: el percentil la está "
+        "arrastrando igual que el criterio acumulado")
+
+
+def test_godel_p90_con_ventana_acumulada_daria_otro_numero():
+    """Contraprueba del anterior: el mismo dato SIN recortar la ventana da
+    un umbral inalcanzable. Si este test pasara a dar lo mismo que el
+    anterior, es que la ventana dejó de aplicarse."""
+    vieja = [10.0] * 3000
+    reciente = [1.0] * GODEL_ROLLING_WINDOW_DAYS
+    serie = vieja + reciente
+
+    movil = compute_godel_p90(serie, global_default=1.19)
+    acumulado = compute_adaptive_percentile(
+        history=serie, percentile=90.0, global_default=1.19)
+
+    assert acumulado.value > movil.value
+    assert acumulado.value == pytest.approx(10.0)
+
+
+def test_godel_p90_la_ventana_se_toma_del_final_no_del_principio():
+    """Las últimas 252 observaciones, no las primeras. Un `[:window]` en
+    vez de `[-window:]` pasa los tests de tamaño y falla acá."""
+    historia = [float(i) for i in range(1000)]
+
+    p90 = compute_godel_p90(historia, global_default=1.19)
+
+    esperado = float(np.percentile(historia[-GODEL_ROLLING_WINDOW_DAYS:], 90))
+    assert p90.value == pytest.approx(esperado)
+    assert p90.value > 900, "está mirando el principio de la serie"
+
+
+def test_godel_p90_la_ventana_avanza_con_el_dia():
+    """Que sea MÓVIL: dos días distintos de la misma serie no comparten
+    umbral cuando la serie se mueve."""
+    serie = [float(i) for i in range(1000)]
+
+    hoy = compute_godel_p90(serie[:600], global_default=1.19)
+    manana = compute_godel_p90(serie[:601], global_default=1.19)
+
+    assert manana.value > hoy.value, "la ventana está congelada"
+
+
+def test_godel_p90_ventana_configurable_pero_el_default_es_252():
+    assert GODEL_ROLLING_WINDOW_DAYS == 252
+
+    historia = [float(i) for i in range(1000)]
+    corta = compute_godel_p90(historia, global_default=1.19, window=50)
+
+    assert corta.n_obs == 50
+    assert compute_godel_p90(historia, global_default=1.19).n_obs == 252
+
+
+def test_godel_p90_ventana_menor_a_uno_es_error_no_degradacion_silenciosa():
+    """Una ventana vacía devolvería el default global todos los días. Eso
+    se ve igual que un criterio conservador y no lo es: es un fallo
+    silencioso."""
+    with pytest.raises(ValueError, match="window"):
+        compute_godel_p90([1.0] * 500, global_default=1.19, window=0)
+
+    with pytest.raises(ValueError, match="window"):
+        compute_godel_p90([1.0] * 500, global_default=1.19, window=-252)
+
+
+# ─── El desplazamiento de un día: la otra mitad del contrato ──────────────
+
+def test_godel_p90_la_ventana_termina_en_el_dia_anterior():
+    """El contrato es que `entropy_history` NO incluye el día evaluado, y
+    que la ventana TERMINA en el último día de esa historia -- el
+    anterior al que se evalúa.
+
+    Se verifica sobre el contenido exacto de la ventana y no sobre el
+    valor del umbral a propósito: con 252 observaciones, un solo día
+    mueve el P90 muy poco, así que una aserción numérica podría pasar
+    con la frontera rota. La ventana es el contrato; el número es su
+    consecuencia."""
+    import core.scoring as scoring
+
+    historia = [float(i) for i in range(1000)]   # todos distintos
+    vistas: list[list[float]] = []
+    real = scoring.compute_adaptive_percentile
+
+    def espia(history, percentile, global_default, **kw):
+        vistas.append(list(history))
+        return real(history, percentile, global_default, **kw)
+
+    scoring.compute_adaptive_percentile = espia
+    try:
+        compute_godel_p90(historia, global_default=1.19)
+    finally:
+        scoring.compute_adaptive_percentile = real
+
+    (ventana,) = vistas
+    assert ventana == historia[-GODEL_ROLLING_WINDOW_DAYS:]
+    assert ventana[-1] == historia[-1], "no termina en el día anterior"
+    assert max(ventana) == historia[-1], "la ventana mira hacia adelante"
+
+
+def test_godel_p90_si_el_dia_entrara_en_su_ventana_el_umbral_cambiaria():
+    """Por qué el desplazamiento es contrato y no un detalle. Se usa una
+    ventana chica a propósito: es donde el efecto de UN día es visible en
+    el número. Con 252 el efecto sigue existiendo, solo que diluido -- la
+    frontera no depende de que se note."""
+    historia = [1.0] * 40
+    dia_atipico = 99.0
+
+    sin_el_dia = compute_godel_p90(historia, global_default=1.19, window=10)
+    con_el_dia = compute_godel_p90(historia + [dia_atipico],
+                                   global_default=1.19, window=10)
+
+    assert con_el_dia.value > sin_el_dia.value, (
+        "el día propio contamina el umbral contra el que se lo compara: "
+        "un día que se autoevalúa empuja su propia vara hacia arriba")
+    assert godel_active(dia_atipico, sin_el_dia.value, vitality_tesla=3)
+
+
+def test_godel_p90_el_desplazamiento_no_se_pierde_con_ventana_llena():
+    """El caso que importa en producción: con más de 252 días de historia
+    la ventana sigue siendo las 252 anteriores, sin sumar el día propio."""
+    historia = [float(i) for i in range(1000)]
+
+    sin_el_dia = compute_godel_p90(historia, global_default=1.19)
+    con_el_dia = compute_godel_p90(historia + [1000.0], global_default=1.19)
+
+    assert sin_el_dia.n_obs == con_el_dia.n_obs == GODEL_ROLLING_WINDOW_DAYS
+    assert con_el_dia.value > sin_el_dia.value, (
+        "la ventana no avanzó al agregar un día")
+
+
+# ─── Warm-up: ventana expandible con lag de un día ────────────────────────
+
+def test_godel_p90_en_warmup_usa_toda_la_historia_disponible():
+    """Para los primeros 252 días no hay 252 observaciones previas. La
+    ventana es todo lo que haya (0...t-1) -- de facto el criterio
+    ACUMULADO, documentado como tal. La alternativa sería tomar
+    observaciones del futuro."""
+    for t in (5, 50, 150, 251):
+        p90 = compute_godel_p90([float(i) for i in range(t)],
+                                global_default=1.19)
+        assert p90.n_obs == t, f"día {t}: la ventana debería ser toda la historia"
+
+
+def test_godel_p90_el_warmup_termina_exactamente_en_252():
+    historia = [float(i) for i in range(400)]
+
+    assert compute_godel_p90(historia[:251], global_default=1.19).n_obs == 251
+    assert compute_godel_p90(historia[:252], global_default=1.19).n_obs == 252
+    assert compute_godel_p90(historia[:253], global_default=1.19).n_obs == 252
+
+
+def test_godel_p90_el_warmup_se_acopla_al_fallback_existente():
+    """No se duplica la lógica de arranque en frío: los cortes de 10 y 100
+    observaciones siguen siendo los de compute_adaptive_percentile."""
+    assert compute_godel_p90([1.0] * 5, global_default=1.19).source is PercentileSource.GLOBAL
+    assert compute_godel_p90([1.0] * 50, global_default=1.19).source is PercentileSource.HYBRID
+    assert compute_godel_p90([1.0] * 150, global_default=1.19).source is PercentileSource.ROLLING
+
+    assert compute_godel_p90([1.0] * MIN_OBS_FOR_HYBRID,
+                             global_default=1.19).source is PercentileSource.HYBRID
+    assert compute_godel_p90([1.0] * MIN_OBS_FOR_ROLLING,
+                             global_default=1.19).source is PercentileSource.ROLLING
+
+
+def test_godel_p90_sin_historia_es_el_default_global_no_un_error():
+    """Cold start: cero historia es un caso VÁLIDO, igual que en el resto
+    del módulo. No se inventa un umbral y no se lanza."""
+    assert compute_godel_p90(None, global_default=1.19).value == 1.19
+    assert compute_godel_p90([], global_default=1.19).value == 1.19
+    assert compute_godel_p90([], global_default=1.19).source is PercentileSource.GLOBAL
+
+
+# ─── Reusar, no reimplementar ─────────────────────────────────────────────
+
+def test_godel_p90_llama_a_compute_adaptive_percentile_no_la_reimplementa():
+    """Port, don't rewrite. Si alguien copiara la lógica del percentil acá,
+    habría dos implementaciones que pueden divergir en silencio."""
+    import core.scoring as scoring
+
+    vistas = []
+    real = scoring.compute_adaptive_percentile
+
+    def espia(history, percentile, global_default, **kw):
+        vistas.append((list(history), percentile, global_default))
+        return real(history, percentile, global_default, **kw)
+
+    original = scoring.compute_adaptive_percentile
+    scoring.compute_adaptive_percentile = espia
+    try:
+        compute_godel_p90([float(i) for i in range(500)], global_default=1.19)
+    finally:
+        scoring.compute_adaptive_percentile = original
+
+    assert len(vistas) == 1, "no llamó a compute_adaptive_percentile"
+    historia_vista, percentil, default = vistas[0]
+    assert percentil == 90.0
+    assert default == 1.19
+    assert len(historia_vista) == GODEL_ROLLING_WINDOW_DAYS
+
+
+def test_godel_p90_devuelve_el_mismo_tipo_que_el_percentil_adaptativo():
+    """Mismo contrato de retorno: quien ya consumía value/source/n_obs no
+    tiene que cambiar nada."""
+    r = compute_godel_p90([1.0] * 500, global_default=1.19)
+    assert isinstance(r, AdaptivePercentileResult)
+    assert r.source in tuple(PercentileSource)
+
+
+# ─── La máscara NO cambió ─────────────────────────────────────────────────
+
+def test_godel_active_conserva_su_firma_y_su_semantica():
+    """Este PR cambia CÓMO se calcula p90_entropy, no la máscara. La firma
+    de godel_active tiene que seguir siendo (entropy, p90, vitality) ->
+    bool: cambiarla rompería a todos sus llamadores."""
+    import inspect
+
+    firma = inspect.signature(godel_active)
+    assert list(firma.parameters) == [
+        "entropy_shannon", "p90_entropy", "vitality_tesla"]
+    assert isinstance(godel_active(1.0, 0.5, 3), bool)
+
+    # El OR, intacto en sus cuatro combinaciones.
+    assert godel_active(1.0, 0.5, 3) is True    # solo entropía
+    assert godel_active(0.1, 0.5, 9) is True    # solo vitality
+    assert godel_active(1.0, 0.5, 9) is True    # ambas
+    assert godel_active(0.1, 0.5, 3) is False   # ninguna
+
+
+# ─── Versionado del criterio ──────────────────────────────────────────────
+
+def test_existe_version_del_criterio_y_dice_ventana_movil_de_252():
+    """Un artefacto persistido con el criterio anterior tiene que poder
+    DETECTARSE. Sin una versión, un p90 acumulado y uno móvil son dos
+    floats indistinguibles."""
+    assert GODEL_CRITERIA_VERSION == "2.0.0-rolling_252d"
+    assert str(GODEL_ROLLING_WINDOW_DAYS) in GODEL_CRITERIA_VERSION
+
+
+def test_la_version_no_entra_en_el_retorno_de_godel_active():
+    """Deliberado: godel_active devuelve bool. Meterle la versión al
+    retorno le cambiaría la firma a todos sus llamadores, que es
+    exactamente lo que este PR no hace."""
+    assert godel_active(1.0, 0.5, 3) is True
+    assert not isinstance(godel_active(1.0, 0.5, 3), tuple)
+
+
+# ─── Fidelidad del port contra tools/measure_godel_samples.py ─────────────
+
+def test_el_port_reproduce_dia_a_dia_el_modo_movil_del_tool():
+    """La medición que motivó este cambio (BTC 611, XAU 398) salió del modo
+    MOVIL del tool. Si el port no produce EXACTAMENTE los mismos umbrales,
+    esos números no aplican a producción.
+
+    No hay datos reales de GDELT/OHLCV en el entorno de test, así que la
+    fidelidad se prueba donde de verdad vive: umbral por umbral sobre la
+    misma serie, cubriendo warm-up y régimen de ventana llena."""
+    from datetime import date, timedelta
+
+    import tools.measure_godel_samples as tool
+
+    rng = np.random.default_rng(11)
+    n = 800
+    entropy = np.array([1.30 - 0.0002 * i + rng.normal(0, 0.10)
+                        for i in range(n)])
+    serie = tool.SerieDerivada(
+        fechas=[date(2020, 1, 1) + timedelta(days=k) for k in range(n)],
+        entropy=entropy,
+        vitality=np.array([3] * n, dtype=int),
+        log_return=np.array([0.01] * n, dtype=float),
+        forward_filled=np.array([False] * n, dtype=bool),
+    )
+
+    del_tool = tool.resolver_umbrales(
+        serie, 1, n, mode=tool.PercentileMode.MOVIL,
+        window=GODEL_ROLLING_WINDOW_DAYS, p90_global_default=1.19,
+    )
+
+    for i in range(1, n):
+        del_core = compute_godel_p90(list(entropy[:i]), global_default=1.19)
+        assert del_core.value == pytest.approx(del_tool.por_dia[i], abs=1e-12), (
+            f"día {i}: el port no reproduce el modo MOVIL del tool")
