@@ -233,8 +233,131 @@ def godel_active(entropy_shannon: float, p90_entropy: float, vitality_tesla: int
     p90_entropy debe calcularse SOLO con datos de entrenamiento -- nunca
     incluir datos de validación/test (regla de integridad temporal, uno
     de los 4 Tamices Irrompibles del proyecto).
+
+    CÓMO SE CALCULA ESE p90_entropy: ver compute_godel_p90() -- desde
+    GODEL_CRITERIA_VERSION 2.0.0 es un percentil de VENTANA MÓVIL, no
+    acumulado. La firma de esta función NO cambió: sigue recibiendo el
+    umbral ya resuelto y devolviendo un bool. La máscara, vitality_tesla
+    y el OR quedan exactamente como estaban.
     """
     return entropy_shannon >= p90_entropy or vitality_tesla == 9
+
+
+# ─── p90 de la máscara Gödel: percentil de ventana móvil ────────────────────
+
+#: Ventana del percentil de la máscara Gödel. 252 = días hábiles de un año.
+#: Parte del CONTRATO junto con el desplazamiento de un día: cambiar
+#: cualquiera de los dos cambia el criterio y obliga a subir
+#: GODEL_CRITERIA_VERSION.
+GODEL_ROLLING_WINDOW_DAYS = 252
+
+#: Versión del criterio con el que se calculó un p90 de la máscara Gödel.
+#:
+#: Existe para que un artefacto persistido con el criterio anterior se
+#: DETECTE y se recalcule, en vez de mezclarse en silencio con resultados
+#: nuevos. Deliberadamente NO forma parte del retorno de godel_active():
+#: esa función devuelve bool y cambiarle la firma rompería a todos sus
+#: llamadores. La consume quien persiste resultados.
+#:
+#: Historia:
+#:   1.x  (implícita, sin constante) -- percentil ACUMULADO: toda la
+#:        historia previa, sin ventana.
+#:   2.0.0-rolling_252d -- percentil de ventana móvil de 252 días con
+#:        desplazamiento de un día. Ver compute_godel_p90() para la
+#:        medición que motivó el cambio.
+GODEL_CRITERIA_VERSION = "2.0.0-rolling_252d"
+
+
+def compute_godel_p90(
+    entropy_history: Sequence[float] | None,
+    global_default: float,
+    *,
+    window: int = GODEL_ROLLING_WINDOW_DAYS,
+) -> AdaptivePercentileResult:
+    """
+    El p90_entropy que consume godel_active(), calculado sobre una VENTANA
+    MÓVIL de `window` observaciones que TERMINA EN EL DÍA ANTERIOR.
+
+    NO reimplementa el percentil: recorta la historia y llama a
+    compute_adaptive_percentile(), que sigue siendo la única
+    implementación del percentil adaptativo en el repo. Lo único que
+    cambia respecto del criterio anterior es QUÉ historia recibe.
+
+    POR QUÉ SE CAMBIÓ, con números medidos (tools/measure_godel_samples.py
+    --compare-modes, sobre BTC 5.893 días de precio y XAU 5.383, entropía
+    GDELT 3.998 días por activo, 2015-01-01 a 2025-12-31):
+
+        activo   ACUMULADO   MOVIL   ZSCORE
+        BTC            284     611      544
+        XAU             68     398      350
+
+    La entropía deriva a la baja de forma monótona (BTC de 1.1726 a
+    0.9970 de media entre 2015 y 2025; XAU de 1.3519 a 1.1522). Un
+    percentil acumulado arrastra la cola de 2015-2018 para siempre: en
+    XAU el P90 de cuatro años seguidos queda por debajo del umbral
+    global, y quedan 1.077 días recientes sin una sola muestra en ambos
+    activos.
+
+    POR QUÉ MÓVIL Y NO Z-SCORE, también medido y no por preferencia:
+      · La entropía normalizada no es normal (Jarque-Bera p ~ 1e-141 en
+        BTC y 1e-169 en XAU; skew -0.54 y -0.46; curtosis en exceso
+        +1.73 y +2.03), así que el Phi^-1(0.90) = 1.2816 que usa el modo
+        ZSCORE impone un umbral entre 21% y 27% por encima del percentil
+        90 empírico real (1.0582 y 1.0118).
+      · La desviación de la ventana móvil está inflada por la propia
+        tendencia: aporta el 38% de la dispersión en BTC y el 47% en XAU.
+      El percentil empírico no sufre ninguna de las dos.
+
+    EFECTO SECUNDARIO, más relevante que el conteo: con el criterio
+    acumulado la máscara la dominaba vitality_tesla (225 de 284 disparos
+    en BTC, participación de la entropía 20.8%). Con ventana móvil la
+    entropía pasa a dominar (386 de 611, participación 63.2%; en XAU
+    87.2%). La máscara no cambió -- cambió cuál de sus dos ramas la
+    sostiene.
+
+    EL DESPLAZAMIENTO DE UN DÍA ES PARTE DEL CONTRATO, no un detalle de
+    implementación: `entropy_history` NO incluye el día que se está
+    evaluando. Sin ese desplazamiento habría fuga temporal -- un día se
+    compararía contra un percentil que él mismo movió. Es la misma
+    convención que ya usan el Respaldo A de compute_vitality_tesla y
+    _zscore_last en este módulo.
+
+    WARM-UP -- ventana expandible con lag de un día. Para los primeros
+    `window` días no hay 252 observaciones previas, así que la ventana es
+    todo lo que haya (0...t-1). Eso significa, dicho explícitamente, que
+    esos días usan DE FACTO EL CRITERIO ACUMULADO. Es el 6,3% del dataset
+    medido y no hay alternativa sin fuga temporal: la única forma de dar
+    252 observaciones al día 10 sería tomarlas del futuro. El warm-up se
+    acopla al fallback que compute_adaptive_percentile ya tiene por
+    debajo de 10 y de 100 observaciones -- no se duplica esa lógica acá.
+
+    Args:
+        entropy_history: entropy_shannon en orden cronológico, SIN el día
+            que se evalúa. La ventana son las últimas `window`
+            OBSERVACIONES de esta lista: si el caller ya filtró días
+            inválidos, la ventana abarca más de `window` días de
+            calendario. Quien construye la historia decide qué cuenta
+            como observación.
+        global_default: mismo contrato que compute_adaptive_percentile --
+            para P90 no hay default legacy confirmado, debe proveerse
+            explícitamente.
+        window: tamaño de la ventana. Default GODEL_ROLLING_WINDOW_DAYS.
+
+    Raises:
+        ValueError: si window < 1. Una ventana vacía no es un criterio
+            más conservador -- devolvería el default global todos los
+            días y eso es un fallo silencioso, no una degradación.
+    """
+    if window < 1:
+        raise ValueError(
+            f"window debe ser >= 1, recibido: {window}. Una ventana vacía "
+            f"dejaría el percentil en global_default todos los días."
+        )
+
+    ventana = list(entropy_history)[-window:] if entropy_history else []
+    return compute_adaptive_percentile(
+        history=ventana, percentile=90.0, global_default=global_default,
+    )
 
 
 # ─── nash_frozen_7d ─────────────────────────────────────────────────────────

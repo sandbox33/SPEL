@@ -150,3 +150,168 @@ def test_dias_insuficientes_no_entran_en_las_ventanas():
     r = resultado["NVDA"]
     # 5 + 3 = 8 días válidos; el día insuficiente (día 6) no cuenta
     assert r.n_days_history == 8
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  El criterio del p90: ventana móvil, no acumulado
+#
+#  ESTE BLOQUE EXISTE PORQUE LA SUITE ERA CIEGA A ESTE CAMBIO. Antes de
+#  agregarlo, la fixture más grande de este archivo era de 15 días -- todas
+#  caían DENTRO del warm-up de 252, donde móvil y acumulado son idénticos
+#  por construcción. Los 607 tests pasaban con cualquiera de los dos
+#  criterios, así que "siguen verdes" no era evidencia de que el cambio
+#  fuera seguro: era evidencia de que no lo estaban mirando.
+#
+#  `test_con_deriva_a_la_baja_el_movil_ve_un_dia_que_el_acumulado_pierde`
+#  es el que separa los dos criterios. Si alguna vez pasa con los dos, dejó
+#  de separar nada y hay que arreglarlo, no relajarlo.
+# ══════════════════════════════════════════════════════════════════════════
+
+#: Deriva diaria a la escala REAL medida sobre BTC: la entropía media cae
+#: de 1.1726 a 0.9970 en once años (~1,5 puntos porcentuales al año). No es
+#: un número elegido para que el test dé: es el fenómeno que motivó el
+#: cambio de criterio, a su tamaño real.
+_ENTROPIA_INICIAL_BTC = 1.1726
+_ENTROPIA_FINAL_BTC = 0.9970
+_DERIVA_DIARIA = (_ENTROPIA_INICIAL_BTC - _ENTROPIA_FINAL_BTC) / (11 * 365)
+
+
+def _sembrar_deriva(asset: str, n_dias: int, start=date(2020, 1, 1),
+                    n_events: int = 10) -> list[float]:
+    """Siembra `n_dias` con deriva descendente a escala real y devuelve la
+    serie de entropías sembradas.
+
+    Sin ruido a propósito: la deriva es lo que hace divergir los dos
+    criterios, y un test que dependa de un `default_rng` para separarlos
+    sería frágil por una razón que no tiene que ver con lo que mide.
+
+    `n_events` constante hace que el tercil de vitality_tesla deje a todos
+    los días en 3 -- necesario para que este test mida la RAMA DE ENTROPÍA
+    del OR. Con vitality en 9 la máscara dispararía igual y el test pasaría
+    sin haber comprobado nada del percentil.
+    """
+    entropias = [_ENTROPIA_INICIAL_BTC - _DERIVA_DIARIA * i for i in range(n_dias)]
+    for i, e in enumerate(entropias):
+        append_day(_dia(asset, start + timedelta(days=i),
+                        entropy=e, n_events=n_events))
+    return entropias
+
+
+def test_con_deriva_a_la_baja_el_movil_ve_un_dia_que_el_acumulado_pierde():
+    """EL TEST QUE SEPARA LOS DOS CRITERIOS.
+
+    Escenario real, a escala real: once años de deriva descendente y un
+    día con un repunte MODERADO -- alto para el último año, normal para
+    2015. El percentil acumulado lo sigue comparando contra la cola vieja
+    y no lo ve; la ventana móvil sí.
+
+    La aserción no se apoya en un número mágico: se calculan los DOS
+    umbrales sobre la misma historia y se comprueba que el día cae
+    exactamente entre ellos. Con el criterio acumulado este test falla."""
+    from core.scoring import compute_adaptive_percentile, compute_godel_p90
+
+    n_historia = 599  # > 252: fuera del warm-up, los criterios divergen
+    historia = _sembrar_deriva("BTC", n_historia)
+
+    umbral_acumulado = compute_adaptive_percentile(
+        history=historia, percentile=90.0, global_default=P90_TEST_DEFAULT).value
+    umbral_movil = compute_godel_p90(
+        historia, global_default=P90_TEST_DEFAULT).value
+
+    # La premisa del escenario, comprobada y no supuesta: con deriva a la
+    # baja el umbral acumulado queda POR ENCIMA del móvil.
+    assert umbral_acumulado > umbral_movil, (
+        "sin esta brecha el test no separa nada")
+
+    # El repunte: justo en el medio de los dos umbrales.
+    repunte = (umbral_movil + umbral_acumulado) / 2
+    assert umbral_movil < repunte < umbral_acumulado
+    append_day(_dia("BTC", date(2020, 1, 1) + timedelta(days=n_historia),
+                    entropy=repunte, n_events=10))
+
+    r = run_scoring_cycle(["BTC"], p90_entropy_global_default=P90_TEST_DEFAULT)["BTC"]
+
+    assert r.data_status == "ok"
+    assert r.vitality_tesla.value != 9, (
+        "vitality dispararía la máscara por su cuenta y el test no estaría "
+        "midiendo la rama de entropía")
+    assert r.godel_is_active is True, (
+        f"el ciclo NO vio el día: entropía={repunte:.6f}, umbral móvil="
+        f"{umbral_movil:.6f}, umbral acumulado={umbral_acumulado:.6f}. "
+        f"Si el ciclo estuviera usando el acumulado, este es exactamente "
+        f"el día que perdería."
+    )
+
+
+def test_dentro_del_warmup_los_dos_criterios_dan_el_mismo_resultado():
+    """La otra cara de la frontera. Con menos de 252 días la ventana móvil
+    ES toda la historia, así que móvil y acumulado coinciden por
+    construcción -- y por eso ningún test corto puede distinguirlos."""
+    from core.scoring import GODEL_ROLLING_WINDOW_DAYS, compute_adaptive_percentile, compute_godel_p90
+
+    n_historia = 200  # < 252: dentro del warm-up
+    assert n_historia < GODEL_ROLLING_WINDOW_DAYS
+    historia = _sembrar_deriva("XAU", n_historia)
+
+    acumulado = compute_adaptive_percentile(
+        history=historia, percentile=90.0, global_default=P90_TEST_DEFAULT)
+    movil = compute_godel_p90(historia, global_default=P90_TEST_DEFAULT)
+
+    assert movil.value == acumulado.value
+    assert movil.n_obs == acumulado.n_obs == n_historia
+
+
+def test_la_frontera_de_252_dias_es_donde_los_criterios_se_separan():
+    """El día exacto en que dejan de coincidir. Con 252 observaciones la
+    ventana todavía abarca toda la historia; con 253 ya recorta."""
+    from core.scoring import GODEL_ROLLING_WINDOW_DAYS, compute_adaptive_percentile, compute_godel_p90
+
+    serie = [_ENTROPIA_INICIAL_BTC - _DERIVA_DIARIA * i for i in range(400)]
+
+    def umbrales(n):
+        h = serie[:n]
+        return (compute_adaptive_percentile(history=h, percentile=90.0,
+                                            global_default=P90_TEST_DEFAULT).value,
+                compute_godel_p90(h, global_default=P90_TEST_DEFAULT).value)
+
+    acum_252, movil_252 = umbrales(GODEL_ROLLING_WINDOW_DAYS)
+    assert movil_252 == acum_252, "en 252 todavía coinciden"
+
+    acum_253, movil_253 = umbrales(GODEL_ROLLING_WINDOW_DAYS + 1)
+    assert movil_253 != acum_253, "en 253 la ventana ya tiene que recortar"
+    assert acum_253 > movil_253, "con deriva a la baja el acumulado queda más alto"
+
+
+# ─── Versionado del criterio: sellado, sin comprobación todavía ───────────
+
+def test_el_resultado_sella_con_que_criterio_se_calculo():
+    """Un p90 acumulado y uno móvil son dos floats indistinguibles. Sin
+    esta marca, un artefacto viejo se mezclaría en silencio con uno nuevo."""
+    from core.scoring import GODEL_CRITERIA_VERSION
+
+    _sembrar_historia("BTC", 15, entropy=0.4, n_events=20)
+
+    r = run_scoring_cycle(["BTC"], p90_entropy_global_default=P90_TEST_DEFAULT)["BTC"]
+
+    assert r.godel_criteria_version == GODEL_CRITERIA_VERSION
+    assert "rolling" in r.godel_criteria_version
+    assert "252" in r.godel_criteria_version
+
+
+def test_el_sello_no_cambia_la_firma_de_run_scoring_cycle():
+    """El campo tiene default: ningún llamador existente se rompe por
+    haberlo agregado."""
+    import dataclasses
+
+    from orchestration.cycle import AssetCycleResult
+
+    campo = next(f for f in dataclasses.fields(AssetCycleResult)
+                 if f.name == "godel_criteria_version")
+    assert campo.default is not dataclasses.MISSING
+
+    r = AssetCycleResult(
+        asset="BTC", data_status="cold_start_no_data", n_days_history=0,
+        vitality_tesla=None, nash_frozen=None, godel_is_active=None,
+        gold_score=None, gold_score_blocked_reason="x",
+    )
+    assert r.godel_criteria_version
