@@ -81,14 +81,19 @@ NOTA CONCEPTUAL (de la discusión con Altair, no un hallazgo de código):
   informacional, capturado con GDELT.
 
 DIFERENCIA DE CONVENCIÓN ENTRE B Y A (deliberada, documentada):
-  B replica el legacy exacto: la ventana INCLUYE el punto actual, y el
-  percentil se calcula sobre toda la ventana (auto-referencial -- así es
-  como lo hacía spel_ingest_incremental.py::compute_entropy_features).
+  B replica el legacy exacto: la ventana INCLUYE el punto actual y el
+  percentil se calcula de forma auto-referencial -- así es como lo hacía
+  spel_ingest_incremental.py::compute_entropy_features.
   A no tiene precedente legacy, así que usa la convención más limpia:
   la ventana es histórica (NO incluye el punto actual), y el valor actual
   se compara contra los percentiles de esa historia. Si en algún momento
   se prefiere unificar la convención, es un cambio de una línea -- queda
   marcado acá para que no sea una inconsistencia silenciosa.
+  PRECISIÓN (versión 3.0.0): B ya NO calcula el percentil sobre toda la
+  ventana que recibe, sino sobre sus últimas GODEL_ROLLING_WINDOW_DAYS
+  observaciones. Eso cambió el TAMAÑO de la ventana, no su carácter
+  auto-referencial: el punto actual sigue siendo su último elemento. La
+  diferencia de convención con A sigue siendo la misma de siempre.
 
 CONDICIÓN GÖDEL -- confirmada con evidencia doble, no solo una fuente:
   godel_active = (entropy_shannon >= p90_entropy) OR (vitality_tesla == 9)
@@ -126,6 +131,49 @@ class InvalidThresholdError(ScoringError):
 #: percentil tenga sentido. Con menos de 3, cualquier percentil es ruido.
 MIN_WINDOW_FOR_PERCENTILE = 3
 
+
+# ─── Ventana móvil: un solo mecanismo para las dos ramas de la máscara ──────
+
+#: Ventana móvil de los estadísticos de la máscara Gödel. 252 = días
+#: hábiles de un año.
+#:
+#: La usan las DOS ramas del OR: el P90 de entropía (compute_godel_p90,
+#: desde la versión 2.0.0) y el tercil de n_events del nivel primario de
+#: vitality_tesla (desde la 3.0.0). Es una sola constante a propósito --
+#: el defecto que ambas corrigen es el mismo (una serie con tendencia
+#: comparada contra su propia cola vieja) y tener dos ventanas distintas
+#: obligaría a justificar por qué difieren.
+GODEL_ROLLING_WINDOW_DAYS = 252
+
+
+def _ventana_movil(historia: Sequence[float] | None, window: int) -> list[float]:
+    """
+    Las últimas `window` OBSERVACIONES de `historia`. Nada más.
+
+    Existe para que las dos ramas de la máscara recorten igual: cuando el
+    tercil de vitality_tesla se pasó a ventana móvil, copiar el `[-window:]`
+    de compute_godel_p90() habría creado dos mecanismos paralelos que
+    pueden divergir en silencio. Es una función de tres líneas justamente
+    porque el recorte es todo lo que comparten -- qué se hace después con
+    esa ventana (percentil adaptativo vs. tercil) es distinto en cada rama
+    y sigue viviendo en cada una.
+
+    Observaciones, no días de calendario: si el caller ya filtró días
+    inválidos, la ventana abarca más de `window` días corridos. Quien
+    construye la historia decide qué cuenta como observación.
+
+    Raises:
+        ValueError: si window < 1. Una ventana vacía no es un criterio más
+            conservador: deja el estadístico sin datos todos los días, y
+            eso es un fallo silencioso, no una degradación.
+    """
+    if window < 1:
+        raise ValueError(
+            f"window debe ser >= 1, recibido: {window}. Una ventana vacía "
+            f"dejaría el estadístico sin observaciones todos los días."
+        )
+    return list(historia)[-window:] if historia else []
+
 #: Defaults de spel_bayesian_core.py (godel_thresholds_v2.json, cuando el
 #: archivo no existe). Se pueden sobreescribir una vez haya calibración
 #: real para EURUSD -- ver Decisión de fuente CORE en SPEL_PERSISTENCE_STATE.md.
@@ -160,23 +208,85 @@ def compute_vitality_tesla(
     *,
     global_p33: float = DEFAULT_GLOBAL_P33,
     global_p66: float = DEFAULT_GLOBAL_P66,
+    n_events_rolling_window: int = GODEL_ROLLING_WINDOW_DAYS,
 ) -> VitalityResult:
     """
     Cascada de 3 niveles para vitality_tesla. Ver docstring del módulo
-    para la justificación completa de cada nivel.
+    para la justificación completa de cada nivel. La cascada, su orden de
+    degradación y los umbrales P33/P66 no cambiaron nunca; lo único que
+    cambió (versión 3.0.0) es el TAMAÑO de la ventana del nivel primario.
+
+    POR QUÉ EL NIVEL PRIMARIO USA VENTANA MÓVIL, con números medidos sobre
+    la serie real (4.880 días, 2013-04-01 a 2026-09-03, recalculando esta
+    misma función con la ventana que usaba producción):
+
+        % de días con vitality == 9
+                BTC    XAU            BTC    XAU
+        2013   62.9   63.3     2020  18.3   12.8
+        2014   41.8   43.9     2021  22.5   21.6
+        2015   52.3   60.5     2022  25.8   20.6
+        2016   42.6   38.5     2023  45.1   51.1
+        2017   21.1   19.7     2024  24.3   19.4
+        2018   31.2   30.4     2025  28.8   24.8
+        2019   20.5   20.3     2026  10.6   11.0
+
+    Un tercil debe dar ~33% estable. Iba de 63% a 11%. NO es arranque en
+    frío: el nivel primario se usó en 4.878 de los 4.880 días. Es que
+    n_events tiene tendencia y el tercil se calculaba contra TODA la
+    historia previa, así que un día se comparaba contra un volumen de
+    cobertura mediática de hace diez años.
+
+    Efecto sobre la máscara: el fold 1 de BTC disparaba al 66,7%, con 511
+    de 545 disparos por vitalidad y solo 13 por entropía. Eso infla el OOF
+    de 330 (folds 3-5) a 1185 y cruza el umbral de 620 sin señal real
+    detrás -- un n que se ve suficiente y no lo es.
+
+    Es la misma corrección que la versión 2.0.0 le hizo al P90 de
+    entropía, con el mismo mecanismo (`_ventana_movil`) y la misma
+    constante (GODEL_ROLLING_WINDOW_DAYS): las dos ramas del OR sufrían
+    la misma deriva.
+
+    LA VENTANA SIGUE INCLUYENDO EL PUNTO ACTUAL. El P90 de entropía usa la
+    ventana previa SIN el día que evalúa; acá no, y la diferencia es
+    deliberada, no un olvido: `n_events_window` es auto-referencial por
+    diseño heredado del legacy (spel_ingest_incremental.py::
+    compute_entropy_features), está documentado como tal desde el port
+    original, y sacar el día propio cambiaría la semántica del nivel
+    primario -- no solo su ventana. Este cambio es de TAMAÑO de ventana,
+    nada más. Ver la NOTA en el docstring del módulo, "DIFERENCIA DE
+    CONVENCIÓN ENTRE B Y A".
+
+    RESPALDO 1 (A) NO SE TOCÓ, y conviene saberlo: su tercil de entropía
+    tiene la misma exposición estructural (percentil sobre toda la ventana
+    que reciba). Queda fuera de este cambio porque la medición lo pone en
+    2 de 4.880 días -- corregirlo sin poder medir el efecto sería mover un
+    umbral a ciegas. Pendiente explícito, no un descuido.
 
     Args:
         n_events_window: ventana de conteo de eventos GDELT, INCLUYENDO
             el punto actual como último elemento (igual que el legacy).
-            None o con menos de MIN_WINDOW_FOR_PERCENTILE puntos -> cae a A.
+            Se recortan sus últimas `n_events_rolling_window`
+            observaciones. None o con menos de MIN_WINDOW_FOR_PERCENTILE
+            puntos -> cae a A.
         entropy_window: ventana HISTÓRICA de entropy_shannon, sin incluir
             el punto actual. None o insuficiente -> cae a C.
         current_entropy: entropy_shannon del punto actual -- siempre
             requerido, es lo único que necesita el nivel C (cold-start).
         global_p33 / global_p66: percentiles globales fijos para el nivel C.
+        n_events_rolling_window: tamaño de la ventana móvil del nivel
+            primario. Default GODEL_ROLLING_WINDOW_DAYS. Nombrado por su
+            rama a propósito: NO aplica al Respaldo A.
+
+    WARM-UP: con menos de `n_events_rolling_window` observaciones la
+    ventana es toda la historia disponible -- de facto el criterio
+    acumulado, igual que en compute_godel_p90(). No hay alternativa sin
+    inventar observaciones que no existen. El piso de
+    MIN_WINDOW_FOR_PERCENTILE sigue mandando por debajo de 3 puntos.
 
     Raises:
         InvalidThresholdError: si global_p33 >= global_p66.
+        ValueError: si n_events_rolling_window < 1 (lo lanza
+            `_ventana_movil`).
     """
     if global_p33 >= global_p66:
         raise InvalidThresholdError(
@@ -184,11 +294,17 @@ def compute_vitality_tesla(
             f"global_p66 ({global_p66})."
         )
 
-    # PRIMARIA (B) -- tercil de n_events, ventana auto-referencial (incluye actual)
+    # PRIMARIA (B) -- tercil de n_events sobre VENTANA MÓVIL, todavía
+    # auto-referencial (el punto actual sigue siendo su último elemento).
     if n_events_window is not None and len(n_events_window) >= MIN_WINDOW_FOR_PERCENTILE:
-        current_n = n_events_window[-1]
-        p33 = float(np.percentile(n_events_window, 33))
-        p66 = float(np.percentile(n_events_window, 66))
+        # El recorte va ANTES del piso de MIN_WINDOW_FOR_PERCENTILE en
+        # sentido lógico pero no puede cambiarlo: `_ventana_movil` nunca
+        # devuelve menos puntos de los que ya había salvo que se recorte,
+        # y el recorte solo achica hacia 252, que es >> 3.
+        ventana = _ventana_movil(n_events_window, n_events_rolling_window)
+        current_n = ventana[-1]
+        p33 = float(np.percentile(ventana, 33))
+        p66 = float(np.percentile(ventana, 66))
         value = 3 if current_n <= p33 else (6 if current_n <= p66 else 9)
         return VitalityResult(value=value, tier_used=VitalityTier.PRIMARY_N_EVENTS, degraded=False)
 
@@ -245,13 +361,10 @@ def godel_active(entropy_shannon: float, p90_entropy: float, vitality_tesla: int
 
 # ─── p90 de la máscara Gödel: percentil de ventana móvil ────────────────────
 
-#: Ventana del percentil de la máscara Gödel. 252 = días hábiles de un año.
-#: Parte del CONTRATO junto con el desplazamiento de un día: cambiar
-#: cualquiera de los dos cambia el criterio y obliga a subir
-#: GODEL_CRITERIA_VERSION.
-GODEL_ROLLING_WINDOW_DAYS = 252
+#: GODEL_ROLLING_WINDOW_DAYS vive arriba, junto a `_ventana_movil()`: desde
+#: la versión 3.0.0 la comparten las dos ramas de la máscara.
 
-#: Versión del criterio con el que se calculó un p90 de la máscara Gödel.
+#: Versión del criterio con el que se calculó la máscara Gödel.
 #:
 #: Existe para que un artefacto persistido con el criterio anterior se
 #: DETECTE y se recalcule, en vez de mezclarse en silencio con resultados
@@ -262,10 +375,16 @@ GODEL_ROLLING_WINDOW_DAYS = 252
 #: Historia:
 #:   1.x  (implícita, sin constante) -- percentil ACUMULADO: toda la
 #:        historia previa, sin ventana.
-#:   2.0.0-rolling_252d -- percentil de ventana móvil de 252 días con
-#:        desplazamiento de un día. Ver compute_godel_p90() para la
-#:        medición que motivó el cambio.
-GODEL_CRITERIA_VERSION = "2.0.0-rolling_252d"
+#:   2.0.0-rolling_252d -- P90 de entropía sobre ventana móvil de 252
+#:        observaciones con desplazamiento de un día. Ver
+#:        compute_godel_p90() para la medición que lo motivó.
+#:   3.0.0-rolling_252d_vitality -- la MISMA ventana móvil aplicada al
+#:        tercil de n_events del nivel primario de vitality_tesla, que
+#:        arrastraba la misma deriva sin corregir. Ver
+#:        compute_vitality_tesla() para la medición. Mayor y no menor
+#:        porque cambia el valor de vitality de días ya calculados: un
+#:        artefacto de la 2.x no es comparable con uno de la 3.x.
+GODEL_CRITERIA_VERSION = "3.0.0-rolling_252d_vitality"
 
 
 def compute_godel_p90(
@@ -344,19 +463,14 @@ def compute_godel_p90(
         window: tamaño de la ventana. Default GODEL_ROLLING_WINDOW_DAYS.
 
     Raises:
-        ValueError: si window < 1. Una ventana vacía no es un criterio
-            más conservador -- devolvería el default global todos los
-            días y eso es un fallo silencioso, no una degradación.
+        ValueError: si window < 1 (lo lanza `_ventana_movil`). Una ventana
+            vacía no es un criterio más conservador -- devolvería el
+            default global todos los días y eso es un fallo silencioso,
+            no una degradación.
     """
-    if window < 1:
-        raise ValueError(
-            f"window debe ser >= 1, recibido: {window}. Una ventana vacía "
-            f"dejaría el percentil en global_default todos los días."
-        )
-
-    ventana = list(entropy_history)[-window:] if entropy_history else []
     return compute_adaptive_percentile(
-        history=ventana, percentile=90.0, global_default=global_default,
+        history=_ventana_movil(entropy_history, window),
+        percentile=90.0, global_default=global_default,
     )
 
 

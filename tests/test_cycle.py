@@ -315,3 +315,131 @@ def test_el_sello_no_cambia_la_firma_de_run_scoring_cycle():
         gold_score=None, gold_score_blocked_reason="x",
     )
     assert r.godel_criteria_version
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  Ventana móvil en el tercil de vitality_tesla (versión 3.0.0)
+#
+#  Mismo estándar que el bloque anterior: la fixture es larga a propósito.
+#  Con menos de 252 días los dos criterios coinciden por construcción, así
+#  que un test corto no puede ver este cambio.
+# ══════════════════════════════════════════════════════════════════════════
+
+#: Tendencia creciente de n_events -- la forma que produce el defecto. En
+#: la serie real la cobertura mediática de GDELT crece con los años, y el
+#: tercil calculado contra toda la historia compara el volumen de hoy con
+#: el de hace diez años.
+_N_EVENTS_BASE = 50
+_N_EVENTS_PASO = 0.75
+
+
+def _sembrar_n_events_creciente(asset: str, n_dias: int,
+                                start=date(2020, 1, 1),
+                                entropy: float = 0.5) -> list[int]:
+    """Siembra `n_dias` con n_events en tendencia creciente y entropía
+    constante, y devuelve la serie de n_events sembrada.
+
+    Entropía CONSTANTE a propósito: así la rama de entropía del OR no
+    puede disparar por su cuenta y el test mide la rama de vitalidad. Con
+    entropía plana el P90 móvil iguala a la entropía de hoy... y por eso
+    el test comprueba explícitamente cuál rama disparó, en vez de
+    suponerlo."""
+    serie = [int(_N_EVENTS_BASE + _N_EVENTS_PASO * i) for i in range(n_dias)]
+    for i, ne in enumerate(serie):
+        append_day(_dia(asset, start + timedelta(days=i),
+                        entropy=entropy, n_events=ne))
+    return serie
+
+
+def test_el_ciclo_ya_no_marca_vitalidad_maxima_en_un_dia_tipico():
+    """EL TEST QUE SEPARA LOS DOS CRITERIOS EN PRODUCCIÓN.
+
+    n_events con tendencia creciente y un día con cobertura MEDIANA para
+    el último año. Con el tercil calculado contra toda la historia ese día
+    sale 9 -- vitalidad máxima -- siendo normal para su época. Con la
+    ventana móvil sale 6.
+
+    Es el efecto que infló el fold 1 de BTC al 66,7% de disparos, 511 de
+    545 por vitalidad. Con el cálculo anterior este test falla."""
+    from core.scoring import GODEL_ROLLING_WINDOW_DAYS, compute_vitality_tesla
+
+    n_historia = 600  # > 252: fuera del warm-up
+    serie = _sembrar_n_events_creciente("BTC", n_historia)
+
+    # "Hoy": la mediana del último año. Ni pico ni valle.
+    hoy = int(sorted(serie[-GODEL_ROLLING_WINDOW_DAYS:])
+              [GODEL_ROLLING_WINDOW_DAYS // 2])
+    append_day(_dia("BTC", date(2020, 1, 1) + timedelta(days=n_historia),
+                    entropy=0.5, n_events=hoy))
+
+    ventana_completa = [float(x) for x in serie] + [float(hoy)]
+
+    # La premisa, comprobada y no supuesta: sin recorte ese día es 9.
+    sin_recorte = compute_vitality_tesla(ventana_completa, None, 0.5,
+                                         n_events_rolling_window=10**9)
+    assert sin_recorte.value == 9, (
+        "la fixture no reproduce el defecto: sin recorte el día mediano "
+        "tiene que salir 9")
+
+    r = run_scoring_cycle(["BTC"], p90_entropy_global_default=P90_TEST_DEFAULT)["BTC"]
+
+    assert r.data_status == "ok"
+    assert r.vitality_tesla.tier_used.value == "primary_n_events", (
+        "esto no es un efecto de degradación de la cascada")
+    assert r.vitality_tesla.value == 6, (
+        f"el ciclo marcó vitality={r.vitality_tesla.value} en un día que es "
+        f"mediano para su propia ventana (n_events={hoy}, serie "
+        f"{serie[0]}..{serie[-1]}). Si el ciclo estuviera usando el tercil "
+        f"acumulado, este es exactamente el día que etiquetaría 9."
+    )
+
+
+def test_dentro_del_warmup_el_tercil_da_lo_mismo_con_los_dos_criterios():
+    """La otra cara de la frontera, y la razón por la que la suite era
+    ciega: con menos de 252 días la ventana móvil ES toda la historia."""
+    from core.scoring import GODEL_ROLLING_WINDOW_DAYS, compute_vitality_tesla
+
+    n_historia = 200
+    assert n_historia < GODEL_ROLLING_WINDOW_DAYS
+    serie = [float(x) for x in
+             _sembrar_n_events_creciente("XAU", n_historia)]
+
+    con_ventana = compute_vitality_tesla(serie, None, 0.5)
+    sin_recorte = compute_vitality_tesla(serie, None, 0.5,
+                                         n_events_rolling_window=10**9)
+
+    assert con_ventana.value == sin_recorte.value
+    assert con_ventana.tier_used == sin_recorte.tier_used
+
+
+def test_el_ciclo_no_recorta_por_su_cuenta_la_ventana_de_n_events():
+    """El recorte vive en core/scoring.py, del mismo lado que el del P90.
+    Si el ciclo recortara además, habría dos mecanismos y el de core -- que
+    es el que está medido -- dejaría de ser el único que manda."""
+    import ast
+    import inspect
+
+    import orchestration.cycle as cycle
+
+    arbol = ast.parse(inspect.getsource(cycle))
+    fn = next(n for n in ast.walk(arbol)
+              if isinstance(n, ast.FunctionDef) and n.name == "run_scoring_cycle")
+
+    # Ningún subscript con slice sobre la ventana de n_events.
+    assert not any(isinstance(n, ast.Subscript) and isinstance(n.slice, ast.Slice)
+                   for n in ast.walk(fn)), (
+        "el ciclo está recortando una ventana por su cuenta")
+
+
+def test_el_sello_de_version_sube_a_la_3():
+    """El cambio altera el valor de vitality de días ya calculados, así que
+    un artefacto de la 2.x no es comparable con uno de la 3.x."""
+    from core.scoring import GODEL_CRITERIA_VERSION
+
+    _sembrar_historia("BTC", 15, entropy=0.4, n_events=20)
+
+    r = run_scoring_cycle(["BTC"], p90_entropy_global_default=P90_TEST_DEFAULT)["BTC"]
+
+    assert r.godel_criteria_version == GODEL_CRITERIA_VERSION
+    assert r.godel_criteria_version.startswith("3.")
+    assert "vitality" in r.godel_criteria_version
