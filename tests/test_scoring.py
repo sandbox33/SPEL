@@ -39,6 +39,7 @@ from core.scoring import (
     compute_gold_score_bma,
     compute_godel_p90,
     compute_mass_panic_index,
+    MIN_WINDOW_FOR_PERCENTILE,
     compute_nash_frozen_7d,
     compute_vitality_tesla,
     godel_active,
@@ -1280,8 +1281,11 @@ def test_existe_version_del_criterio_y_dice_ventana_movil_de_252():
     """Un artefacto persistido con el criterio anterior tiene que poder
     DETECTARSE. Sin una versión, un p90 acumulado y uno móvil son dos
     floats indistinguibles."""
-    assert GODEL_CRITERIA_VERSION == "2.0.0-rolling_252d"
+    assert GODEL_CRITERIA_VERSION == "3.0.0-rolling_252d_vitality"
     assert str(GODEL_ROLLING_WINDOW_DAYS) in GODEL_CRITERIA_VERSION
+    # Mayor, no menor: la 3.0.0 cambia el valor de vitality de días ya
+    # calculados, así que un artefacto 2.x no es comparable con uno 3.x.
+    assert GODEL_CRITERIA_VERSION.startswith("3.")
 
 
 def test_la_version_no_entra_en_el_retorno_de_godel_active():
@@ -1327,3 +1331,297 @@ def test_el_port_reproduce_dia_a_dia_el_modo_movil_del_tool():
         del_core = compute_godel_p90(list(entropy[:i]), global_default=1.19)
         assert del_core.value == pytest.approx(del_tool.por_dia[i], abs=1e-12), (
             f"día {i}: el port no reproduce el modo MOVIL del tool")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  Ventana móvil en el tercil de vitality_tesla (versión 3.0.0)
+#
+#  El test que separa los dos criterios es
+#  `test_un_dia_tipico_del_ultimo_ano_ya_no_se_compara_contra_hace_diez`.
+#  Con el cálculo anterior falla. La suite NO tenía ningún test que
+#  distinguiera los dos criterios: al hacer el cambio, el único que se
+#  puso en rojo fue el pin literal de GODEL_CRITERIA_VERSION -- ninguno
+#  miraba el tercil.
+# ══════════════════════════════════════════════════════════════════════════
+
+#: Ventana "sin recorte" para expresar el criterio VIEJO en los tests sin
+#: reimplementarlo: una ventana más larga que cualquier fixture equivale a
+#: no recortar. Así el contraste se hace con la función real y no con una
+#: copia del cálculo anterior que podría divergir de él.
+_SIN_RECORTE = 10**9
+
+
+def _rampa_creciente(n: int, base: float = 50.0, paso: float = 0.75) -> list[float]:
+    """n_events con tendencia creciente -- la forma que produce el defecto.
+
+    Determinista, sin ruido: la tendencia es lo que hace divergir los dos
+    criterios, y un test que dependa de un `default_rng` para separarlos
+    sería frágil por una razón que no tiene que ver con lo que mide."""
+    return [base + paso * i for i in range(n)]
+
+
+# ─── EL TEST QUE SEPARA LOS DOS CRITERIOS ─────────────────────────────────
+
+def test_un_dia_tipico_del_ultimo_ano_ya_no_se_compara_contra_hace_diez():
+    """El defecto exacto, con la forma exacta que tiene en los datos
+    reales: n_events crece, y un día con cobertura MEDIANA para el último
+    año queda por encima del p66 de toda la historia previa porque esa
+    historia incluye el volumen de hace diez años.
+
+    Ese día se etiquetaba 9 -- vitalidad máxima -- siendo perfectamente
+    normal para su época. Con la ventana móvil cae en 6, que es lo que un
+    tercil bien calculado tiene que decir de un valor mediano.
+
+    Con el cálculo anterior este test falla."""
+    historia = _rampa_creciente(600)
+    # "Hoy": la mediana del último año. Ni pico ni valle.
+    hoy = float(np.median(historia[-GODEL_ROLLING_WINDOW_DAYS:]))
+    ventana = historia + [hoy]
+
+    viejo = compute_vitality_tesla(ventana, None, 0.5,
+                                   n_events_rolling_window=_SIN_RECORTE)
+    nuevo = compute_vitality_tesla(ventana, None, 0.5)
+
+    assert viejo.value == 9, (
+        "la premisa del escenario no se cumple: sin recorte el día mediano "
+        "tiene que salir 9, que es el defecto que se está corrigiendo")
+    assert nuevo.value == 6, (
+        f"un día mediano para su ventana debe caer en 6, salió {nuevo.value}")
+    # Los dos por el nivel primario: esto no es un efecto de degradación.
+    assert viejo.tier_used is VitalityTier.PRIMARY_N_EVENTS
+    assert nuevo.tier_used is VitalityTier.PRIMARY_N_EVENTS
+
+
+def test_la_ventana_movil_baja_la_tasa_de_nueves_pero_no_la_lleva_a_un_tercio():
+    """Cuánto corrige, medido, y hasta dónde -- que no es hasta el 33%.
+
+    La ventana móvil elimina la deriva que queda FUERA de la ventana. La
+    que ocurre DENTRO de los 252 días sigue empujando al día actual hacia
+    arriba, así que un tercil sobre una serie con tendencia sigue dando
+    más de un tercio de nueves. Es una corrección grande, no completa, y
+    decirlo acá evita que alguien lea el cambio como una garantía de 33%
+    que no es."""
+    rng = np.random.default_rng(7)
+    n = 1200
+    serie = [max(1.0, 50.0 + 0.05 * i + rng.normal(0, 25.0)) for i in range(n)]
+
+    def tasa_de_nueves(window: int) -> float:
+        nueves = evaluados = 0
+        for i in range(300, n):     # después del warm-up
+            nueves += compute_vitality_tesla(
+                serie[:i + 1], None, 0.5,
+                n_events_rolling_window=window).value == 9
+            evaluados += 1
+        return 100.0 * nueves / evaluados
+
+    viejo = tasa_de_nueves(_SIN_RECORTE)
+    nuevo = tasa_de_nueves(GODEL_ROLLING_WINDOW_DAYS)
+
+    assert viejo > 55.0, f"la fixture no reproduce la inflación: {viejo:.1f}%"
+    assert nuevo < viejo - 10.0, (
+        f"la ventana móvil tiene que bajar la tasa de forma clara: "
+        f"{viejo:.1f}% -> {nuevo:.1f}%")
+    # Y la parte honesta: sigue por encima de un tercio.
+    assert nuevo > 33.0, (
+        "si esto alguna vez baja de 33%, la corrección hace más de lo que "
+        "este PR dice que hace y hay que volver a medir, no relajar el test")
+
+
+# ─── La ventana ───────────────────────────────────────────────────────────
+
+def test_el_tercil_solo_mira_las_ultimas_252_observaciones():
+    """Historia vieja baja + ventana reciente alta: si el tercil viera más
+    de 252 observaciones, la cola vieja bajaría los umbrales y cualquier
+    día reciente saldría 9."""
+    vieja = [1.0] * 3000
+    reciente = [500.0] * GODEL_ROLLING_WINDOW_DAYS
+
+    assert compute_vitality_tesla(vieja + reciente, None, 0.5,
+                                  n_events_rolling_window=_SIN_RECORTE).value == 9
+    # Dentro de su propia ventana, 500 es el valor de todos: cae en 3.
+    assert compute_vitality_tesla(vieja + reciente, None, 0.5).value == 3
+
+
+def test_el_tercil_toma_la_ventana_del_final_no_del_principio():
+    """Un `[:window]` en vez de `[-window:]` pasa cualquier test de tamaño
+    y falla acá."""
+    historia = _rampa_creciente(1000)
+    ventana_esperada = historia[-GODEL_ROLLING_WINDOW_DAYS:]
+
+    resultado = compute_vitality_tesla(historia, None, 0.5)
+    p33 = float(np.percentile(ventana_esperada, 33))
+    p66 = float(np.percentile(ventana_esperada, 66))
+    esperado = 3 if historia[-1] <= p33 else (6 if historia[-1] <= p66 else 9)
+
+    assert resultado.value == esperado
+    # Contra el principio de la serie daría otra cosa.
+    assert p33 > float(np.percentile(historia[:GODEL_ROLLING_WINDOW_DAYS], 33))
+
+
+def test_la_ventana_del_tercil_es_configurable_y_por_defecto_252():
+    historia = _rampa_creciente(1000)
+
+    por_defecto = compute_vitality_tesla(historia, None, 0.5)
+    explicito = compute_vitality_tesla(
+        historia, None, 0.5, n_events_rolling_window=GODEL_ROLLING_WINDOW_DAYS)
+
+    assert por_defecto.value == explicito.value
+
+
+def test_ventana_del_tercil_menor_a_uno_es_error():
+    with pytest.raises(ValueError, match="window"):
+        compute_vitality_tesla([10.0] * 500, None, 0.5,
+                               n_events_rolling_window=0)
+
+
+# ─── Warm-up ──────────────────────────────────────────────────────────────
+
+def test_en_warmup_el_tercil_usa_toda_la_historia_igual_que_antes():
+    """Con menos de 252 observaciones la ventana ES toda la historia, así
+    que el cambio no toca ninguno de esos días. Es también la razón por la
+    que ningún test corto podía distinguir los dos criterios."""
+    for n in (3, 10, 100, GODEL_ROLLING_WINDOW_DAYS - 1):
+        historia = _rampa_creciente(n)
+        assert (compute_vitality_tesla(historia, None, 0.5).value
+                == compute_vitality_tesla(
+                    historia, None, 0.5,
+                    n_events_rolling_window=_SIN_RECORTE).value), (
+            f"con {n} observaciones los dos criterios tienen que coincidir")
+
+
+def test_la_frontera_del_warmup_esta_en_252():
+    historia = _rampa_creciente(400)
+
+    def coinciden(n):
+        h = historia[:n]
+        return (compute_vitality_tesla(h, None, 0.5).value
+                == compute_vitality_tesla(
+                    h, None, 0.5, n_events_rolling_window=_SIN_RECORTE).value)
+
+    assert coinciden(GODEL_ROLLING_WINDOW_DAYS), "en 252 todavía coinciden"
+
+
+def test_el_recorte_no_puede_romper_el_piso_de_tres_puntos():
+    """MIN_WINDOW_FOR_PERCENTILE sigue mandando: el recorte solo achica
+    hacia 252, que es mucho mayor que 3, así que nunca puede dejar al
+    nivel primario con menos puntos de los que exige."""
+    assert GODEL_ROLLING_WINDOW_DAYS > MIN_WINDOW_FOR_PERCENTILE
+
+    con_tres = compute_vitality_tesla([10.0, 50.0, 90.0], None, 0.5)
+    assert con_tres.tier_used is VitalityTier.PRIMARY_N_EVENTS
+
+    con_dos = compute_vitality_tesla([10.0, 50.0], [0.1, 0.2, 0.3], 0.5)
+    assert con_dos.tier_used is VitalityTier.FALLBACK_ENTROPY_ROLLING
+
+
+# ─── Lo que este cambio NO toca ───────────────────────────────────────────
+
+def test_la_ventana_del_tercil_sigue_incluyendo_el_dia_actual():
+    """DELIBERADO, no un olvido: el P90 de entropía usa la ventana previa
+    SIN el día evaluado; `n_events_window` es auto-referencial por diseño
+    heredado del legacy. Este PR cambia el TAMAÑO de la ventana, no su
+    semántica. Si algún día se saca el día propio, que sea una decisión
+    explícita que rompa este test, no un efecto colateral."""
+    # El último elemento ES el día evaluado: cambiarlo cambia el resultado.
+    base = [10.0] * 300
+    assert compute_vitality_tesla(base + [10.0], None, 0.5).value == 3
+    assert compute_vitality_tesla(base + [9999.0], None, 0.5).value == 9
+
+
+def test_el_respaldo_a_no_recibe_ventana_movil():
+    """Pendiente explícito, no un descuido: el tercil de entropía del
+    Respaldo A tiene la misma exposición estructural, y queda sin tocar
+    porque la medición lo pone en 2 de 4.880 días. Este test fija que hoy
+    NO se le aplica recorte -- si alguien se lo agrega, que sea con su
+    propia medición."""
+    entropia_vieja = [0.1] * 3000
+    entropia_reciente = [0.9] * GODEL_ROLLING_WINDOW_DAYS
+
+    r = compute_vitality_tesla(
+        None, entropia_vieja + entropia_reciente, current_entropy=0.5,
+        n_events_rolling_window=GODEL_ROLLING_WINDOW_DAYS)
+
+    assert r.tier_used is VitalityTier.FALLBACK_ENTROPY_ROLLING
+    # Si A recortara a las últimas 252 (todas 0.9), 0.5 caería en 3.
+    # Sin recortar, la historia está dominada por 0.1 y 0.5 sale 9.
+    assert r.value == 9, "el Respaldo A dejó de usar toda su ventana"
+
+
+def test_la_cascada_y_su_orden_de_degradacion_no_cambiaron():
+    """B -> A -> C, en ese orden, con los mismos disparadores."""
+    assert compute_vitality_tesla([10.0, 50.0, 90.0], [0.1] * 10, 0.5
+                                  ).tier_used is VitalityTier.PRIMARY_N_EVENTS
+    assert compute_vitality_tesla(None, [0.1, 0.5, 0.9], 0.5
+                                  ).tier_used is VitalityTier.FALLBACK_ENTROPY_ROLLING
+    assert compute_vitality_tesla(None, None, 0.5
+                                  ).tier_used is VitalityTier.FALLBACK_GLOBAL_THRESHOLDS
+
+
+def test_los_umbrales_del_tercil_siguen_siendo_33_y_66():
+    """Se cambió qué observaciones entran al percentil, no qué percentil se
+    pide ni la regla de comparación (<=, no <)."""
+    uniforme = [5.0] * 500
+    assert compute_vitality_tesla(uniforme, None, 0.5).value == 3
+
+    ventana = list(range(1, 101)) * 3      # 300 puntos, 1..100 repetidos
+    p33 = float(np.percentile(ventana[-GODEL_ROLLING_WINDOW_DAYS:], 33))
+    p66 = float(np.percentile(ventana[-GODEL_ROLLING_WINDOW_DAYS:], 66))
+    assert 0 < p33 < p66 < 100
+
+
+# ─── Reusar, no reimplementar ─────────────────────────────────────────────
+
+def test_las_dos_ramas_recortan_con_el_mismo_mecanismo():
+    """Port, don't rewrite. Si el tercil copiara el `[-window:]` de
+    compute_godel_p90 habría dos recortes paralelos que pueden divergir en
+    silencio. Se verifica sobre el AST y no sobre el texto: un docstring
+    que mencione `_ventana_movil` no cuenta como llamarla."""
+    import ast
+    import inspect
+
+    import core.scoring as scoring
+
+    fuente = inspect.getsource(scoring)
+    arbol = ast.parse(fuente)
+
+    def llama_a_ventana_movil(nombre_funcion: str) -> bool:
+        fn = next(n for n in ast.walk(arbol)
+                  if isinstance(n, ast.FunctionDef) and n.name == nombre_funcion)
+        return any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+                   and n.func.id == "_ventana_movil"
+                   for n in ast.walk(fn))
+
+    assert llama_a_ventana_movil("compute_godel_p90")
+    assert llama_a_ventana_movil("compute_vitality_tesla")
+
+
+def test_una_sola_constante_de_ventana_para_las_dos_ramas():
+    """Dos ventanas distintas obligarían a justificar por qué difieren."""
+    import inspect
+
+    from core.scoring import _ventana_movil
+
+    firma_vitality = inspect.signature(compute_vitality_tesla)
+    firma_p90 = inspect.signature(compute_godel_p90)
+
+    assert (firma_vitality.parameters["n_events_rolling_window"].default
+            == firma_p90.parameters["window"].default
+            == GODEL_ROLLING_WINDOW_DAYS)
+    assert _ventana_movil is not None
+
+
+def test_ventana_movil_es_solo_el_recorte():
+    """La función compartida no hace nada más que recortar: si algún día
+    empieza a filtrar, ordenar o rellenar, las dos ramas heredan ese
+    cambio sin pedirlo."""
+    from core.scoring import _ventana_movil
+
+    assert _ventana_movil([1.0, 2.0, 3.0, 4.0], 2) == [3.0, 4.0]
+    assert _ventana_movil([1.0, 2.0], 10) == [1.0, 2.0]
+    assert _ventana_movil([], 5) == []
+    assert _ventana_movil(None, 5) == []
+    # Ni ordena ni deduplica: devuelve la cola tal cual.
+    assert _ventana_movil([3.0, 1.0, 2.0, 1.0], 3) == [1.0, 2.0, 1.0]
+
+    with pytest.raises(ValueError, match="window"):
+        _ventana_movil([1.0, 2.0], 0)

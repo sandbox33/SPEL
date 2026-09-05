@@ -39,12 +39,19 @@ inventado. `compute_vitality_tesla` ya tiene su propia cascada para
 degradar con poca historia (Tier C); este módulo no reimplementa esa
 lógica, la usa.
 
-CRITERIO DEL P90 (GODEL_CRITERIA_VERSION 2.0.0-rolling_252d): desde este
-patch el umbral de la máscara Gödel es un percentil de VENTANA MÓVIL de
-252 observaciones -- ver core.scoring.compute_godel_p90() para la
-medición que lo motivó. Hasta la versión 1.x este ciclo le pasaba a
-compute_adaptive_percentile() TODA la historia previa, que es el criterio
-acumulado que dejó 1.077 días recientes sin una sola muestra.
+CRITERIO DE LA MÁSCARA (GODEL_CRITERIA_VERSION 3.0.0-rolling_252d_vitality):
+las DOS ramas del OR usan ventana móvil de 252 observaciones.
+  · El P90 de entropía, desde la versión 2.0.0 -- ver
+    core.scoring.compute_godel_p90(). Hasta la 1.x este ciclo le pasaba a
+    compute_adaptive_percentile() TODA la historia previa, el criterio
+    acumulado que dejó 1.077 días recientes sin una sola muestra.
+  · El tercil de n_events del nivel primario de vitality_tesla, desde la
+    3.0.0 -- ver core.scoring.compute_vitality_tesla(). Arrastraba la
+    misma deriva: la tasa de días en vitality==9 iba de 63% a 11% según
+    el año, cuando un tercil debe dar ~33% estable.
+Este ciclo no cambió para la 3.0.0: sigue pasando la ventana completa de
+n_events y el recorte vive en core/scoring.py, del mismo lado que el de
+la entropía.
 
 UNA PRECISIÓN SOBRE ESAS 252 OBSERVACIONES, para que el número no se lea
 como algo que no es: acá la historia son días de CALENDARIO de la serie
@@ -198,6 +205,11 @@ def run_scoring_cycle(
             )
             continue
 
+        # `n_events_window` va COMPLETA a propósito: desde la versión
+        # 3.0.0 el recorte a 252 observaciones lo hace
+        # compute_vitality_tesla() adentro, con el mismo `_ventana_movil`
+        # que usa el P90 de entropía. Recortar acá además sería un segundo
+        # mecanismo, y el de core es el que está medido.
         vitality = compute_vitality_tesla(
             n_events_window=n_events_window,
             entropy_window=entropy_hist,
