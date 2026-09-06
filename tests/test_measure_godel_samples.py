@@ -61,10 +61,28 @@ def _serie(
     )
 
 
+#: Umbral global tan bajo que ningún día queda por debajo. Reemplaza al
+#: idioma viejo `vitality=[9]*n`, que servía para "máscara siempre
+#: activa" y dejó de funcionar en la versión 4.0.0: vitality ya no entra
+#: en la máscara. Combinado con entropía estrictamente creciente
+#: (el default de `_serie`), garantiza que TODOS los días pasen el filtro
+#: en cualquiera de los tres regímenes de compute_adaptive_percentile.
+UMBRAL_MASCARA_SIEMPRE_ACTIVA = -1.0
+
+
+def _serie_mascara_activa(n: int, **kw) -> SerieDerivada:
+    """Serie donde la máscara acepta todos los días, para aislar lo que el
+    test realmente mide (el target, el arrastre, la estabilidad...).
+    Entropía estrictamente creciente: cada día supera el tercil superior
+    de su propia historia."""
+    kw.setdefault("entropy", [float(i) for i in range(n)])
+    return _serie(n, **kw)
+
+
 def _fold(**kw) -> FoldMeasurement:
     base = dict(
         fold=1, n_train_days=10, val_start="2024-01-01", val_end="2024-02-01",
-        p90_used=1.0, p90_source="GLOBAL", p90_n_obs=10,
+        umbral_used=1.0, umbral_source="GLOBAL", umbral_n_obs=10,
         n_total=0, n_post_mask=0, n_post_propia=0, n_post_arrastrada=0,
         n_up=0, n_down=0, estable=False,
     )
@@ -95,7 +113,7 @@ def test_p90_de_cada_fold_solo_ve_dias_anteriores_a_su_validacion(monkeypatch):
 
     monkeypatch.setattr(mod, "compute_adaptive_percentile", espia)
 
-    folds = measure_folds(serie, lookback=10, n_folds=4, p90_global_default=1.19)
+    folds = measure_folds(serie, lookback=10, n_folds=4, umbral_global_default=1.19)
 
     assert len(historias) == len(folds) == 4
     for fold, historia in zip(folds, historias):
@@ -113,8 +131,8 @@ def test_el_p90_cambia_entre_folds_cuando_la_historia_cambia():
     mismo número en los cuatro folds."""
     serie = _serie(200, entropy=[float(i) for i in range(200)])
 
-    folds = measure_folds(serie, lookback=10, n_folds=4, p90_global_default=1.19)
-    p90s = [f.p90_used for f in folds]
+    folds = measure_folds(serie, lookback=10, n_folds=4, umbral_global_default=1.19)
+    p90s = [f.umbral_used for f in folds]
 
     assert len(set(p90s)) == len(p90s), f"P90 repetido entre folds: {p90s}"
     assert p90s == sorted(p90s)  # historia creciente -> percentil creciente
@@ -138,12 +156,12 @@ def test_target_sube_si_log_return_positivo_baja_si_no():
     n = 60
     # Intercalados, no en bloques: si los ceros quedaran todos en el train,
     # la validación no vería nunca esa clase y el test no probaría nada.
-    serie = _serie(
-        n, vitality=[9] * n,  # máscara siempre activa: aísla el target
-        log_return=[0.5 if i % 2 else 0.0 for i in range(n)],
+    serie = _serie_mascara_activa(   # máscara siempre activa: aísla el target
+        n, log_return=[0.5 if i % 2 else 0.0 for i in range(n)],
     )
 
-    folds = measure_folds(serie, lookback=0, n_folds=1, p90_global_default=99.0)
+    folds = measure_folds(serie, lookback=0, n_folds=1,
+                          umbral_global_default=UMBRAL_MASCARA_SIEMPRE_ACTIVA)
     total_up = sum(f.n_up for f in folds)
     total_down = sum(f.n_down for f in folds)
 
@@ -159,8 +177,8 @@ def test_indices_por_debajo_del_lookback_no_se_cuentan():
     n = 100
     serie = _serie(n, vitality=[9] * n)
 
-    laxo = measure_folds(serie, lookback=0, n_folds=1, p90_global_default=99.0)
-    estricto = measure_folds(serie, lookback=90, n_folds=1, p90_global_default=99.0)
+    laxo = measure_folds(serie, lookback=0, n_folds=1, umbral_global_default=99.0)
+    estricto = measure_folds(serie, lookback=90, n_folds=1, umbral_global_default=99.0)
 
     assert sum(f.n_total for f in laxo) > sum(f.n_total for f in estricto)
 
@@ -168,7 +186,7 @@ def test_indices_por_debajo_del_lookback_no_se_cuentan():
 def test_lookback_mayor_que_la_serie_da_cero_muestras_sin_lanzar():
     serie = _serie(50, vitality=[9] * 50)
 
-    folds = measure_folds(serie, lookback=500, n_folds=2, p90_global_default=99.0)
+    folds = measure_folds(serie, lookback=500, n_folds=2, umbral_global_default=99.0)
 
     assert sum(f.n_post_mask for f in folds) == 0
 
@@ -177,20 +195,28 @@ def test_lookback_mayor_que_la_serie_da_cero_muestras_sin_lanzar():
 #  La máscara Gödel — se delega en core.scoring, no se reimplementa
 # ══════════════════════════════════════════════════════════════════════════
 
-def test_vitality_9_activa_la_mascara_aunque_la_entropia_sea_baja():
+def test_vitality_9_ya_no_activa_la_mascara():
+    """Versión 4.0.0. Antes este test se llamaba
+    `test_vitality_9_activa_la_mascara_aunque_la_entropia_sea_baja` y
+    verificaba justo lo contrario: con entropía 0 y vitality 9, TODOS los
+    días pasaban el filtro. Ese era el 72% de los disparos.
+
+    Ahora vitality no entra en la máscara y una entropía plana bajo su
+    propio umbral no pasa por ninguna vía."""
     n = 100
     serie = _serie(n, entropy=[0.0] * n, vitality=[9] * n)
 
-    folds = measure_folds(serie, lookback=0, n_folds=1, p90_global_default=99.0)
+    folds = measure_folds(serie, lookback=0, n_folds=1, umbral_global_default=99.0)
 
-    assert sum(f.n_post_mask for f in folds) == sum(f.n_total for f in folds)
+    assert sum(f.n_total for f in folds) > 0        # había candidatos
+    assert sum(f.n_post_mask for f in folds) == 0   # vitality ya no los salva
 
 
-def test_entropia_bajo_p90_y_vitality_distinto_de_9_no_pasa_la_mascara():
+def test_entropia_bajo_el_tercil_superior_no_pasa_la_mascara():
     n = 100
     serie = _serie(n, entropy=[0.0] * n, vitality=[3] * n)
 
-    folds = measure_folds(serie, lookback=0, n_folds=1, p90_global_default=99.0)
+    folds = measure_folds(serie, lookback=0, n_folds=1, umbral_global_default=99.0)
 
     assert sum(f.n_total for f in folds) > 0   # había candidatos
     assert sum(f.n_post_mask for f in folds) == 0  # ninguno sobrevivió
@@ -202,13 +228,13 @@ def test_dias_sin_entropia_o_sin_retorno_no_se_cuentan_como_candidatos():
     entropy[40] = float("nan")
     serie = _serie(n, entropy=entropy, vitality=[9] * n)
 
-    folds = measure_folds(serie, lookback=0, n_folds=1, p90_global_default=99.0)
+    folds = measure_folds(serie, lookback=0, n_folds=1, umbral_global_default=99.0)
     con_nan = sum(f.n_total for f in folds)
 
     serie_limpia = _serie(n, vitality=[9] * n)
     sin_nan = sum(
         f.n_total for f in
-        measure_folds(serie_limpia, lookback=0, n_folds=1, p90_global_default=99.0)
+        measure_folds(serie_limpia, lookback=0, n_folds=1, umbral_global_default=99.0)
     )
 
     assert con_nan == sin_nan - 1
@@ -232,14 +258,14 @@ def test_walk_forward_produce_ventanas_contiguas_y_sin_solapamiento():
 def test_el_numero_de_folds_es_parametro(n_folds):
     serie = _serie(400, vitality=[9] * 400)
 
-    folds = measure_folds(serie, lookback=0, n_folds=n_folds, p90_global_default=99.0)
+    folds = measure_folds(serie, lookback=0, n_folds=n_folds, umbral_global_default=99.0)
 
     assert len(folds) == n_folds
 
 
 def test_serie_demasiado_corta_para_partir_no_lanza():
     assert walk_forward_splits(3, 5) == []
-    assert measure_folds(_serie(3), lookback=0, n_folds=5, p90_global_default=1.0) == []
+    assert measure_folds(_serie(3), lookback=0, n_folds=5, umbral_global_default=1.0) == []
 
 
 def test_n_folds_invalido_es_error_de_uso():
@@ -276,19 +302,20 @@ def test_sin_folds_es_sin_datos_no_una_excepcion():
 
 
 def test_fold_estable_exige_n_y_ambas_clases():
-    serie_ok = _serie(
-        800, vitality=[9] * 800,
-        log_return=[0.01 if i % 2 else -0.01 for i in range(800)],
+    serie_ok = _serie_mascara_activa(
+        800, log_return=[0.01 if i % 2 else -0.01 for i in range(800)],
     )
-    folds = measure_folds(serie_ok, lookback=0, n_folds=1, p90_global_default=99.0)
+    folds = measure_folds(serie_ok, lookback=0, n_folds=1,
+                          umbral_global_default=UMBRAL_MASCARA_SIEMPRE_ACTIVA)
     assert folds[0].n_post_mask >= FOLD_MIN_N
     assert min(folds[0].n_up, folds[0].n_down) >= FOLD_MIN_CLASE
     assert folds[0].estable is True
 
     # Mismo n, una sola clase -> no estable.
-    serie_desbalanceada = _serie(800, vitality=[9] * 800, log_return=[0.01] * 800)
+    serie_desbalanceada = _serie_mascara_activa(800, log_return=[0.01] * 800)
     desbalanceado = measure_folds(
-        serie_desbalanceada, lookback=0, n_folds=1, p90_global_default=99.0
+        serie_desbalanceada, lookback=0, n_folds=1,
+        umbral_global_default=UMBRAL_MASCARA_SIEMPRE_ACTIVA,
     )[0]
     assert desbalanceado.n_post_mask >= FOLD_MIN_N
     assert desbalanceado.estable is False
@@ -338,7 +365,7 @@ def test_exit_0_aunque_el_veredicto_sea_negativo(entorno, capsys):
     _escribir_gdelt("BTC", n=120)
 
     codigo = main([
-        "--assets", "BTC", "--p90-global-default", "1.19",
+        "--assets", "BTC", "--umbral-global-default", "1.19",
         "--ohlcv-root", str(ohlcv), "--n-folds", "3",
     ])
 
@@ -351,7 +378,7 @@ def test_activo_sin_datos_reporta_cero_y_no_lanza(entorno, capsys):
     _, ohlcv = entorno
 
     codigo = main([
-        "--assets", "NO_EXISTE", "--p90-global-default", "1.19",
+        "--assets", "NO_EXISTE", "--umbral-global-default", "1.19",
         "--ohlcv-root", str(ohlcv),
     ])
 
@@ -365,7 +392,7 @@ def test_ruta_raiz_inexistente_si_es_fallo_real(tmp_path, capsys):
     """La distinción: 'este activo no tiene datos' es medición; 'la ruta que
     me diste no existe' es un error de invocación."""
     codigo = main([
-        "--assets", "BTC", "--p90-global-default", "1.19",
+        "--assets", "BTC", "--umbral-global-default", "1.19",
         "--ohlcv-root", str(tmp_path / "no_existe"),
     ])
 
@@ -385,7 +412,7 @@ def test_el_tool_no_escribe_ningun_archivo(entorno, capsys):
     antes_drive, antes_ohlcv = foto(drive), foto(ohlcv)
 
     assert main([
-        "--assets", "BTC", "--p90-global-default", "1.19",
+        "--assets", "BTC", "--umbral-global-default", "1.19",
         "--ohlcv-root", str(ohlcv), "--format", "json",
     ]) == 0
 
@@ -400,7 +427,7 @@ def test_salida_json_es_parseable_y_lleva_el_veredicto(entorno, capsys):
     _escribir_gdelt("BTC", n=200)
 
     main([
-        "--assets", "BTC", "--p90-global-default", "1.19",
+        "--assets", "BTC", "--umbral-global-default", "1.19",
         "--ohlcv-root", str(ohlcv), "--format", "json",
     ])
 
@@ -419,7 +446,7 @@ def test_reporta_profundidad_de_datos_y_solapamiento(entorno, capsys):
     _escribir_gdelt("BTC", n=150)
 
     main([
-        "--assets", "BTC", "--p90-global-default", "1.19",
+        "--assets", "BTC", "--umbral-global-default", "1.19",
         "--ohlcv-root", str(ohlcv), "--format", "json",
     ])
 
@@ -549,7 +576,7 @@ def test_el_reporte_de_no_encontrado_lista_rutas_y_patron(tmp_path, monkeypatch,
     vacio.mkdir()
 
     codigo = main([
-        "--assets", "BTC", "--p90-global-default", "1.19",
+        "--assets", "BTC", "--umbral-global-default", "1.19",
         "--ohlcv-root", str(vacio),
         "--ohlcv-pattern", "{asset}_ohlcv_v5.parquet",
     ])
@@ -568,7 +595,7 @@ def test_el_reporte_dice_de_donde_leyo_cuando_si_encuentra(tmp_path, monkeypatch
     _csv_minimo(root / "BTC" / "BTC_ohlcv_v5.csv", n=120)
 
     main([
-        "--assets", "BTC", "--p90-global-default", "1.19",
+        "--assets", "BTC", "--umbral-global-default", "1.19",
         "--ohlcv-root", str(root), "--ohlcv-pattern", "{asset}_ohlcv_v5.csv",
     ])
 
@@ -629,12 +656,12 @@ def test_sin_columna_de_fecha_el_error_lista_las_columnas_que_si_vinieron(tmp_pa
 def test_desglosa_propias_y_arrastradas_por_fold():
     n = 200
     # Alterna arrastrada/propia: el desglose tiene que partir el total.
-    serie = _serie(
-        n, vitality=[9] * n,
-        forward_filled=[bool(i % 2) for i in range(n)],
+    serie = _serie_mascara_activa(
+        n, forward_filled=[bool(i % 2) for i in range(n)],
     )
 
-    folds = measure_folds(serie, lookback=0, n_folds=3, p90_global_default=99.0)
+    folds = measure_folds(serie, lookback=0, n_folds=3,
+                          umbral_global_default=UMBRAL_MASCARA_SIEMPRE_ACTIVA)
 
     for f in folds:
         assert f.n_post_propia + f.n_post_arrastrada == f.n_post_mask
@@ -645,7 +672,7 @@ def test_sin_arrastre_todo_cuenta_como_propia():
     n = 100
     serie = _serie(n, vitality=[9] * n, forward_filled=[False] * n)
 
-    folds = measure_folds(serie, lookback=0, n_folds=1, p90_global_default=99.0)
+    folds = measure_folds(serie, lookback=0, n_folds=1, umbral_global_default=99.0)
 
     assert sum(f.n_post_arrastrada for f in folds) == 0
     assert sum(f.n_post_propia for f in folds) == sum(f.n_post_mask for f in folds)
@@ -655,7 +682,7 @@ def test_todo_arrastrado_deja_el_n_sin_arrastre_en_cero():
     n = 100
     serie = _serie(n, vitality=[9] * n, forward_filled=[True] * n)
 
-    folds = measure_folds(serie, lookback=0, n_folds=1, p90_global_default=99.0)
+    folds = measure_folds(serie, lookback=0, n_folds=1, umbral_global_default=99.0)
 
     assert sum(f.n_post_propia for f in folds) == 0
     assert sum(f.n_post_arrastrada for f in folds) == sum(f.n_post_mask for f in folds)
@@ -706,7 +733,7 @@ def test_el_agregado_oof_desglosado_aparece_en_el_json(tmp_path, monkeypatch, ca
     _escribir_gdelt("BTC", n=200)
 
     main([
-        "--assets", "BTC", "--p90-global-default", "1.19",
+        "--assets", "BTC", "--umbral-global-default", "1.19",
         "--ohlcv-root", str(root), "--format", "json",
     ])
 
@@ -744,10 +771,10 @@ def test_el_default_no_cambia_absolutamente_nada():
                    vitality=[3] * 300)
 
     explicito = measure_folds(serie, lookback=0, n_folds=3,
-                              p90_global_default=1.05,
+                              umbral_global_default=1.05,
                               percentile_mode=mod.PercentileMode.ACUMULADO)
     implicito = measure_folds(serie, lookback=0, n_folds=3,
-                              p90_global_default=1.05)
+                              umbral_global_default=1.05)
 
     assert explicito == implicito
 
@@ -756,7 +783,7 @@ def test_modo_desconocido_es_error_de_uso():
     serie = _serie(100)
 
     with pytest.raises(ValueError, match="Modo de percentil desconocido"):
-        measure_folds(serie, lookback=0, n_folds=1, p90_global_default=1.0,
+        measure_folds(serie, lookback=0, n_folds=1, umbral_global_default=1.0,
                       percentile_mode="A_OJO")
 
 
@@ -780,7 +807,7 @@ def test_ningun_modo_usa_datos_posteriores_al_dia_que_evalua(modo, monkeypatch):
     monkeypatch.setattr(mod, "compute_adaptive_percentile", espia)
 
     umbrales = mod.resolver_umbrales(
-        serie, 300, 400, mode=modo, window=50, p90_global_default=1.0,
+        serie, 300, 400, mode=modo, window=50, umbral_global_default=1.0,
     )
 
     assert historias, "el modo tiene que consultar el percentil"
@@ -811,7 +838,7 @@ def test_la_ventana_movil_termina_en_el_dia_anterior(monkeypatch):
     monkeypatch.setattr(mod, "compute_adaptive_percentile", espia)
 
     mod.resolver_umbrales(serie, 250, 253, mode=mod.PercentileMode.MOVIL,
-                          window=100, p90_global_default=1.0)
+                          window=100, umbral_global_default=1.0)
 
     # Tres días evaluados (250, 251, 252), una historia por día.
     assert len(vistas) == 3
@@ -836,7 +863,7 @@ def test_la_ventana_movil_avanza_con_el_dia(monkeypatch):
     monkeypatch.setattr(mod, "compute_adaptive_percentile", espia)
 
     mod.resolver_umbrales(serie, 250, 254, mode=mod.PercentileMode.MOVIL,
-                          window=100, p90_global_default=1.0)
+                          window=100, umbral_global_default=1.0)
 
     minimos = [min(h) for h in vistas]
     assert minimos == sorted(minimos) and len(set(minimos)) == len(minimos), (
@@ -882,10 +909,10 @@ def test_con_deriva_a_la_baja_el_movil_rescata_dias_que_el_acumulado_pierde():
     serie = _serie(n, entropy=entropy, vitality=[3] * n)
 
     acumulado = measure_folds(serie, lookback=0, n_folds=3,
-                              p90_global_default=1.30,
+                              umbral_global_default=1.30,
                               percentile_mode=mod.PercentileMode.ACUMULADO)
     movil = measure_folds(serie, lookback=0, n_folds=3,
-                          p90_global_default=1.30,
+                          umbral_global_default=1.30,
                           percentile_mode=mod.PercentileMode.MOVIL,
                           rolling_window=100)
 
@@ -903,7 +930,7 @@ def test_los_tres_modos_se_pueden_comparar_en_una_corrida():
 
     resultados = {
         modo: sum(f.n_post_mask for f in measure_folds(
-            serie, lookback=0, n_folds=3, p90_global_default=1.20,
+            serie, lookback=0, n_folds=3, umbral_global_default=1.20,
             percentile_mode=modo, rolling_window=100))
         for modo in mod.PercentileMode.todos()
     }
@@ -927,11 +954,11 @@ def test_el_p90_reportado_esta_en_unidades_de_entropia_en_los_tres_modos():
 
     for modo in mod.PercentileMode.todos():
         folds = measure_folds(serie, lookback=0, n_folds=3,
-                              p90_global_default=99.0,
+                              umbral_global_default=99.0,
                               percentile_mode=modo, rolling_window=100)
         for f in folds:
-            assert lo - amplitud <= f.p90_used <= hi + amplitud, (
-                f"{modo}: P90={f.p90_used} no está en unidades de entropía "
+            assert lo - amplitud <= f.umbral_used <= hi + amplitud, (
+                f"{modo}: P90={f.umbral_used} no está en unidades de entropía "
                 f"(rango observado {lo}..{hi})")
 
 
@@ -954,7 +981,7 @@ def test_se_reporta_la_tasa_no_solo_el_conteo():
                    entropy=[2.0 - 0.001 * i for i in range(n)])
 
     folds = measure_folds(serie, lookback=0, n_folds=3,
-                          p90_global_default=99.0)
+                          umbral_global_default=99.0)
 
     for f in folds:
         assert f.n_total > 0
@@ -971,7 +998,7 @@ def test_la_tasa_es_cero_sin_disparos_y_no_lanza():
                    vitality=[3] * 200)
 
     folds = measure_folds(serie, lookback=0, n_folds=2,
-                          p90_global_default=99.0)
+                          umbral_global_default=99.0)
 
     assert all(f.n_post_mask == 0 for f in folds)
     assert all(f.tasa_disparo == 0.0 for f in folds)
@@ -984,50 +1011,37 @@ def test_las_tres_categorias_suman_exactamente_el_total():
     serie = _serie(n, entropy=[float(i % 7) for i in range(n)],
                    vitality=[9 if i % 3 == 0 else 3 for i in range(n)])
 
-    folds = measure_folds(serie, lookback=0, n_folds=3, p90_global_default=3.0)
+    folds = measure_folds(serie, lookback=0, n_folds=3, umbral_global_default=3.0)
 
     for f in folds:
         assert (f.n_solo_entropia + f.n_solo_vitality + f.n_ambas_ramas
                 == f.n_post_mask)
 
 
-def test_vitality_sola_se_distingue_de_entropia_sola():
-    """Sobre los datos reales, vitality participa en el 93% de los disparos
-    de BTC y la entropía pura aporta el 6.7%. Si el desglose no separara las
-    ramas, comparar criterios de percentil sería comparar el 7% del problema
-    creyendo que se comparó todo."""
+def test_ya_no_hay_dos_ramas_todos_los_disparos_son_de_entropia():
+    """Versión 4.0.0. Antes había tres tests acá
+    (`test_vitality_sola_se_distingue_de_entropia_sola`,
+    `test_entropia_sola_cuando_vitality_nunca_dispara` y
+    `test_ambas_ramas_a_la_vez_se_cuentan_aparte`) que verificaban que el
+    desglose separara bien las dos ramas del OR. Ese desglose hizo su
+    trabajo: mostró que vitality aportaba el 93% de los disparos de BTC, y
+    eso llevó a descubrir que esa rama usaba n_events y a sacarla.
+
+    Hoy la máscara es `entropy > p66` y no hay segunda rama. Los tres
+    campos siguen sumando n_post_mask; que dos queden en cero es la forma
+    que tiene el reporte de decir que el OR desapareció."""
     n = 300
-    # Entropía siempre bajo su propio umbral (decreciente estricta): todo
-    # disparo viene de vitality.
-    serie = _serie(n, entropy=[2.0 - 0.001 * i for i in range(n)],
-                   vitality=[9 if i % 5 == 0 else 3 for i in range(n)])
+    # Vitality alterna, y da igual: ya no participa.
+    serie = _serie_mascara_activa(
+        n, vitality=[9 if i % 5 == 0 else 3 for i in range(n)])
 
-    folds = measure_folds(serie, lookback=0, n_folds=2, p90_global_default=99.0)
+    folds = measure_folds(serie, lookback=0, n_folds=2,
+                          umbral_global_default=UMBRAL_MASCARA_SIEMPRE_ACTIVA)
 
-    assert sum(f.n_solo_vitality for f in folds) > 0
-    assert sum(f.n_solo_entropia for f in folds) == 0
+    assert sum(f.n_post_mask for f in folds) > 0
+    assert sum(f.n_solo_entropia for f in folds) == sum(f.n_post_mask for f in folds)
+    assert sum(f.n_solo_vitality for f in folds) == 0
     assert sum(f.n_ambas_ramas for f in folds) == 0
-
-
-def test_entropia_sola_cuando_vitality_nunca_dispara():
-    n = 300
-    serie = _serie(n, entropy=[5.0] * n, vitality=[3] * n)
-
-    folds = measure_folds(serie, lookback=0, n_folds=2, p90_global_default=0.0)
-
-    assert sum(f.n_solo_entropia for f in folds) > 0
-    assert sum(f.n_solo_vitality for f in folds) == 0
-
-
-def test_ambas_ramas_a_la_vez_se_cuentan_aparte():
-    n = 300
-    serie = _serie(n, entropy=[5.0] * n, vitality=[9] * n)
-
-    folds = measure_folds(serie, lookback=0, n_folds=2, p90_global_default=0.0)
-
-    assert sum(f.n_ambas_ramas for f in folds) > 0
-    assert sum(f.n_solo_entropia for f in folds) == 0
-    assert sum(f.n_solo_vitality for f in folds) == 0
 
 
 def test_el_desglose_se_agrega_al_nivel_oof(entorno, capsys):
@@ -1036,7 +1050,7 @@ def test_el_desglose_se_agrega_al_nivel_oof(entorno, capsys):
     _escribir_ohlcv(ohlcv, "BTC", n=300)
     _escribir_gdelt("BTC", n=300)
 
-    main(["--assets", "BTC", "--p90-global-default", "1.19",
+    main(["--assets", "BTC", "--umbral-global-default", "1.19",
           "--ohlcv-root", str(ohlcv), "--format", "json"])
 
     a = json.loads(capsys.readouterr().out)["assets"][0]
@@ -1052,7 +1066,7 @@ def test_compare_modes_corre_los_tres(entorno, capsys):
     _escribir_ohlcv(ohlcv, "BTC", n=300)
     _escribir_gdelt("BTC", n=300)
 
-    codigo = main(["--assets", "BTC", "--p90-global-default", "1.19",
+    codigo = main(["--assets", "BTC", "--umbral-global-default", "1.19",
                    "--ohlcv-root", str(ohlcv), "--compare-modes",
                    "--rolling-window", "60"])
 
@@ -1069,7 +1083,7 @@ def test_compare_modes_en_json_trae_los_tres(entorno, capsys):
     _escribir_ohlcv(ohlcv, "BTC", n=300)
     _escribir_gdelt("BTC", n=300)
 
-    main(["--assets", "BTC", "--p90-global-default", "1.19",
+    main(["--assets", "BTC", "--umbral-global-default", "1.19",
           "--ohlcv-root", str(ohlcv), "--compare-modes",
           "--rolling-window", "60", "--format", "json"])
 
@@ -1087,7 +1101,7 @@ def test_las_columnas_nuevas_no_desplazan_al_desglose_de_arrastre(entorno,
     _escribir_ohlcv(ohlcv, "BTC", n=300)
     _escribir_gdelt("BTC", n=300)
 
-    main(["--assets", "BTC", "--p90-global-default", "1.19",
+    main(["--assets", "BTC", "--umbral-global-default", "1.19",
           "--ohlcv-root", str(ohlcv)])
 
     salida = capsys.readouterr().out
@@ -1103,7 +1117,7 @@ def test_sin_el_flag_el_json_no_carga_por_modo(entorno, capsys):
     _escribir_ohlcv(ohlcv, "BTC", n=300)
     _escribir_gdelt("BTC", n=300)
 
-    main(["--assets", "BTC", "--p90-global-default", "1.19",
+    main(["--assets", "BTC", "--umbral-global-default", "1.19",
           "--ohlcv-root", str(ohlcv), "--format", "json"])
 
     rep = json.loads(capsys.readouterr().out)
@@ -1114,7 +1128,7 @@ def test_sin_el_flag_el_json_no_carga_por_modo(entorno, capsys):
 def test_rolling_window_invalida_es_fallo_de_invocacion(entorno, capsys):
     lake, ohlcv = entorno
 
-    codigo = main(["--assets", "BTC", "--p90-global-default", "1.19",
+    codigo = main(["--assets", "BTC", "--umbral-global-default", "1.19",
                    "--ohlcv-root", str(ohlcv), "--rolling-window", "1"])
 
     assert codigo == 2
@@ -1143,9 +1157,15 @@ def test_los_modos_llaman_a_compute_adaptive_percentile_no_la_reimplementan():
     assert "compute_adaptive_percentile" not in definidas
 
 
-def test_el_zscore_default_es_el_percentil_90_de_la_normal():
-    """Φ⁻¹(0.90). No es un número inventado: se verifica contra la CDF."""
-    z = mod.ZSCORE_P90_GLOBAL_DEFAULT
+def test_el_zscore_default_es_el_percentil_de_la_mascara_en_la_normal():
+    """Φ⁻¹(GODEL_MASK_PERCENTILE/100). No es un número inventado: se
+    verifica contra la CDF. Cambió en la versión 4.0.0 junto con el
+    percentil de la máscara -- era Φ⁻¹(0.90) cuando el tool medía un P90.
+    Este test lo ata al percentil real en vez de a un literal, para que no
+    puedan volver a separarse."""
+    from core.scoring import GODEL_MASK_PERCENTILE
+
+    z = mod.ZSCORE_UMBRAL_GLOBAL_DEFAULT
     phi = 0.5 * (1 + math.erf(z / math.sqrt(2)))
 
-    assert phi == pytest.approx(0.90, abs=1e-9)
+    assert phi == pytest.approx(GODEL_MASK_PERCENTILE / 100.0, abs=1e-9)

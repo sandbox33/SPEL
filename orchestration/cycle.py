@@ -39,19 +39,25 @@ inventado. `compute_vitality_tesla` ya tiene su propia cascada para
 degradar con poca historia (Tier C); este módulo no reimplementa esa
 lógica, la usa.
 
-CRITERIO DE LA MÁSCARA (GODEL_CRITERIA_VERSION 3.0.0-rolling_252d_vitality):
-las DOS ramas del OR usan ventana móvil de 252 observaciones.
-  · El P90 de entropía, desde la versión 2.0.0 -- ver
-    core.scoring.compute_godel_p90(). Hasta la 1.x este ciclo le pasaba a
-    compute_adaptive_percentile() TODA la historia previa, el criterio
-    acumulado que dejó 1.077 días recientes sin una sola muestra.
-  · El tercil de n_events del nivel primario de vitality_tesla, desde la
-    3.0.0 -- ver core.scoring.compute_vitality_tesla(). Arrastraba la
-    misma deriva: la tasa de días en vitality==9 iba de 63% a 11% según
-    el año, cuando un tercil debe dar ~33% estable.
-Este ciclo no cambió para la 3.0.0: sigue pasando la ventana completa de
-n_events y el recorte vive en core/scoring.py, del mismo lado que el de
-la entropía.
+CRITERIO DE LA MÁSCARA (GODEL_CRITERIA_VERSION 4.0.0-entropy_state_p66):
+YA NO ES UN OR. La máscara es `entropy > p66`, el borde del tercil
+superior de la entropía sobre ventana móvil de 252 observaciones que
+termina el día anterior -- ver core.scoring.godel_active().
+
+Eso NO es un umbral nuevo. La fórmula anterior era `(e >= p90) OR
+(vitality == 9)`, y bajo la definición del legacy `vitality == 9`
+equivale a `e > p66`; como p90 >= p66 siempre, la primera rama estaba
+implicada por la segunda y nunca cambió un resultado. El sistema operaba
+de facto con P66 y el nombre `p90_entropy` lo ocultaba.
+
+Lo que sí cambia es DE DÓNDE sale ese umbral: antes llegaba por
+vitality_tesla, que en este repo se calculaba sobre n_events -- una
+desviación del legacy, que lo define como tercil de ENTROPÍA. Ahora sale
+del tercil de entropía directamente. Ver core.scoring.entropy_state() y
+compute_vitality_tesla().
+
+vitality_tesla se sigue calculando y se sigue reportando en
+AssetCycleResult; simplemente no es una compuerta de trading.
 
 UNA PRECISIÓN SOBRE ESAS 252 OBSERVACIONES, para que el número no se lea
 como algo que no es: acá la historia son días de CALENDARIO de la serie
@@ -74,7 +80,7 @@ from core.scoring import (
     GODEL_CRITERIA_VERSION,
     NashFrozenResult,
     VitalityResult,
-    compute_godel_p90,
+    compute_godel_p66,
     compute_nash_frozen_7d,
     compute_vitality_tesla,
     godel_active,
@@ -156,7 +162,7 @@ def _build_windows(asset: str) -> tuple[list, list[float], list[float], float | 
 def run_scoring_cycle(
     assets: Sequence[str] = DEFAULT_CYCLE_ASSETS,
     *,
-    p90_entropy_global_default: float,
+    p66_entropy_global_default: float,
 ) -> dict[str, AssetCycleResult]:
     """
     Corre vitality_tesla + nash_frozen_7d + godel_active para cada activo
@@ -168,14 +174,18 @@ def run_scoring_cycle(
     Args:
         assets: activos a procesar. Default: DEFAULT_CYCLE_ASSETS (los 5
             con classify_gdelt_event() funcional).
-        p90_entropy_global_default: SIN valor por defecto a propósito --
+        p66_entropy_global_default: SIN valor por defecto a propósito --
             compute_adaptive_percentile() documenta explícitamente que
-            "para P90 NO hay default legacy confirmado, debe proveerse
-            explícitamente". Inventar uno acá sería exactamente el tipo
-            de certeza fabricada que este proyecto evita. El caller debe
+            para estos umbrales NO hay default legacy confirmado y deben
+            proveerse. Inventar uno acá sería exactamente el tipo de
+            certeza fabricada que este proyecto evita. El caller debe
             proveerlo de forma consciente (y documentar de dónde salió).
             Sigue siendo el default de arranque en frío: con la ventana
             móvil se usa en los primeros días, no en régimen.
+            SE RENOMBRÓ en la versión 4.0.0 (era `p90_entropy_global_default`)
+            porque el umbral que alimenta es el del tercil superior, no un
+            P90. El nombre viejo describía un término que nunca cambió un
+            resultado -- ver core.scoring.godel_active().
 
     Raises:
         ValueError: si algún asset en `assets` no tiene
@@ -220,17 +230,23 @@ def run_scoring_cycle(
         nash = compute_nash_frozen_7d(entropy_window=entropy_hist + [current_entropy])
         # VENTANA MÓVIL, no acumulado (GODEL_CRITERIA_VERSION 2.0.0):
         # `entropy_hist` es toda la historia sin el día actual, y
-        # compute_godel_p90() se queda con sus últimas 252 observaciones.
+        # compute_godel_p66() se queda con sus últimas 252 observaciones.
         # Pasarle la historia entera -- que es lo que este ciclo hacía
         # hasta la versión 1.x -- arrastra la cola vieja y deja días
-        # recientes sin muestra. Ver compute_godel_p90() para la medición.
-        p90 = compute_godel_p90(
-            entropy_hist, global_default=p90_entropy_global_default,
+        # recientes sin muestra. Ver compute_godel_p66() para la medición.
+        #
+        # P66 y no P90 (versión 4.0.0): el umbral de la máscara es el
+        # borde del tercil superior de entropía. No es un criterio nuevo
+        # -- es el que el sistema venía usando de facto, con otro nombre.
+        # Ver godel_active() para la demostración.
+        p66 = compute_godel_p66(
+            entropy_hist, global_default=p66_entropy_global_default,
         )
+        # vitality_tesla ya NO entra: es un estado, no una compuerta.
+        # Se sigue calculando y reportando en el resultado.
         godel = godel_active(
             entropy_shannon=current_entropy,
-            p90_entropy=p90.value,
-            vitality_tesla=vitality.value,
+            p66_entropy=p66.value,
         )
 
         results[asset] = AssetCycleResult(

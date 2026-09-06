@@ -583,6 +583,72 @@ entrada original de este log.
 
 ---
 
+## 2026-09-06 — La máscara Gödel operó de facto con P66, no con P90
+
+**Fuente:** `git show origin/archive/legacy-pre-20260813:03_BRAIN_INTERNALS/gdelt_foundation.py`
+(`add_nash_and_tesla`, líneas 449-489) y
+`04_GOLD_MODULES/harvesters/spel_ingest_incremental.py` (`compute_entropy_features`,
+líneas 249-252). Leídos para portar; ningún módulo importa de `archive/*`.
+
+**Este es el hallazgo que hay que encontrar sin releer cinco patches:** durante todo el
+proyecto, la condición de activación se escribió y se documentó como
+
+```
+godel_active = (entropy_shannon >= p90_entropy) OR (vitality_tesla == 9)
+```
+
+y el primer término **nunca cambió un resultado**. Bajo la definición del legacy,
+`vitality_tesla == 9` es exactamente `entropy > p66`. Como `p90 >= p66` por definición de
+percentil, la primera rama está contenida en la segunda:
+
+```
+(e >= p90)  ⟹  (e > p66)        =>        A ∨ B  =  B
+```
+
+Medido sobre 5.000 días sintéticos con la definición del legacy: la rama del P90 dispara el
+**10,0%** de los días, la del tercil superior el **34,0%**, el OR el **34,0%**, y los días que
+disparan por P90 sin disparar ya por el tercil son **cero**.
+
+El nombre del parámetro (`p90_entropy`) describía un término inerte, y eso ocultó durante todo
+el proyecto qué criterio estaba corriendo de verdad. Cualquier razonamiento pasado sobre "el
+umbral P90" del sistema hay que releerlo con esto en la mano.
+
+**Segundo hallazgo, que es la causa del primero:** el legacy tiene **dos fórmulas incompatibles**
+para `vitality_tesla`, y este repo portó la que no generó los datos.
+
+| fuente legacy | fórmula | coincidencia con la columna real de los parquets (3.998 días) |
+|---|---|---|
+| `gdelt_foundation.py::add_nash_and_tesla` | tercil de **entropy_shannon** | **99,8%** |
+| `spel_ingest_incremental.py::compute_entropy_features` | tercil de **n_events** | 44,8% / 49,3% |
+
+Los parquets salieron de `gdelt_foundation.py`. El port eligió la segunda citándola como "la
+única con evidencia empírica real" — apuntaba a la fórmula que no produjo esos datos.
+
+Consecuencia medida: con la fórmula del legacy el solape entre las dos ramas del OR es del
+100% (un respaldo redundante, que es lo que la documentación decía que era). Con n_events cayó
+a 43-51% y esa rama pasó a aportar el **72% de los disparos** — un respaldo convertido en la
+señal dominante sin que nadie lo decidiera.
+
+**Decisión (versión de criterio `4.0.0-entropy_state_p66`):** se separa el ESTADO del FILTRO.
+
+1. `entropy_state()` es la Capa 1: tercil de entropía sobre ventana móvil causal, función pura,
+   sin decisiones de trading. Devuelve `None` en warm-up — un día sin ventana no tiene estado.
+2. `godel_active()` pierde `vitality_tesla` y su parámetro pasa a llamarse `p66_entropy`, que es
+   lo que siempre fue. El comportamiento **efectivo** de la máscara no cambia; el nombre sí.
+3. `compute_vitality_tesla()` se conserva como señal y deja de alimentar el filtro.
+
+**Desviación del legacy, deliberada y documentada** (misma disciplina que `nash_frozen_7d`): el
+legacy calcula los terciles sobre **todo el año en batch**, lo cual es look-ahead — admisible en
+un pipeline de etiquetado histórico, no en algo que alimenta una decisión en vivo. Acá la ventana
+es móvil y causal, y termina el día anterior.
+
+**Validación pendiente:** nada de esto se corrió sobre los datos reales de GDELT/OHLCV — este
+entorno no los tiene y los proveedores están bloqueados por política de red. Falta medir el `n`
+que produce la máscara con el umbral correctamente nombrado, y recalcular la tabla anual de
+distribución de estados.
+
+---
+
 ## Principios que se sostuvieron toda la sesión
 
 - Ningún número entra sin fuente verificada contra el código real (no contra memoria de sesiones anteriores, no contra texto pegado sin auditar).
