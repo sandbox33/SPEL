@@ -21,7 +21,7 @@ from orchestration.cycle import (
     run_scoring_cycle,
 )
 
-P90_TEST_DEFAULT = 0.7  # placeholder consciente para tests -- ver docstring
+P66_TEST_DEFAULT = 0.7  # placeholder consciente para tests -- ver docstring
                         # de run_scoring_cycle sobre por qué no hay default.
 
 
@@ -50,7 +50,7 @@ def _sembrar_historia(asset: str, n_dias: int, start=date(2026, 1, 1), **kwargs)
 # ─── Cold start -- caso válido, no un error ────────────────────────────────
 
 def test_activo_sin_historia_es_cold_start_no_data():
-    resultado = run_scoring_cycle(["NVDA"], p90_entropy_global_default=P90_TEST_DEFAULT)
+    resultado = run_scoring_cycle(["NVDA"], p66_entropy_global_default=P66_TEST_DEFAULT)
     r = resultado["NVDA"]
     assert r.data_status == "cold_start_no_data"
     assert r.n_days_history == 0
@@ -63,7 +63,7 @@ def test_activo_sin_historia_es_cold_start_no_data():
 
 def test_activo_con_historia_calcula_los_3_reales():
     _sembrar_historia("BTC", 15, entropy=0.4, n_events=20)
-    resultado = run_scoring_cycle(["BTC"], p90_entropy_global_default=P90_TEST_DEFAULT)
+    resultado = run_scoring_cycle(["BTC"], p66_entropy_global_default=P66_TEST_DEFAULT)
     r = resultado["BTC"]
 
     assert r.data_status == "ok"
@@ -78,7 +78,7 @@ def test_activo_con_historia_calcula_los_3_reales():
 
 def test_gold_score_siempre_none_con_o_sin_historia():
     _sembrar_historia("XAU", 5)
-    resultado = run_scoring_cycle(["XAU", "NIFTY50"], p90_entropy_global_default=P90_TEST_DEFAULT)
+    resultado = run_scoring_cycle(["XAU", "NIFTY50"], p66_entropy_global_default=P66_TEST_DEFAULT)
     for r in resultado.values():
         assert r.gold_score is None
         assert r.gold_score_blocked_reason == GOLD_SCORE_BLOCKED_REASON
@@ -94,7 +94,7 @@ def test_eurusd_funciona_end_to_end_gracias_al_fix_anterior():
     (que no llama classify_gdelt_event directamente, pero depende de que
     EURUSD sea un activo válido para el resto del pipeline) lo acepta."""
     _sembrar_historia("EURUSD", 12, entropy=0.6)
-    resultado = run_scoring_cycle(["EURUSD"], p90_entropy_global_default=P90_TEST_DEFAULT)
+    resultado = run_scoring_cycle(["EURUSD"], p66_entropy_global_default=P66_TEST_DEFAULT)
     assert resultado["EURUSD"].data_status == "ok"
 
 
@@ -102,7 +102,7 @@ def test_eurusd_funciona_end_to_end_gracias_al_fix_anterior():
 
 def test_activo_no_configurado_lanza_valueerror_no_degrada_en_silencio():
     with pytest.raises(ValueError, match="no tiene classify_gdelt_event"):
-        run_scoring_cycle(["ACTIVO_INVENTADO_XYZ"], p90_entropy_global_default=P90_TEST_DEFAULT)
+        run_scoring_cycle(["ACTIVO_INVENTADO_XYZ"], p66_entropy_global_default=P66_TEST_DEFAULT)
 
 
 def test_indice_volatilidad_no_esta_configurado_a_proposito():
@@ -110,10 +110,10 @@ def test_indice_volatilidad_no_esta_configurado_a_proposito():
     índices sintéticos (Fase 6, Hallazgo 1) -- debe seguir sin cobertura
     acá, no agregarse por accidente."""
     with pytest.raises(ValueError):
-        run_scoring_cycle(["VOL50"], p90_entropy_global_default=P90_TEST_DEFAULT)
+        run_scoring_cycle(["VOL50"], p66_entropy_global_default=P66_TEST_DEFAULT)
 
 
-# ─── p90_entropy_global_default es obligatorio -- sin valor inventado ─────
+# ─── p66_entropy_global_default es obligatorio -- sin valor inventado ─────
 
 def test_p90_global_default_es_argumento_obligatorio():
     with pytest.raises(TypeError):
@@ -132,7 +132,7 @@ def test_default_cycle_assets_son_exactamente_los_5_confirmados():
 def test_corrida_multi_activo_mezcla_cold_start_y_con_historia():
     _sembrar_historia("NVDA", 8)
     # XAU, BTC, NIFTY50, EURUSD quedan sin historia -- cold start real
-    resultado = run_scoring_cycle(p90_entropy_global_default=P90_TEST_DEFAULT)  # default: los 5
+    resultado = run_scoring_cycle(p66_entropy_global_default=P66_TEST_DEFAULT)  # default: los 5
 
     assert resultado["NVDA"].data_status == "ok"
     for asset in ("XAU", "BTC", "NIFTY50", "EURUSD"):
@@ -146,7 +146,7 @@ def test_dias_insuficientes_no_entran_en_las_ventanas():
     append_day(_dia("NVDA", date(2026, 1, 6), insufficient=True))  # sin entropy
     _sembrar_historia("NVDA", 3, start=date(2026, 1, 7), entropy=0.6)
 
-    resultado = run_scoring_cycle(["NVDA"], p90_entropy_global_default=P90_TEST_DEFAULT)
+    resultado = run_scoring_cycle(["NVDA"], p66_entropy_global_default=P66_TEST_DEFAULT)
     r = resultado["NVDA"]
     # 5 + 3 = 8 días válidos; el día insuficiente (día 6) no cuenta
     assert r.n_days_history == 8
@@ -208,15 +208,21 @@ def test_con_deriva_a_la_baja_el_movil_ve_un_dia_que_el_acumulado_pierde():
     La aserción no se apoya en un número mágico: se calculan los DOS
     umbrales sobre la misma historia y se comprueba que el día cae
     exactamente entre ellos. Con el criterio acumulado este test falla."""
-    from core.scoring import compute_adaptive_percentile, compute_godel_p90
+    from core.scoring import (GODEL_MASK_PERCENTILE, compute_adaptive_percentile,
+                              compute_godel_p66)
 
     n_historia = 599  # > 252: fuera del warm-up, los criterios divergen
     historia = _sembrar_deriva("BTC", n_historia)
 
+    # GODEL_MASK_PERCENTILE y compute_godel_p66, no P90: desde la versión
+    # 4.0.0 es el umbral que el ciclo usa de verdad. Con P90 el test seguía
+    # pasando, pero por la razón equivocada -- un repunte que supera el P90
+    # supera también el P66, así que no separaba acumulado de móvil.
     umbral_acumulado = compute_adaptive_percentile(
-        history=historia, percentile=90.0, global_default=P90_TEST_DEFAULT).value
-    umbral_movil = compute_godel_p90(
-        historia, global_default=P90_TEST_DEFAULT).value
+        history=historia, percentile=GODEL_MASK_PERCENTILE,
+        global_default=P66_TEST_DEFAULT).value
+    umbral_movil = compute_godel_p66(
+        historia, global_default=P66_TEST_DEFAULT).value
 
     # La premisa del escenario, comprobada y no supuesta: con deriva a la
     # baja el umbral acumulado queda POR ENCIMA del móvil.
@@ -229,7 +235,7 @@ def test_con_deriva_a_la_baja_el_movil_ve_un_dia_que_el_acumulado_pierde():
     append_day(_dia("BTC", date(2020, 1, 1) + timedelta(days=n_historia),
                     entropy=repunte, n_events=10))
 
-    r = run_scoring_cycle(["BTC"], p90_entropy_global_default=P90_TEST_DEFAULT)["BTC"]
+    r = run_scoring_cycle(["BTC"], p66_entropy_global_default=P66_TEST_DEFAULT)["BTC"]
 
     assert r.data_status == "ok"
     assert r.vitality_tesla.value != 9, (
@@ -254,8 +260,8 @@ def test_dentro_del_warmup_los_dos_criterios_dan_el_mismo_resultado():
     historia = _sembrar_deriva("XAU", n_historia)
 
     acumulado = compute_adaptive_percentile(
-        history=historia, percentile=90.0, global_default=P90_TEST_DEFAULT)
-    movil = compute_godel_p90(historia, global_default=P90_TEST_DEFAULT)
+        history=historia, percentile=90.0, global_default=P66_TEST_DEFAULT)
+    movil = compute_godel_p90(historia, global_default=P66_TEST_DEFAULT)
 
     assert movil.value == acumulado.value
     assert movil.n_obs == acumulado.n_obs == n_historia
@@ -271,8 +277,8 @@ def test_la_frontera_de_252_dias_es_donde_los_criterios_se_separan():
     def umbrales(n):
         h = serie[:n]
         return (compute_adaptive_percentile(history=h, percentile=90.0,
-                                            global_default=P90_TEST_DEFAULT).value,
-                compute_godel_p90(h, global_default=P90_TEST_DEFAULT).value)
+                                            global_default=P66_TEST_DEFAULT).value,
+                compute_godel_p90(h, global_default=P66_TEST_DEFAULT).value)
 
     acum_252, movil_252 = umbrales(GODEL_ROLLING_WINDOW_DAYS)
     assert movil_252 == acum_252, "en 252 todavía coinciden"
@@ -291,11 +297,9 @@ def test_el_resultado_sella_con_que_criterio_se_calculo():
 
     _sembrar_historia("BTC", 15, entropy=0.4, n_events=20)
 
-    r = run_scoring_cycle(["BTC"], p90_entropy_global_default=P90_TEST_DEFAULT)["BTC"]
+    r = run_scoring_cycle(["BTC"], p66_entropy_global_default=P66_TEST_DEFAULT)["BTC"]
 
     assert r.godel_criteria_version == GODEL_CRITERIA_VERSION
-    assert "rolling" in r.godel_criteria_version
-    assert "252" in r.godel_criteria_version
 
 
 def test_el_sello_no_cambia_la_firma_de_run_scoring_cycle():
@@ -381,7 +385,7 @@ def test_el_ciclo_ya_no_marca_vitalidad_maxima_en_un_dia_tipico():
         "la fixture no reproduce el defecto: sin recorte el día mediano "
         "tiene que salir 9")
 
-    r = run_scoring_cycle(["BTC"], p90_entropy_global_default=P90_TEST_DEFAULT)["BTC"]
+    r = run_scoring_cycle(["BTC"], p66_entropy_global_default=P66_TEST_DEFAULT)["BTC"]
 
     assert r.data_status == "ok"
     assert r.vitality_tesla.tier_used.value == "primary_n_events", (
@@ -431,15 +435,16 @@ def test_el_ciclo_no_recorta_por_su_cuenta_la_ventana_de_n_events():
         "el ciclo está recortando una ventana por su cuenta")
 
 
-def test_el_sello_de_version_sube_a_la_3():
-    """El cambio altera el valor de vitality de días ya calculados, así que
-    un artefacto de la 2.x no es comparable con uno de la 3.x."""
+def test_el_sello_de_version_sube_a_la_4():
+    """Cada mayor cambia el valor de días ya calculados. La 3.0.0 cambió el
+    tamaño de la ventana del tercil de n_events; la 4.0.0 cambia de qué
+    SERIE sale el umbral -- del tercil de n_events al de entropía."""
     from core.scoring import GODEL_CRITERIA_VERSION
 
     _sembrar_historia("BTC", 15, entropy=0.4, n_events=20)
 
-    r = run_scoring_cycle(["BTC"], p90_entropy_global_default=P90_TEST_DEFAULT)["BTC"]
+    r = run_scoring_cycle(["BTC"], p66_entropy_global_default=P66_TEST_DEFAULT)["BTC"]
 
     assert r.godel_criteria_version == GODEL_CRITERIA_VERSION
-    assert r.godel_criteria_version.startswith("3.")
-    assert "vitality" in r.godel_criteria_version
+    assert r.godel_criteria_version.startswith("4.")
+    assert "entropy_state" in r.godel_criteria_version

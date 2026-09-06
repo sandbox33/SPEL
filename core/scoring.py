@@ -96,7 +96,12 @@ DIFERENCIA DE CONVENCIÓN ENTRE B Y A (deliberada, documentada):
   diferencia de convención con A sigue siendo la misma de siempre.
 
 CONDICIÓN GÖDEL -- confirmada con evidencia doble, no solo una fuente:
-  godel_active = (entropy_shannon >= p90_entropy) OR (vitality_tesla == 9)
+  godel_active = entropy_shannon > p66_entropy   (versión 4.0.0)
+  Era `(entropy >= p90) OR (vitality == 9)`. Bajo la definición del
+  legacy esas dos ramas no eran independientes: `vitality == 9` es
+  `entropy > p66`, y como p90 >= p66 la primera implicaba la segunda.
+  El OR colapsaba al tercil superior y la rama del P90 nunca cambió un
+  resultado -- el sistema operó de facto con P66 desde el principio.
   Confirmado en godel_bound.py (con test empírico contra el crash de
   COVID-19, marzo 2020) Y en la resolución cerrada del Bug #35/#36 en el
   historial de sesiones legacy ("Opción A elegida: entropy >= P90 OR
@@ -216,6 +221,55 @@ def compute_vitality_tesla(
     degradación y los umbrales P33/P66 no cambiaron nunca; lo único que
     cambió (versión 3.0.0) es el TAMAÑO de la ventana del nivel primario.
 
+    ══ DESDE LA VERSIÓN 4.0.0 ESTA FUNCIÓN NO ALIMENTA LA MÁSCARA ══
+
+    Sigue existiendo como señal y se puede seguir consultando, pero
+    `godel_active()` ya no la recibe. La razón, y la auditoría que la
+    respalda, importan más que el cambio:
+
+    EL NIVEL PRIMARIO SOBRE n_events FUE UNA DESVIACIÓN DEL LEGACY. El
+    legacy tiene DOS fórmulas incompatibles para vitality_tesla, y este
+    port eligió la equivocada:
+
+      · gdelt_foundation.py::add_nash_and_tesla -- TERCIL DE ENTROPÍA:
+            p33 = df["entropy_shannon"].quantile(0.33)
+            p66 = df["entropy_shannon"].quantile(0.66)
+            vitality = 3 if e <= p33 else (6 if e <= p66 else 9)
+        Es la que produce la columna `vitality_tesla` del ENTROPY_SCHEMA,
+        o sea la que está en los parquets.
+
+      · spel_ingest_incremental.py::compute_entropy_features -- TERCIL DE
+        n_events, sobre `current['n_events']`. Es la que este repo portó,
+        citándola como "la única con evidencia empírica real".
+
+    Cuál produjo los datos que el proyecto usa quedó zanjado midiendo
+    contra la columna real de los parquets, 3.998 días: el tercil de
+    ENTROPÍA coincide 99,8%; el de n_events, 44,8% y 49,3%. Los parquets
+    salieron de gdelt_foundation.py. La cita de "evidencia empírica" del
+    port apuntaba a la fórmula que NO generó esos datos.
+
+    POR QUÉ SE REVIRTIÓ, más allá de la fidelidad: con la fórmula del
+    legacy, `vitality == 9` equivale a `entropy > p66`, así que la segunda
+    rama del OR quedaba lógicamente implicada por la primera y el solape
+    era del 100% -- exactamente el "respaldo redundante" que la
+    documentación decía que era. Con n_events el solape cayó a 43-51% y
+    esa rama pasó a aportar el 72% de los disparos: un respaldo se había
+    convertido en la señal dominante sin que nadie lo decidiera.
+
+    Y hay una razón que ninguna ventana móvil arregla: n_events mide
+    cobertura mediática de GDELT, que tiene tendencia estructural propia
+    (expansión del número de fuentes, no actividad real del mundo). Esa
+    tendencia vive DENTRO de la ventana, así que recortarla no la elimina
+    -- ver la medición de la versión 3.0.0, que bajó la tasa de nueves de
+    ~61% a ~44% y no a un tercio.
+
+    PENDIENTE, explícito: si n_events se conserva como señal propia,
+    debería normalizarse (fracción del total diario o z-score móvil) antes
+    de tener cualquier consumidor. No se hizo en este PR porque su único
+    consumidor era la máscara de la que se lo está sacando: normalizarlo
+    ahora sería un cambio de comportamiento sin nadie que lo consuma y sin
+    medición que lo respalde.
+
     POR QUÉ EL NIVEL PRIMARIO USA VENTANA MÓVIL, con números medidos sobre
     la serie real (4.880 días, 2013-04-01 a 2026-09-03, recalculando esta
     misma función con la ventana que usaba producción):
@@ -333,36 +387,185 @@ def compute_vitality_tesla(
     return VitalityResult(value=value, tier_used=VitalityTier.FALLBACK_GLOBAL_THRESHOLDS, degraded=True)
 
 
+# ─── entropy_state: la Capa 1, estado sin decisión de trading ───────────────
+
+#: Los tres estados. Son un ESTADO del régimen informacional, no una señal:
+#: ninguno significa "operar" ni "no operar". Numerados 0/1/2 y no 3/6/9 a
+#: propósito -- el 3/6/9 es la escala de vitality_tesla y confundir las dos
+#: es lo que llevó a que un estado terminara actuando como filtro.
+ENTROPY_STATE_LOW = 0
+ENTROPY_STATE_MID = 1
+ENTROPY_STATE_HIGH = 2
+
+#: Terciles del legacy: gdelt_foundation.py::TESLA_PERCENTILE_THRESHOLDS
+#: = (33.0, 66.0). Port literal, incluido el `<=` (no `<`).
+ENTROPY_STATE_PERCENTILES: tuple[float, float] = (33.0, 66.0)
+
+#: El percentil que define el umbral de la máscara Gödel: el borde del
+#: tercil superior. UNA sola fuente de verdad -- la usan
+#: compute_godel_p66(), entropy_state() y el tool que mide la máscara. Que
+#: el tool midiera un percentil distinto del que usa producción sería
+#: medir otra cosa y no notarlo.
+GODEL_MASK_PERCENTILE = ENTROPY_STATE_PERCENTILES[1]
+
+#: Cómo se representa un día SIN ventana completa: `None`, no un estado.
+#:
+#: Un día de warm-up no tiene un estado "bajo" ni "medio" -- no tiene
+#: estado, porque no hay contra qué compararlo. Devolver 0 o 1 ahí
+#: mezclaría días medidos con días adivinados en la misma columna, y
+#: cualquier distribución calculada sobre esa columna estaría contaminada
+#: sin que se note. `None` obliga a que quien agregue decida qué hacer con
+#: ellos; los tests de distribución de este módulo los excluyen
+#: explícitamente antes de contar.
+ENTROPY_STATE_WARMUP = None
+
+
+def entropy_state(
+    entropy_series: Sequence[float] | None,
+    window: int = GODEL_ROLLING_WINDOW_DAYS,
+) -> int | None:
+    """
+    Estado del régimen de entropía del último día de `entropy_series`:
+    ENTROPY_STATE_LOW / MID / HIGH, o None si no hay ventana completa.
+
+    FUNCIÓN PURA Y SIN DECISIONES DE TRADING. Describe en qué tercil de su
+    propia historia reciente cae la entropía de hoy. No dice si operar. Esa
+    separación es el punto de esta capa: mezclar estado y filtro es lo que
+    convirtió un respaldo documentado como "red de seguridad redundante" en
+    la señal dominante de la máscara.
+
+    PORT DE gdelt_foundation.py::add_nash_and_tesla (rama vitality_tesla),
+    verificado con `git show` sobre origin/archive/legacy-pre-20260813:
+
+        p33 = df["entropy_shannon"].quantile(0.33)
+        p66 = df["entropy_shannon"].quantile(0.66)
+        vitality = 3 if e <= p33 else (6 if e <= p66 else 9)
+
+    Es TERCIL DE ENTROPÍA, no de n_events. El port original de este repo lo
+    implementó sobre n_events y esa desviación no estaba documentada -- ver
+    compute_vitality_tesla() para la auditoría completa y la evidencia.
+
+    DESVIACIÓN DEL LEGACY, deliberada y con motivo (misma disciplina que
+    nash_frozen_7d): el legacy calcula p33/p66 sobre TODO EL AÑO de una
+    sola vez -- `add_nash_and_tesla` corre en batch sobre el resultado
+    anual ya completo. Eso es look-ahead: el estado del 3 de enero se
+    decide con entropía de diciembre. Es admisible en un pipeline de
+    etiquetado histórico y NO lo es en algo que alimenta una decisión en
+    vivo. Acá los terciles salen de una ventana móvil causal que termina
+    el día ANTERIOR, con el mismo `_ventana_movil` que usan las otras dos
+    ramas. Portar el batch literal habría roto el primero de los Tamices.
+
+    LA FRONTERA TEMPORAL: `entropy_series[-1]` es el día que se clasifica y
+    NO entra en su propia ventana. Los terciles salen de
+    `entropy_series[:-1]`, recortada a sus últimas `window` observaciones.
+    Sin ese desplazamiento un día movería el estadístico contra el que se
+    lo compara. Es la convención del Respaldo A, ya documentada en el
+    docstring del módulo como "la más limpia".
+
+    WARM-UP: mientras haya menos de `window` observaciones ANTERIORES al
+    día, devuelve ENTROPY_STATE_WARMUP (None). A diferencia de
+    compute_godel_p90(), que degrada a ventana expandible, acá no se
+    degrada: un tercil es una afirmación sobre la posición relativa dentro
+    de una distribución, y con media ventana esa posición no es comparable
+    con la de un día en régimen. Un umbral degradado sigue siendo un
+    umbral; un estado degradado sería una etiqueta distinta con el mismo
+    nombre.
+
+    Args:
+        entropy_series: entropy_shannon en orden cronológico. El ÚLTIMO
+            elemento es el día que se clasifica.
+        window: observaciones de la ventana. Default
+            GODEL_ROLLING_WINDOW_DAYS, la misma de las otras dos ramas.
+
+    Returns:
+        0, 1 o 2 -- o None si no hay ventana completa.
+
+    Raises:
+        ValueError: si window < 1 (lo lanza `_ventana_movil`).
+    """
+    if not entropy_series or len(entropy_series) < 2:
+        # Sin al menos un día previo no hay ventana ninguna.
+        _ventana_movil(entropy_series, window)   # valida `window` igual
+        return ENTROPY_STATE_WARMUP
+
+    hoy = float(entropy_series[-1])
+    previos = _ventana_movil(entropy_series[:-1], window)
+
+    if len(previos) < window:
+        return ENTROPY_STATE_WARMUP
+
+    p33 = float(np.percentile(previos, ENTROPY_STATE_PERCENTILES[0]))
+    p66 = float(np.percentile(previos, ENTROPY_STATE_PERCENTILES[1]))
+    if hoy <= p33:
+        return ENTROPY_STATE_LOW
+    if hoy <= p66:
+        return ENTROPY_STATE_MID
+    return ENTROPY_STATE_HIGH
+
+
 # ─── Condición Gödel ────────────────────────────────────────────────────────
 
-def godel_active(entropy_shannon: float, p90_entropy: float, vitality_tesla: int) -> bool:
+def godel_active(entropy_shannon: float, p66_entropy: float) -> bool:
     """
-    Condición de activación Gödel -- régimen de alta entropía / anomalía.
+    Filtro de la máscara Gödel: ¿la entropía de hoy está en el TERCIL
+    SUPERIOR de su historia reciente?
 
-        godel_active = (entropy_shannon >= p90_entropy) OR (vitality_tesla == 9)
+        godel_active = entropy_shannon > p66_entropy
 
-    Confirmada en godel_bound.py (con test empírico contra el crash de
-    COVID-19, marzo 2020) y en la resolución cerrada del Bug #35/#36 del
-    historial legacy: "Opción A elegida: entropy >= P90 OR vitality==9 es
-    canónica para todos los assets."
+    EL PARÁMETRO SE LLAMABA `p90_entropy` Y ESO ERA UNA MENTIRA. Vale la
+    pena dejar escrito por qué, porque el nombre viejo ocultó durante todo
+    el proyecto qué criterio estaba corriendo de verdad.
 
-    p90_entropy debe calcularse SOLO con datos de entrenamiento -- nunca
-    incluir datos de validación/test (regla de integridad temporal, uno
-    de los 4 Tamices Irrompibles del proyecto).
+    La fórmula anterior era `(entropy >= p90) OR (vitality_tesla == 9)`.
+    Bajo la definición del legacy -- que es tercil de ENTROPÍA, ver
+    entropy_state() -- `vitality_tesla == 9` equivale exactamente a
+    `entropy > p66`. Y como p90 >= p66 siempre, por definición de
+    percentil, el primer término IMPLICA el segundo:
 
-    CÓMO SE CALCULA ESE p90_entropy: ver compute_godel_p90() -- desde
-    GODEL_CRITERIA_VERSION 2.0.0 es un percentil de VENTANA MÓVIL, no
-    acumulado. La firma de esta función NO cambió: sigue recibiendo el
-    umbral ya resuelto y devolviendo un bool. La máscara, vitality_tesla
-    y el OR quedan exactamente como estaban.
+        (e >= p90)  ⟹  (e > p66)      =>   A ∨ B  =  B
+
+    El OR colapsaba a la rama de vitality. La rama del P90 nunca cambió un
+    resultado: no existe un día que dispare por P90 y no dispare ya por el
+    tercil superior. Medido sobre 5.000 días sintéticos con la definición
+    del legacy: la rama P90 dispara el 10,0% de los días, la rama del
+    tercil el 34,0%, el OR el 34,0%, y los días con P90 sin tercil son
+    CERO.
+
+    Es decir: EL SISTEMA OPERÓ DE FACTO CON P66 DESDE EL PRINCIPIO. El
+    nombre `p90_entropy` describía un término inerte. Esta función no
+    cambia el comportamiento efectivo de la máscara -- lo nombra.
+
+    Lo que sí cambió es de dónde sale el umbral. Antes llegaba por la rama
+    de vitality_tesla, que en este repo se calculaba sobre n_events (una
+    desviación del legacy, ver compute_vitality_tesla). Ahora sale del
+    tercil de entropía, que es lo que el legacy define. Ver
+    compute_godel_p66() y entropy_state().
+
+    LA COMPARACIÓN ES ESTRICTA (`>`, no `>=`), y eso también es port: el
+    legacy asigna 9 cuando el valor NO cumple `e <= p66`. Un `>=` movería
+    de tercil a los días que caen exactamente sobre el borde.
+
+    `p66_entropy` debe calcularse SOLO con días anteriores al que se
+    evalúa -- nunca incluir el día propio ni datos de validación/test
+    (regla de integridad temporal, uno de los 4 Tamices Irrompibles).
+    compute_godel_p66() ya lo garantiza.
+
+    Args:
+        entropy_shannon: entropía del día que se evalúa.
+        p66_entropy: umbral del tercil superior de su historia reciente.
+
+    NOTA SOBRE `vitality_tesla`: ya no es parámetro. Sigue existiendo como
+    señal (compute_vitality_tesla) pero no alimenta el filtro -- ver el
+    docstring de esa función para por qué un estado no debe ser una
+    compuerta de trading.
     """
-    return entropy_shannon >= p90_entropy or vitality_tesla == 9
+    return entropy_shannon > p66_entropy
 
 
-# ─── p90 de la máscara Gödel: percentil de ventana móvil ────────────────────
+# ─── Umbrales de la máscara Gödel: percentil de ventana móvil ───────────────
 
 #: GODEL_ROLLING_WINDOW_DAYS vive arriba, junto a `_ventana_movil()`: desde
-#: la versión 3.0.0 la comparten las dos ramas de la máscara.
+#: la versión 3.0.0 la comparten todas las ramas.
 
 #: Versión del criterio con el que se calculó la máscara Gödel.
 #:
@@ -384,7 +587,63 @@ def godel_active(entropy_shannon: float, p90_entropy: float, vitality_tesla: int
 #:        compute_vitality_tesla() para la medición. Mayor y no menor
 #:        porque cambia el valor de vitality de días ya calculados: un
 #:        artefacto de la 2.x no es comparable con uno de la 3.x.
-GODEL_CRITERIA_VERSION = "3.0.0-rolling_252d_vitality"
+#:   4.0.0-entropy_state_p66 -- se separa el ESTADO del FILTRO. La máscara
+#:        deja de ser un OR: es `entropy > p66` sobre el tercil de
+#:        ENTROPÍA (la definición del legacy), y vitality_tesla sale del
+#:        filtro. Mayor porque cambia de dónde sale el umbral: antes
+#:        llegaba por el tercil de n_events, ahora por el de entropía.
+#:        El comportamiento EFECTIVO de la máscara no cambia de umbral
+#:        conceptual (ya era P66, ver godel_active) pero sí de serie.
+GODEL_CRITERIA_VERSION = "4.0.0-entropy_state_p66"
+
+
+def compute_godel_p66(
+    entropy_history: Sequence[float] | None,
+    global_default: float,
+    *,
+    window: int = GODEL_ROLLING_WINDOW_DAYS,
+) -> AdaptivePercentileResult:
+    """
+    El umbral que consume godel_active(): el borde del TERCIL SUPERIOR de
+    la entropía, sobre ventana móvil que termina el día anterior.
+
+    Gemela exacta de compute_godel_p90() -- mismo `_ventana_movil`, misma
+    ventana, mismo `compute_adaptive_percentile`. Lo único que cambia es
+    el percentil que se pide: GODEL_MASK_PERCENTILE (66.0) en vez de 90.
+
+    Por qué 66 y no 90: ver godel_active(). En resumen, la máscara ya
+    operaba de facto con P66 -- la rama del P90 estaba lógicamente
+    implicada por la del tercil superior y nunca cambió un resultado.
+    Esta función nombra el umbral que el sistema venía usando.
+
+    RELACIÓN CON entropy_state(): con ventana completa las dos coinciden
+    exactamente. `entropy_state(serie) == ENTROPY_STATE_HIGH` es
+    equivalente a `godel_active(serie[-1], compute_godel_p66(serie[:-1],
+    ...).value)` siempre que haya >= MIN_OBS_FOR_ROLLING observaciones, que
+    es el único régimen donde entropy_state() devuelve algo distinto de
+    None. Hay un test que fija esa equivalencia: si se rompe, el filtro
+    dejó de preguntar lo que la Capa 1 responde.
+
+    Fuera de ese régimen las dos difieren a propósito: entropy_state()
+    devuelve None (no hay estado sin ventana), mientras que esta función
+    degrada al híbrido/global de compute_adaptive_percentile, porque un
+    umbral degradado sigue siendo un umbral usable y un filtro tiene que
+    responder algo todos los días.
+
+    Args:
+        entropy_history: entropy_shannon en orden cronológico, SIN el día
+            que se evalúa.
+        global_default: valor de arranque en frío. Mismo contrato que
+            compute_adaptive_percentile.
+        window: tamaño de la ventana. Default GODEL_ROLLING_WINDOW_DAYS.
+
+    Raises:
+        ValueError: si window < 1 (lo lanza `_ventana_movil`).
+    """
+    return compute_adaptive_percentile(
+        history=_ventana_movil(entropy_history, window),
+        percentile=GODEL_MASK_PERCENTILE, global_default=global_default,
+    )
 
 
 def compute_godel_p90(
@@ -394,8 +653,15 @@ def compute_godel_p90(
     window: int = GODEL_ROLLING_WINDOW_DAYS,
 ) -> AdaptivePercentileResult:
     """
-    El p90_entropy que consume godel_active(), calculado sobre una VENTANA
-    MÓVIL de `window` observaciones que TERMINA EN EL DÍA ANTERIOR.
+    El P90 de la entropía sobre una VENTANA MÓVIL de `window`
+    observaciones que TERMINA EN EL DÍA ANTERIOR.
+
+    YA NO ALIMENTA LA MÁSCARA. Desde la versión 4.0.0 el umbral del filtro
+    es compute_godel_p66(): la rama del P90 estaba lógicamente implicada
+    por la del tercil superior y nunca cambió un resultado -- ver
+    godel_active() para la demostración y los números. Esta función se
+    conserva porque calcula correctamente lo que su nombre dice y sirve
+    para medir; simplemente no es el umbral de decisión de nadie.
 
     NO reimplementa el percentil: recorta la historia y llama a
     compute_adaptive_percentile(), que sigue siendo la única
@@ -959,8 +1225,7 @@ def compute_gold_score_bma(
     backbone_score: float,
     asset: str,
     entropy_shannon: float,
-    p90_entropy: float,
-    vitality_tesla: int,
+    p66_entropy: float,
     kl_divergence: float = 0.0,
     legacy_entropy_threshold: float | None = SHANNON_KILL_THRESHOLD,
 ) -> GoldScoreResult:
@@ -983,7 +1248,7 @@ def compute_gold_score_bma(
     0.42) por godel_active() puro, argumentando Tamiz 3 (una
     implementación por concepto). Se reincorpora el umbral fijo como
     RED DE SEGURIDAD INDEPENDIENTE, no como reemplazo de esa decisión:
-    godel_active() depende de p90_entropy, que en frío (poca historia)
+    godel_active() depende de p66_entropy, que en frío (poca historia)
     puede venir de compute_adaptive_percentile() en modo GLOBAL -- un
     default sin backtest. Si ese default está mal calibrado,
     godel_active() puede fallar en dejar pasar entropías
@@ -1012,7 +1277,9 @@ def compute_gold_score_bma(
     Args:
         godel_score, te_score, backbone_score: inputs [0,1].
         asset: nombre del activo -- determina native vs synthetic.
-        entropy_shannon, p90_entropy, vitality_tesla: para godel_active().
+        entropy_shannon, p66_entropy: para godel_active(). `vitality_tesla`
+            dejó de ser parámetro en la versión 4.0.0 -- ver godel_active().
+            La LÓGICA de esta función no cambió: solo lo que se le pasa.
         kl_divergence: default 0.0.
         legacy_entropy_threshold: default SHANNON_KILL_THRESHOLD (0.42).
             None para desactivar.
@@ -1029,7 +1296,7 @@ def compute_gold_score_bma(
     asset_type = "native" if asset.upper() in NATIVE_ASSETS else "synthetic"
     weights = BMA_WEIGHTS[asset_type]
 
-    is_godel_active = godel_active(entropy_shannon, p90_entropy, vitality_tesla)
+    is_godel_active = godel_active(entropy_shannon, p66_entropy)
     is_drift = kl_divergence > KL_DIVERGENCE_THRESHOLD
     is_legacy_kill = (
         legacy_entropy_threshold is not None

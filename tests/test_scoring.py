@@ -37,6 +37,7 @@ from core.scoring import (
     compute_entropy_delta_lags,
     compute_entropy_fibonacci_lags,
     compute_gold_score_bma,
+    compute_godel_p66,
     compute_godel_p90,
     compute_mass_panic_index,
     MIN_WINDOW_FOR_PERCENTILE,
@@ -45,6 +46,13 @@ from core.scoring import (
     godel_active,
     GODEL_CRITERIA_VERSION,
     GODEL_ROLLING_WINDOW_DAYS,
+    GODEL_MASK_PERCENTILE,
+    entropy_state,
+    ENTROPY_STATE_LOW,
+    ENTROPY_STATE_MID,
+    ENTROPY_STATE_HIGH,
+    ENTROPY_STATE_WARMUP,
+    ENTROPY_STATE_PERCENTILES,
 )
 
 
@@ -231,24 +239,45 @@ def test_el_valor_siempre_es_3_6_o_9(n_events, entropy_hist, current):
 
 # ─── Condición Gödel ─────────────────────────────────────────────────────────
 
-def test_godel_activo_por_entropia_sobre_p90():
-    assert godel_active(entropy_shannon=1.5, p90_entropy=1.2, vitality_tesla=6) is True
+def test_godel_activo_por_entropia_sobre_el_tercil_superior():
+    assert godel_active(entropy_shannon=1.5, p66_entropy=1.2) is True
 
 
-def test_godel_activo_por_vitality_tesla_9_aunque_entropia_este_baja():
-    assert godel_active(entropy_shannon=0.1, p90_entropy=1.2, vitality_tesla=9) is True
+def test_godel_inactivo_bajo_el_tercil_superior():
+    assert godel_active(entropy_shannon=0.5, p66_entropy=1.2) is False
 
 
-def test_godel_inactivo_si_ninguna_condicion_se_cumple():
-    assert godel_active(entropy_shannon=0.5, p90_entropy=1.2, vitality_tesla=6) is False
+def test_godel_en_el_borde_exacto_NO_dispara_la_comparacion_es_estricta():
+    """PORT DEL LEGACY, y un cambio respecto de la versión anterior. El
+    legacy asigna el tercil superior cuando el valor NO cumple `e <= p66`,
+    o sea con `>` estricto. La fórmula vieja usaba `entropy >= p90` y por
+    eso el borde exacto disparaba; ahora no.
+
+    No es una preferencia de estilo: un `>=` movería de tercil a los días
+    que caen justo sobre el umbral, y el borde de un percentil sobre una
+    serie discreta se toca más seguido de lo que parece."""
+    assert godel_active(entropy_shannon=1.2, p66_entropy=1.2) is False
+    assert godel_active(entropy_shannon=1.2000001, p66_entropy=1.2) is True
 
 
-def test_godel_activo_en_el_borde_exacto_del_p90():
-    assert godel_active(entropy_shannon=1.2, p90_entropy=1.2, vitality_tesla=3) is True
+def test_vitality_tesla_ya_no_participa_de_la_mascara():
+    """Versión 4.0.0: la máscara dejó de ser un OR. Antes existía este
+    test, y pasaba:
 
+        godel_active(entropy_shannon=0.1, p90_entropy=1.2, vitality_tesla=9)
+        -> True
 
-def test_godel_activo_cuando_ambas_condiciones_se_cumplen():
-    assert godel_active(entropy_shannon=2.0, p90_entropy=1.2, vitality_tesla=9) is True
+    Un día con entropía muy por debajo del umbral entraba igual porque
+    vitality valía 9. Eso ya no ocurre: `godel_active` no recibe vitality
+    y una entropía baja no pasa el filtro por ninguna vía.
+
+    Que este test exista y no sea solo una eliminación importa: deja
+    constancia de qué comportamiento se quitó, para que reaparecer no sea
+    gratis."""
+    import inspect
+
+    assert "vitality_tesla" not in inspect.signature(godel_active).parameters
+    assert godel_active(entropy_shannon=0.1, p66_entropy=1.2) is False
 
 
 # ─── nash_frozen_7d ─────────────────────────────────────────────────────────
@@ -550,7 +579,7 @@ def test_delta_no_reemplaza_ni_altera_fibonacci_lags_niveles():
 def test_gold_pesos_native_correctos_xau():
     result = compute_gold_score_bma(
         godel_score=0.5, te_score=0.5, backbone_score=0.5, asset="XAU",
-        entropy_shannon=0.3, p90_entropy=1.0, vitality_tesla=6,
+        entropy_shannon=0.3, p66_entropy=1.0,
     )
     assert result.weights_used == {"godel": 0.40, "te_entropy": 0.30, "backbone": 0.30}
     assert result.asset_type == "native"
@@ -561,7 +590,7 @@ def test_gold_pesos_native_correctos_xau():
 def test_gold_pesos_synthetic_correctos_eurusd():
     result = compute_gold_score_bma(
         godel_score=0.5, te_score=0.5, backbone_score=1.0, asset="EURUSD",
-        entropy_shannon=0.3, p90_entropy=1.0, vitality_tesla=6,
+        entropy_shannon=0.3, p66_entropy=1.0,
     )
     assert result.weights_used == {"godel": 0.55, "te_entropy": 0.45, "backbone": 0.00}
     assert result.asset_type == "synthetic"
@@ -572,7 +601,7 @@ def test_gold_pesos_synthetic_correctos_eurusd():
 def test_gold_reconoce_activo_en_minuscula():
     result = compute_gold_score_bma(
         godel_score=0.5, te_score=0.5, backbone_score=0.5, asset="xau",
-        entropy_shannon=0.3, p90_entropy=1.0, vitality_tesla=6,
+        entropy_shannon=0.3, p66_entropy=1.0,
     )
     assert result.asset_type == "native"
 
@@ -580,7 +609,7 @@ def test_gold_reconoce_activo_en_minuscula():
 def test_gold_kill_por_godel_active_via_entropia_sobre_p90():
     result = compute_gold_score_bma(
         godel_score=0.9, te_score=0.9, backbone_score=0.9, asset="XAU",
-        entropy_shannon=1.5, p90_entropy=1.2, vitality_tesla=6,
+        entropy_shannon=1.5, p66_entropy=1.2,
     )
     assert result.kill_signal is True
     assert result.kill_reason == GoldScoreKillReason.GODEL_ACTIVE
@@ -589,20 +618,32 @@ def test_gold_kill_por_godel_active_via_entropia_sobre_p90():
     assert result.regime == GoldScoreRegime.GODEL_ACTIVE_KILL
 
 
-def test_gold_kill_por_godel_active_via_vitality_9():
+def test_gold_ya_no_mata_por_vitality_con_entropia_baja():
+    """Versión 4.0.0. Antes este test se llamaba
+    `test_gold_kill_por_godel_active_via_vitality_9` y pasaba: con
+    entropía 0.1 y vitality 9, gold_score salía 0.0 con kill_signal.
+
+    Ya no hay vía de vitality. Con entropía 0.1 y umbral 1.2 no dispara
+    NINGUNA de las tres condiciones de kill, así que el score se calcula.
+
+    Nota: bajo la fórmula del legacy ese escenario era imposible de todos
+    modos -- `vitality == 9` significa `entropy > p66`, o sea que una
+    entropía de 0.1 con umbral 1.2 nunca podría haber tenido vitality 9.
+    El caso solo existía porque este repo calculaba vitality sobre
+    n_events, donde entropía y vitality sí podían contradecirse."""
     result = compute_gold_score_bma(
         godel_score=0.9, te_score=0.9, backbone_score=0.9, asset="XAU",
-        entropy_shannon=0.1, p90_entropy=1.2, vitality_tesla=9,
+        entropy_shannon=0.1, p66_entropy=1.2,
     )
-    assert result.kill_signal is True
-    assert result.kill_reason == GoldScoreKillReason.GODEL_ACTIVE
-    assert result.gold_score == 0.0
+    assert result.kill_signal is False
+    assert result.kill_reason == GoldScoreKillReason.NONE
+    assert result.gold_score > 0.0
 
 
 def test_gold_kill_por_drift_control_kl_divergence():
     result = compute_gold_score_bma(
         godel_score=0.9, te_score=0.9, backbone_score=0.9, asset="XAU",
-        entropy_shannon=0.1, p90_entropy=1.2, vitality_tesla=6,
+        entropy_shannon=0.1, p66_entropy=1.2,
         kl_divergence=0.25,
     )
     assert result.kill_signal is True
@@ -615,7 +656,7 @@ def test_gold_kill_por_drift_control_kl_divergence():
 def test_gold_kl_en_el_borde_no_dispara_drift_es_estricto():
     result = compute_gold_score_bma(
         godel_score=0.5, te_score=0.5, backbone_score=0.5, asset="XAU",
-        entropy_shannon=0.1, p90_entropy=1.2, vitality_tesla=6,
+        entropy_shannon=0.1, p66_entropy=1.2,
         kl_divergence=0.20,  # == threshold, no > threshold
     )
     assert result.kill_signal is False
@@ -624,7 +665,7 @@ def test_gold_kl_en_el_borde_no_dispara_drift_es_estricto():
 def test_gold_godel_active_tiene_prioridad_sobre_drift_si_ambos_disparan():
     result = compute_gold_score_bma(
         godel_score=0.9, te_score=0.9, backbone_score=0.9, asset="XAU",
-        entropy_shannon=1.5, p90_entropy=1.2, vitality_tesla=6,
+        entropy_shannon=1.5, p66_entropy=1.2,
         kl_divergence=0.99,
     )
     assert result.kill_reason == GoldScoreKillReason.GODEL_ACTIVE
@@ -633,7 +674,7 @@ def test_gold_godel_active_tiene_prioridad_sobre_drift_si_ambos_disparan():
 def test_gold_regime_transcendence_cuando_godel_score_es_090_o_mas():
     result = compute_gold_score_bma(
         godel_score=0.95, te_score=0.9, backbone_score=0.9, asset="XAU",
-        entropy_shannon=0.1, p90_entropy=1.2, vitality_tesla=6,
+        entropy_shannon=0.1, p66_entropy=1.2,
     )
     assert result.regime == GoldScoreRegime.TRANSCENDENCE
     assert result.action == GoldScoreAction.EXECUTE_STRONG
@@ -642,7 +683,7 @@ def test_gold_regime_transcendence_cuando_godel_score_es_090_o_mas():
 def test_gold_regime_creation_cuando_godel_score_bajo():
     result = compute_gold_score_bma(
         godel_score=0.1, te_score=0.1, backbone_score=0.1, asset="XAU",
-        entropy_shannon=0.1, p90_entropy=1.2, vitality_tesla=6,
+        entropy_shannon=0.1, p66_entropy=1.2,
     )
     assert result.regime == GoldScoreRegime.CREATION
     assert result.action == GoldScoreAction.HOLD
@@ -651,7 +692,7 @@ def test_gold_regime_creation_cuando_godel_score_bajo():
 def test_gold_action_execute_strong_en_el_borde_085():
     result = compute_gold_score_bma(
         godel_score=0.85, te_score=0.85, backbone_score=0.85, asset="XAU",
-        entropy_shannon=0.1, p90_entropy=1.2, vitality_tesla=6,
+        entropy_shannon=0.1, p66_entropy=1.2,
     )
     assert result.gold_score == pytest.approx(0.85)
     assert result.action == GoldScoreAction.EXECUTE_STRONG
@@ -660,7 +701,7 @@ def test_gold_action_execute_strong_en_el_borde_085():
 def test_gold_action_watch_en_el_borde_040():
     result = compute_gold_score_bma(
         godel_score=0.40, te_score=0.40, backbone_score=0.40, asset="XAU",
-        entropy_shannon=0.1, p90_entropy=1.2, vitality_tesla=6,
+        entropy_shannon=0.1, p66_entropy=1.2,
     )
     assert result.gold_score == pytest.approx(0.40)
     assert result.action == GoldScoreAction.WATCH
@@ -670,7 +711,7 @@ def test_gold_clampea_inputs_fuera_de_rango():
     # godel_score=1.5 debe clampearse a 1.0 antes de ponderar
     result = compute_gold_score_bma(
         godel_score=1.5, te_score=0.0, backbone_score=0.0, asset="XAU",
-        entropy_shannon=0.1, p90_entropy=1.2, vitality_tesla=6,
+        entropy_shannon=0.1, p66_entropy=1.2,
     )
     assert result.gold_score == pytest.approx(0.40)  # 0.40 * 1.0 clampeado
 
@@ -678,7 +719,7 @@ def test_gold_clampea_inputs_fuera_de_rango():
 def test_gold_no_kill_por_defecto_sin_kl_divergence():
     result = compute_gold_score_bma(
         godel_score=0.5, te_score=0.5, backbone_score=0.5, asset="XAU",
-        entropy_shannon=0.1, p90_entropy=1.2, vitality_tesla=6,
+        entropy_shannon=0.1, p66_entropy=1.2,
     )
     assert result.kill_signal is False
     assert result.kill_reason == GoldScoreKillReason.NONE
@@ -874,9 +915,9 @@ def test_gold_legacy_threshold_mata_entropia_moderada_que_godel_active_dejaria_p
     # riesgo de un p90 mal calibrado en frío.
     result = compute_gold_score_bma(
         godel_score=0.8, te_score=0.8, backbone_score=0.8, asset="XAU",
-        entropy_shannon=0.5, p90_entropy=1.2, vitality_tesla=6,
+        entropy_shannon=0.5, p66_entropy=1.2,
     )
-    assert godel_active(entropy_shannon=0.5, p90_entropy=1.2, vitality_tesla=6) is False  # confirma la premisa
+    assert godel_active(entropy_shannon=0.5, p66_entropy=1.2) is False  # confirma la premisa
     assert result.kill_signal is True
     assert result.kill_reason == GoldScoreKillReason.LEGACY_ENTROPY_THRESHOLD
     assert result.regime == GoldScoreRegime.HIGH_ENTROPY_LEGACY_KILL
@@ -886,7 +927,7 @@ def test_gold_legacy_threshold_mata_entropia_moderada_que_godel_active_dejaria_p
 def test_gold_legacy_threshold_none_desactiva_la_red_de_seguridad():
     result = compute_gold_score_bma(
         godel_score=0.8, te_score=0.8, backbone_score=0.8, asset="XAU",
-        entropy_shannon=0.5, p90_entropy=1.2, vitality_tesla=6,
+        entropy_shannon=0.5, p66_entropy=1.2,
         legacy_entropy_threshold=None,
     )
     assert result.kill_signal is False  # vuelve al comportamiento anterior
@@ -895,7 +936,7 @@ def test_gold_legacy_threshold_none_desactiva_la_red_de_seguridad():
 def test_gold_legacy_threshold_en_el_borde_no_dispara_es_estricto():
     result = compute_gold_score_bma(
         godel_score=0.5, te_score=0.5, backbone_score=0.5, asset="XAU",
-        entropy_shannon=0.42, p90_entropy=1.2, vitality_tesla=6,  # == umbral, no >
+        entropy_shannon=0.42, p66_entropy=1.2,  # == umbral, no >
     )
     assert result.kill_signal is False
 
@@ -904,7 +945,7 @@ def test_gold_godel_active_tiene_prioridad_sobre_legacy_threshold():
     # entropy=1.5 dispara AMBOS (godel_active por >=p90, y legacy por >0.42)
     result = compute_gold_score_bma(
         godel_score=0.8, te_score=0.8, backbone_score=0.8, asset="XAU",
-        entropy_shannon=1.5, p90_entropy=1.2, vitality_tesla=6,
+        entropy_shannon=1.5, p66_entropy=1.2,
     )
     assert result.kill_reason == GoldScoreKillReason.GODEL_ACTIVE  # no LEGACY_ENTROPY_THRESHOLD
 
@@ -912,7 +953,7 @@ def test_gold_godel_active_tiene_prioridad_sobre_legacy_threshold():
 def test_gold_legacy_threshold_respeta_valor_personalizado():
     result = compute_gold_score_bma(
         godel_score=0.5, te_score=0.5, backbone_score=0.5, asset="XAU",
-        entropy_shannon=0.35, p90_entropy=1.2, vitality_tesla=6,
+        entropy_shannon=0.35, p66_entropy=1.2,
         legacy_entropy_threshold=0.30,  # umbral más estricto que el default
     )
     assert result.kill_signal is True
@@ -923,7 +964,8 @@ def test_gold_legacy_threshold_respeta_valor_personalizado():
 #
 # Compara 3 lógicas de kill signal en 5 escenarios operacionales:
 #   Caso A: umbral legacy fijo puro -- entropy_shannon > 0.42, sin nada más.
-#   Caso B: godel_active() puro -- entropy >= p90 OR vitality == 9.
+#   Caso B: godel_active() puro -- entropy > p66 (versión 4.0.0; era
+#           `entropy >= p90 OR vitality == 9`).
 #   Caso C: el sistema real en producción -- compute_gold_score_bma(),
 #           que ya combina los 3 mecanismos (godel_active OR legacy_threshold
 #           OR drift) con la prioridad confirmada en la sesión del fix.
@@ -947,37 +989,48 @@ def _caso_a_legacy_fijo(entropy: float, threshold: float = 0.42) -> bool:
     return entropy > threshold
 
 
-def _caso_b_godel_puro(entropy: float, p90: float, vitality: int) -> bool:
-    """Caso B -- llama a godel_active() real del módulo, sin wrapping."""
-    return godel_active(entropy, p90, vitality)
+def _caso_b_godel_puro(entropy: float, p66: float) -> bool:
+    """Caso B -- llama a godel_active() real del módulo, sin wrapping.
+
+    Perdió el parámetro `vitality` en la versión 4.0.0: la máscara dejó de
+    ser un OR. El benchmark sigue teniendo sentido -- compara un umbral
+    ABSOLUTO (A, 0.42 fijo) contra uno ADAPTATIVO (B, el tercil de su
+    propia historia), y esa divergencia es la que motiva que C tenga
+    ambos."""
+    return godel_active(entropy, p66)
 
 
 @pytest.mark.parametrize(
-    "nombre, entropy, p90, vitality, kl, esperado_a, esperado_b, esperado_c, razon_c_esperada",
+    "nombre, entropy, p66, kl, esperado_a, esperado_b, esperado_c, razon_c_esperada",
     [
         # 1: entropía alta en términos absolutos, pero el régimen reciente
         # fue tan volátil (p90=0.70) que 0.55 no llega a cruzarlo -- B
         # (adaptativo puro) queda ciego acá. Solo A y C, vía la red de
         # seguridad legacy, lo detienen.
-        ("Ruido moderado alto", 0.55, 0.70, 3, 0.02, True, False, True, "legacy_entropy_threshold"),
+        ("Ruido moderado alto", 0.55, 0.70, 0.02, True, False, True, "legacy_entropy_threshold"),
         # 2: entropía baja en términos absolutos (0.35 < 0.42, A no lo ve),
         # pero el régimen reciente fue MUY estable (p90=0.30) -- 0.35 sí
         # rompe ese percentil. B y C lo detectan, A no.
-        ("Micro-ruptura de percentil local", 0.35, 0.30, 3, 0.02, False, True, True, "godel_active"),
-        ("Vitality Tesla 9 fuerza kill pese a entropía muy baja", 0.20, 0.50, 9, 0.01, False, True, True, "godel_active"),
+        ("Micro-ruptura de percentil local", 0.35, 0.30, 0.02, False, True, True, "godel_active"),
+        # El escenario "Vitality Tesla 9 fuerza kill pese a entropía muy
+        # baja" SE ELIMINÓ en la versión 4.0.0. Describía un caso que solo
+        # era posible con vitality calculada sobre n_events: bajo la
+        # definición del legacy, `vitality == 9` ES `entropy > p66`, así
+        # que entropía muy baja y vitality 9 no pueden coexistir. El
+        # escenario probaba una contradicción, no un caso límite.
         # 4: corregido -- ver nota arriba. KL=0.25 sí supera el umbral real.
-        ("Drift severo, KL sobre el umbral real", 0.30, 0.50, 2, 0.25, False, False, True, "drift_control"),
-        ("Régimen nominal, ningún caso dispara", 0.25, 0.60, 4, 0.01, False, False, False, "none"),
+        ("Drift severo, KL sobre el umbral real", 0.30, 0.50, 0.25, False, False, True, "drift_control"),
+        ("Régimen nominal, ningún caso dispara", 0.25, 0.60, 0.01, False, False, False, "none"),
     ],
 )
 def test_benchmark_abc_casos_limite_donde_las_3_logicas_divergen(
-    nombre, entropy, p90, vitality, kl, esperado_a, esperado_b, esperado_c, razon_c_esperada,
+    nombre, entropy, p66, kl, esperado_a, esperado_b, esperado_c, razon_c_esperada,
 ):
     a = _caso_a_legacy_fijo(entropy)
-    b = _caso_b_godel_puro(entropy, p90, vitality)
+    b = _caso_b_godel_puro(entropy, p66)
     resultado_c = compute_gold_score_bma(
         godel_score=0.8, te_score=0.8, backbone_score=0.8, asset="XAU",
-        entropy_shannon=entropy, p90_entropy=p90, vitality_tesla=vitality,
+        entropy_shannon=entropy, p66_entropy=p66,
         kl_divergence=kl,
     )
 
@@ -993,13 +1046,13 @@ def test_benchmark_abc_al_menos_un_escenario_donde_a_ve_y_b_no():
     # Confirma que existe divergencia real A>B, no solo B>=A siempre --
     # si este test fallara, "Caso A" sería estrictamente redundante.
     assert _caso_a_legacy_fijo(0.55) is True
-    assert _caso_b_godel_puro(0.55, p90=0.70, vitality=3) is False
+    assert _caso_b_godel_puro(0.55, p66=0.70) is False
 
 
 def test_benchmark_abc_al_menos_un_escenario_donde_b_ve_y_a_no():
     # Confirma la divergencia inversa -- ninguno de los 2 domina al otro.
     assert _caso_a_legacy_fijo(0.35) is False
-    assert _caso_b_godel_puro(0.35, p90=0.30, vitality=3) is True
+    assert _caso_b_godel_puro(0.35, p66=0.30) is True
 
 
 def test_benchmark_abc_c_nunca_dispara_menos_que_a_o_b_por_separado():
@@ -1008,18 +1061,17 @@ def test_benchmark_abc_c_nunca_dispara_menos_que_a_o_b_por_separado():
     # fallara, la síntesis de kill_signal tendría un caso donde perdió
     # cobertura respecto a sus propios componentes.
     escenarios = [
-        (0.55, 0.70, 3, 0.02), (0.35, 0.30, 3, 0.02), (0.20, 0.50, 9, 0.01),
-        (0.30, 0.50, 2, 0.25), (0.25, 0.60, 4, 0.01),
+        (0.55, 0.70, 0.02), (0.35, 0.30, 0.02),
+        (0.30, 0.50, 0.25), (0.25, 0.60, 0.01),
     ]
-    for entropy, p90, vitality, kl in escenarios:
+    for entropy, p66, kl in escenarios:
         a = _caso_a_legacy_fijo(entropy)
-        b = _caso_b_godel_puro(entropy, p90, vitality)
+        b = _caso_b_godel_puro(entropy, p66)
         c = compute_gold_score_bma(
-            0.8, 0.8, 0.8, "XAU", entropy_shannon=entropy, p90_entropy=p90,
-            vitality_tesla=vitality, kl_divergence=kl,
+            0.8, 0.8, 0.8, "XAU", entropy_shannon=entropy, p66_entropy=p66, kl_divergence=kl,
         ).kill_signal
         if a or b:
-            assert c is True, f"entropy={entropy} p90={p90} vit={vitality}: A={a} B={b} pero C=False"
+            assert c is True, f"entropy={entropy} p66={p66}: A={a} B={b} pero C=False"
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -1161,7 +1213,7 @@ def test_godel_p90_si_el_dia_entrara_en_su_ventana_el_umbral_cambiaria():
     assert con_el_dia.value > sin_el_dia.value, (
         "el día propio contamina el umbral contra el que se lo compara: "
         "un día que se autoevalúa empuja su propia vara hacia arriba")
-    assert godel_active(dia_atipico, sin_el_dia.value, vitality_tesla=3)
+    assert godel_active(dia_atipico, sin_el_dia.value)
 
 
 def test_godel_p90_el_desplazamiento_no_se_pierde_con_ventana_llena():
@@ -1257,22 +1309,20 @@ def test_godel_p90_devuelve_el_mismo_tipo_que_el_percentil_adaptativo():
 
 # ─── La máscara NO cambió ─────────────────────────────────────────────────
 
-def test_godel_active_conserva_su_firma_y_su_semantica():
-    """Este PR cambia CÓMO se calcula p90_entropy, no la máscara. La firma
-    de godel_active tiene que seguir siendo (entropy, p90, vitality) ->
-    bool: cambiarla rompería a todos sus llamadores."""
+def test_godel_active_tiene_la_firma_de_un_filtro_de_un_solo_termino():
+    """La versión 4.0.0 SÍ cambia la firma -- es el punto del cambio. Este
+    test la fija en su forma nueva: (entropía, umbral) -> bool. Y fija que
+    el parámetro no vuelva a llamarse p90: ese nombre describía un término
+    que nunca cambió un resultado."""
     import inspect
 
     firma = inspect.signature(godel_active)
-    assert list(firma.parameters) == [
-        "entropy_shannon", "p90_entropy", "vitality_tesla"]
-    assert isinstance(godel_active(1.0, 0.5, 3), bool)
+    assert list(firma.parameters) == ["entropy_shannon", "p66_entropy"]
+    assert isinstance(godel_active(1.0, 0.5), bool)
 
-    # El OR, intacto en sus cuatro combinaciones.
-    assert godel_active(1.0, 0.5, 3) is True    # solo entropía
-    assert godel_active(0.1, 0.5, 9) is True    # solo vitality
-    assert godel_active(1.0, 0.5, 9) is True    # ambas
-    assert godel_active(0.1, 0.5, 3) is False   # ninguna
+    assert godel_active(1.0, 0.5) is True     # sobre el tercil superior
+    assert godel_active(0.1, 0.5) is False    # debajo
+    assert godel_active(0.5, 0.5) is False    # en el borde: estricto
 
 
 # ─── Versionado del criterio ──────────────────────────────────────────────
@@ -1281,19 +1331,20 @@ def test_existe_version_del_criterio_y_dice_ventana_movil_de_252():
     """Un artefacto persistido con el criterio anterior tiene que poder
     DETECTARSE. Sin una versión, un p90 acumulado y uno móvil son dos
     floats indistinguibles."""
-    assert GODEL_CRITERIA_VERSION == "3.0.0-rolling_252d_vitality"
-    assert str(GODEL_ROLLING_WINDOW_DAYS) in GODEL_CRITERIA_VERSION
-    # Mayor, no menor: la 3.0.0 cambia el valor de vitality de días ya
-    # calculados, así que un artefacto 2.x no es comparable con uno 3.x.
-    assert GODEL_CRITERIA_VERSION.startswith("3.")
+    assert GODEL_CRITERIA_VERSION == "4.0.0-entropy_state_p66"
+    # Mayor, no menor: la 4.0.0 cambia de qué serie sale el umbral (tercil
+    # de entropía, no de n_events), así que un artefacto 3.x no es
+    # comparable con uno 4.x.
+    assert GODEL_CRITERIA_VERSION.startswith("4.")
+    assert str(int(GODEL_MASK_PERCENTILE)) in GODEL_CRITERIA_VERSION
 
 
 def test_la_version_no_entra_en_el_retorno_de_godel_active():
     """Deliberado: godel_active devuelve bool. Meterle la versión al
     retorno le cambiaría la firma a todos sus llamadores, que es
     exactamente lo que este PR no hace."""
-    assert godel_active(1.0, 0.5, 3) is True
-    assert not isinstance(godel_active(1.0, 0.5, 3), tuple)
+    assert godel_active(1.0, 0.5) is True
+    assert not isinstance(godel_active(1.0, 0.5), tuple)
 
 
 # ─── Fidelidad del port contra tools/measure_godel_samples.py ─────────────
@@ -1324,11 +1375,15 @@ def test_el_port_reproduce_dia_a_dia_el_modo_movil_del_tool():
 
     del_tool = tool.resolver_umbrales(
         serie, 1, n, mode=tool.PercentileMode.MOVIL,
-        window=GODEL_ROLLING_WINDOW_DAYS, p90_global_default=1.19,
+        window=GODEL_ROLLING_WINDOW_DAYS, umbral_global_default=1.19,
     )
 
     for i in range(1, n):
-        del_core = compute_godel_p90(list(entropy[:i]), global_default=1.19)
+        # compute_godel_p66 y no p90: desde la versión 4.0.0 el tool mide
+        # el percentil de la máscara (GODEL_MASK_PERCENTILE), que es el que
+        # usa producción. Un tool que midiera otro percentil mediría otra
+        # cosa sin que se note.
+        del_core = compute_godel_p66(list(entropy[:i]), global_default=1.19)
         assert del_core.value == pytest.approx(del_tool.por_dia[i], abs=1e-12), (
             f"día {i}: el port no reproduce el modo MOVIL del tool")
 
@@ -1625,3 +1680,264 @@ def test_ventana_movil_es_solo_el_recorte():
 
     with pytest.raises(ValueError, match="window"):
         _ventana_movil([1.0, 2.0], 0)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  entropy_state -- la Capa 1 (GODEL_CRITERIA_VERSION 4.0.0)
+#
+#  Los dos que sostienen el resto:
+#    · `test_entropy_state_no_mira_el_dia_que_clasifica` -- integridad
+#      temporal, verificada sobre la VENTANA recibida y no sobre el valor.
+#    · `test_la_distribucion_no_se_concentra_en_un_solo_estado` -- la
+#      prueba que habría detectado el 63%->11% de la implementación con
+#      n_events antes de que llegara a producción.
+# ══════════════════════════════════════════════════════════════════════════
+
+# ─── Integridad temporal ──────────────────────────────────────────────────
+
+def test_entropy_state_no_mira_el_dia_que_clasifica(monkeypatch):
+    """Se inspecciona la VENTANA que recibe np.percentile, no el estado que
+    sale. Un test sobre el valor podría pasar con la frontera rota: con 252
+    observaciones un día mueve el percentil muy poco, así que el número
+    seguiría cayendo en el mismo tercil casi siempre."""
+    import core.scoring as scoring
+
+    n = 400
+    # Todos distintos y crecientes: el día que se clasifica es el máximo, y
+    # si entrara en su ventana se vería sin ambigüedad.
+    serie = [float(i) for i in range(n)]
+
+    ventanas: list[list[float]] = []
+    real = scoring.np.percentile
+
+    def espia(a, q, *args, **kw):
+        ventanas.append(list(a))
+        return real(a, q, *args, **kw)
+
+    monkeypatch.setattr(scoring.np, "percentile", espia)
+    entropy_state(serie)
+
+    assert ventanas, "no llamó a np.percentile"
+    for ventana in ventanas:
+        assert serie[-1] not in ventana, "el día propio entró en su ventana"
+        assert max(ventana) == serie[-2], "la ventana no termina el día anterior"
+        assert len(ventana) == GODEL_ROLLING_WINDOW_DAYS
+
+
+def test_entropy_state_usa_las_ultimas_252_no_toda_la_historia(monkeypatch):
+    import core.scoring as scoring
+
+    serie = [float(i) for i in range(2000)]
+    ventanas: list[list[float]] = []
+    real = scoring.np.percentile
+    monkeypatch.setattr(
+        scoring.np, "percentile",
+        lambda a, q, *ar, **kw: (ventanas.append(list(a)), real(a, q, *ar, **kw))[1])
+
+    entropy_state(serie)
+
+    for ventana in ventanas:
+        assert ventana == serie[-1 - GODEL_ROLLING_WINDOW_DAYS:-1]
+
+
+# ─── Distribución: la prueba que habría detectado el 63%->11% ─────────────
+
+def test_la_distribucion_no_se_concentra_en_un_solo_estado():
+    """Un tercil sobre una serie CON DERIVA tiene que seguir repartiendo.
+    La implementación con n_events daba entre 63% y 11% de días en un solo
+    valor según el año; este test la habría puesto en rojo.
+
+    EL WARM-UP SE EXCLUYE, y esa exclusión es parte del test: los primeros
+    252 días no tienen ventana completa y `entropy_state` los devuelve como
+    ENTROPY_STATE_WARMUP (None), no como un estado. Contarlos metería días
+    sin medir dentro de una distribución de días medidos."""
+    rng = np.random.default_rng(3)
+    n = 1500
+    # Deriva descendente, la forma real de la entropía GDELT.
+    serie = [1.30 - 0.0002 * i + rng.normal(0, 0.10) for i in range(n)]
+
+    estados = [entropy_state(serie[:i + 1]) for i in range(n)]
+
+    # La exclusión, explícita y verificada -- no un filtro silencioso.
+    warmup = [e for e in estados if e is ENTROPY_STATE_WARMUP]
+    medidos = [e for e in estados if e is not ENTROPY_STATE_WARMUP]
+    assert len(warmup) == GODEL_ROLLING_WINDOW_DAYS
+    assert ENTROPY_STATE_WARMUP not in medidos, (
+        "un día sin ventana se coló en la distribución")
+    assert len(medidos) == n - GODEL_ROLLING_WINDOW_DAYS
+
+    conteo = {e: medidos.count(e) for e in (ENTROPY_STATE_LOW,
+                                           ENTROPY_STATE_MID,
+                                           ENTROPY_STATE_HIGH)}
+    total = len(medidos)
+    for estado, veces in conteo.items():
+        fraccion = 100.0 * veces / total
+        assert fraccion <= 60.0, (
+            f"el estado {estado} concentra {fraccion:.1f}% de los días: un "
+            f"tercil no puede quedar así ni con deriva")
+        assert fraccion >= 15.0, (
+            f"el estado {estado} aparece solo {fraccion:.1f}%: el tercil "
+            f"dejó de repartir")
+
+
+def test_sobre_una_serie_estacionaria_los_tres_estados_rondan_un_tercio():
+    """Sin deriva, un tercil bien calculado tiene que dar ~33% cada uno.
+    Es la contraprueba del anterior: fija que los límites de 60/15 no son
+    laxos porque el cálculo esté mal, sino porque la deriva desbalancea."""
+    rng = np.random.default_rng(11)
+    n = 2000
+    serie = list(rng.normal(1.0, 0.2, n))
+
+    medidos = [e for e in (entropy_state(serie[:i + 1]) for i in range(n))
+               if e is not ENTROPY_STATE_WARMUP]
+
+    for estado in (ENTROPY_STATE_LOW, ENTROPY_STATE_MID, ENTROPY_STATE_HIGH):
+        fraccion = 100.0 * medidos.count(estado) / len(medidos)
+        assert 25.0 <= fraccion <= 42.0, (
+            f"estado {estado}: {fraccion:.1f}%, lejos de un tercio")
+
+
+# ─── Warm-up: None, no un estado ──────────────────────────────────────────
+
+def test_sin_ventana_completa_no_hay_estado():
+    """`None`, no 0 ni 1. Un día de warm-up no está "bajo": no tiene estado,
+    porque no hay contra qué compararlo. Devolver un número mezclaría días
+    medidos con días adivinados en la misma columna."""
+    assert ENTROPY_STATE_WARMUP is None
+
+    for n in (0, 1, 2, 50, GODEL_ROLLING_WINDOW_DAYS):
+        serie = [float(i) for i in range(n)]
+        assert entropy_state(serie) is ENTROPY_STATE_WARMUP, (
+            f"con {n} observaciones no puede haber estado")
+
+    assert entropy_state(None) is ENTROPY_STATE_WARMUP
+    assert entropy_state([]) is ENTROPY_STATE_WARMUP
+
+
+def test_la_frontera_del_warmup_esta_en_252_dias_previos():
+    serie = [float(i) for i in range(400)]
+
+    # 252 elementos = 251 previos + el día: falta uno.
+    assert entropy_state(serie[:GODEL_ROLLING_WINDOW_DAYS]) is ENTROPY_STATE_WARMUP
+    # 253 elementos = 252 previos + el día: alcanza.
+    assert entropy_state(serie[:GODEL_ROLLING_WINDOW_DAYS + 1]) is not ENTROPY_STATE_WARMUP
+
+
+def test_ventana_menor_a_uno_es_error():
+    with pytest.raises(ValueError, match="window"):
+        entropy_state([1.0] * 500, window=0)
+
+
+# ─── Port del legacy ──────────────────────────────────────────────────────
+
+def test_los_terciles_son_los_del_legacy_33_y_66():
+    """gdelt_foundation.py::TESLA_PERCENTILE_THRESHOLDS = (33.0, 66.0)."""
+    assert ENTROPY_STATE_PERCENTILES == (33.0, 66.0)
+    assert GODEL_MASK_PERCENTILE == 66.0
+
+
+def test_la_comparacion_es_menor_o_igual_como_el_legacy():
+    """`3 if e <= p33 else (6 if e <= p66 else 9)`. El valor que cae
+    exactamente sobre p33 es BAJO, no medio."""
+    # 252 previos constantes en 1.0 -> p33 == p66 == 1.0.
+    previos = [1.0] * GODEL_ROLLING_WINDOW_DAYS
+
+    assert entropy_state(previos + [1.0]) is ENTROPY_STATE_LOW   # e <= p33
+    assert entropy_state(previos + [1.1]) is ENTROPY_STATE_HIGH  # e > p66
+
+
+def test_el_estado_reproduce_la_formula_del_legacy_sobre_su_ventana():
+    """Port verificado contra la fórmula literal, no contra una idea de
+    ella: se replica `quantile(0.33)/quantile(0.66)` sobre la misma ventana
+    y se compara estado por estado."""
+    rng = np.random.default_rng(5)
+    n = 600
+    serie = list(rng.normal(1.0, 0.25, n))
+
+    for i in range(GODEL_ROLLING_WINDOW_DAYS + 1, n):
+        ventana = serie[i - GODEL_ROLLING_WINDOW_DAYS:i]
+        e = serie[i]
+        p33 = float(np.percentile(ventana, 33.0))
+        p66 = float(np.percentile(ventana, 66.0))
+        esperado = (ENTROPY_STATE_LOW if e <= p33
+                    else ENTROPY_STATE_MID if e <= p66
+                    else ENTROPY_STATE_HIGH)
+        assert entropy_state(serie[:i + 1]) == esperado, f"día {i}"
+
+
+def test_entropy_state_no_decide_nada_de_trading():
+    """Función pura: mismos datos, mismo resultado, sin efectos. Si algún
+    día devuelve algo que se parece a una orden, la separación que este PR
+    introduce se perdió."""
+    serie = [float(i) for i in range(400)]
+    copia = list(serie)
+
+    a = entropy_state(serie)
+    b = entropy_state(serie)
+
+    assert a == b
+    assert serie == copia, "mutó su entrada"
+    assert a in (ENTROPY_STATE_LOW, ENTROPY_STATE_MID, ENTROPY_STATE_HIGH)
+
+
+# ─── El filtro pregunta lo que la Capa 1 responde ─────────────────────────
+
+def test_godel_active_es_exactamente_preguntar_si_el_estado_es_alto():
+    """LA EQUIVALENCIA QUE HACE COHERENTE LA SEPARACIÓN. La Capa 1 devuelve
+    el estado; el filtro pregunta si es HIGH. Si estas dos formas dejaran
+    de coincidir, habría dos definiciones del tercil superior y el sistema
+    podría operar con una mientras se reporta la otra."""
+    rng = np.random.default_rng(7)
+    n = 800
+    serie = list(rng.normal(1.0, 0.25, n))
+
+    comprobados = 0
+    for i in range(GODEL_ROLLING_WINDOW_DAYS + 1, n):
+        historia = serie[:i]          # sin el día i
+        estado = entropy_state(serie[:i + 1])
+        umbral = compute_godel_p66(historia, global_default=1.19).value
+
+        assert (estado is ENTROPY_STATE_HIGH) == godel_active(serie[i], umbral), (
+            f"día {i}: estado={estado} pero el filtro dice "
+            f"{godel_active(serie[i], umbral)}")
+        comprobados += 1
+
+    assert comprobados > 500, "el barrido no cubrió suficientes días"
+
+
+def test_compute_godel_p66_pide_el_percentil_de_la_mascara():
+    """Una sola fuente de verdad para el percentil: si alguien cambia
+    GODEL_MASK_PERCENTILE, el umbral lo sigue."""
+    import core.scoring as scoring
+
+    pedidos = []
+    real = scoring.compute_adaptive_percentile
+
+    def espia(history, percentile, global_default, **kw):
+        pedidos.append(percentile)
+        return real(history, percentile, global_default, **kw)
+
+    original = scoring.compute_adaptive_percentile
+    scoring.compute_adaptive_percentile = espia
+    try:
+        compute_godel_p66([float(i) for i in range(500)], global_default=1.19)
+    finally:
+        scoring.compute_adaptive_percentile = original
+
+    assert pedidos == [GODEL_MASK_PERCENTILE]
+
+
+def test_compute_godel_p66_recorta_con_el_mecanismo_compartido():
+    """Port, don't rewrite: el mismo `_ventana_movil` que usan las otras
+    ramas, verificado sobre el AST."""
+    import ast
+    import inspect
+
+    import core.scoring as scoring
+
+    arbol = ast.parse(inspect.getsource(scoring))
+    fn = next(n for n in ast.walk(arbol)
+              if isinstance(n, ast.FunctionDef) and n.name == "compute_godel_p66")
+
+    assert any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+               and n.func.id == "_ventana_movil" for n in ast.walk(fn))

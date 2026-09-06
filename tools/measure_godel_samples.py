@@ -71,6 +71,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from core.scoring import (  # noqa: E402
+    GODEL_MASK_PERCENTILE,
     compute_adaptive_percentile,
     compute_vitality_tesla,
     godel_active,
@@ -135,14 +136,19 @@ class PercentileMode:
 #: Ventana de los modos móviles. 252 = días hábiles de un año.
 ROLLING_WINDOW_DEFAULT = 252
 
-#: Default global para el modo ZSCORE. El `--p90-global-default` del usuario
+#: Default global para el modo ZSCORE. El `--umbral-global-default` del usuario
 #: está en unidades de entropía y no sirve en espacio z, así que hace falta
-#: uno propio: Φ⁻¹(0.90) = 1.2815515655, el percentil 90 de la normal
-#: estándar. NO es un número inventado — es una constante matemática,
-#: verificada por bisección sobre la CDF (Φ(1.2815515655) = 0.90000000).
-#: Es el valor correcto si la entropía normalizada fuera normal; que lo sea
-#: o no es precisamente una de las cosas que la comparación deja ver.
-ZSCORE_P90_GLOBAL_DEFAULT = 1.2815515655
+#: uno propio: Φ⁻¹(GODEL_MASK_PERCENTILE/100). Con el percentil de la máscara
+#: en 66 eso es Φ⁻¹(0.66) = 0.4124631294. NO es un número inventado — es una
+#: constante matemática, verificada por bisección sobre la CDF
+#: (Φ(0.4124631294) = 0.66000000). Es el valor correcto si la entropía
+#: normalizada fuera normal; que lo sea o no es precisamente una de las cosas
+#: que la comparación deja ver.
+#:
+#: Cambió en la versión 4.0.0 junto con el percentil de la máscara: era
+#: Φ⁻¹(0.90) = 1.2815515655 cuando el tool medía un P90. Un tool que mide un
+#: percentil distinto del que usa producción mide otra cosa y no se nota.
+ZSCORE_UMBRAL_GLOBAL_DEFAULT = 0.4124631294
 
 
 class VerdictLevel:
@@ -161,9 +167,9 @@ class FoldMeasurement:
     n_train_days: int
     val_start: Optional[str]
     val_end: Optional[str]
-    p90_used: float
-    p90_source: str
-    p90_n_obs: int          # cuántos días de TRAIN alimentaron el P90
+    umbral_used: float
+    umbral_source: str
+    umbral_n_obs: int          # cuántos días de TRAIN alimentaron el P90
     n_total: int            # candidatos en validación (los que tienen i >= lookback)
     n_post_mask: int        # los que además pasan la máscara Gödel
     n_post_propia: int      # de los post-máscara, con entropía DEL PROPIO DÍA
@@ -532,8 +538,8 @@ def _mediana(valores: Sequence[float], respaldo: float) -> float:
 
 def resolver_umbrales(
     serie: SerieDerivada, val_ini: int, val_fin: int, *,
-    mode: str, window: int, p90_global_default: float,
-    z_global_default: float = ZSCORE_P90_GLOBAL_DEFAULT,
+    mode: str, window: int, umbral_global_default: float,
+    z_global_default: float = ZSCORE_UMBRAL_GLOBAL_DEFAULT,
 ) -> Umbrales:
     """
     Calcula el umbral de entropía de cada día de validación según el modo.
@@ -563,7 +569,8 @@ def resolver_umbrales(
         # Comportamiento de HOY, sin un solo cambio.
         historia = [float(v) for v in serie.entropy[:val_ini] if not math.isnan(v)]
         p = compute_adaptive_percentile(
-            history=historia, percentile=90.0, global_default=p90_global_default,
+            history=historia, percentile=GODEL_MASK_PERCENTILE,
+            global_default=umbral_global_default,
         )
         return Umbrales(
             por_dia={i: p.value for i in range(val_ini, val_fin)},
@@ -580,13 +587,13 @@ def resolver_umbrales(
             # de un día es la diferencia entre medir y hacer trampa.
             historia = [float(v) for v in serie.entropy[ini:i] if not math.isnan(v)]
             ultimo = compute_adaptive_percentile(
-                history=historia, percentile=90.0,
-                global_default=p90_global_default,
+                history=historia, percentile=GODEL_MASK_PERCENTILE,
+                global_default=umbral_global_default,
             )
             por_dia[i] = ultimo.value
         return Umbrales(
             por_dia=por_dia,
-            representativo=_mediana(list(por_dia.values()), p90_global_default),
+            representativo=_mediana(list(por_dia.values()), umbral_global_default),
             fuente=getattr(ultimo.source, "name", "GLOBAL") if ultimo else "GLOBAL",
             n_obs=ultimo.n_obs if ultimo else 0,
         )
@@ -598,7 +605,8 @@ def resolver_umbrales(
     mu, sigma, z = _zscores_causales(serie.entropy, window)
     historia_z = [float(v) for v in z[:val_ini] if not math.isnan(v)]
     p = compute_adaptive_percentile(
-        history=historia_z, percentile=90.0, global_default=z_global_default,
+        history=historia_z, percentile=GODEL_MASK_PERCENTILE,
+        global_default=z_global_default,
     )
     por_dia = {}
     for i in range(val_ini, val_fin):
@@ -606,14 +614,14 @@ def resolver_umbrales(
             # Sin ventana utilizable, no se inventa un umbral: se usa el
             # global en unidades de entropía, que es lo que haría el modo
             # acumulado en frío.
-            por_dia[i] = p90_global_default
+            por_dia[i] = umbral_global_default
             continue
         por_dia[i] = float(mu[i]) + p.value * float(sigma[i])
     return Umbrales(
         por_dia=por_dia,
         # Mediana de los umbrales YA devueltos a unidades de entropía. El
         # percentil en espacio z (p.value) no va acá: es de otra escala.
-        representativo=_mediana(list(por_dia.values()), p90_global_default),
+        representativo=_mediana(list(por_dia.values()), umbral_global_default),
         fuente=getattr(p.source, "name", str(p.source)), n_obs=p.n_obs,
     )
 
@@ -623,7 +631,7 @@ def measure_folds(
     *,
     lookback: int,
     n_folds: int,
-    p90_global_default: float,
+    umbral_global_default: float,
     percentile_mode: str = PercentileMode.ACUMULADO,
     rolling_window: int = ROLLING_WINDOW_DEFAULT,
 ) -> list[FoldMeasurement]:
@@ -642,7 +650,7 @@ def measure_folds(
         # la frontera del fold sin que eso sea fuga.
         umbrales = resolver_umbrales(
             serie, val_ini, val_fin, mode=percentile_mode,
-            window=rolling_window, p90_global_default=p90_global_default,
+            window=rolling_window, umbral_global_default=umbral_global_default,
         )
 
         n_total = n_post = n_up = n_down = 0
@@ -659,26 +667,24 @@ def measure_folds(
             umbral = umbrales.por_dia[i]
             if not godel_active(
                 entropy_shannon=float(serie.entropy[i]),
-                p90_entropy=umbral,
-                vitality_tesla=int(serie.vitality[i]),
+                p66_entropy=umbral,
             ):
                 continue
             n_post += 1
-            # DESGLOSE DE LAS DOS RAMAS DEL OR. La máscara es
-            # (entropy >= P90) OR (vitality == 9), y sobre los datos reales
-            # vitality participa en el 93% de los disparos de BTC mientras
-            # la entropía pura aporta el 6.7%. Sin este desglose, comparar
-            # criterios de percentil es comparar el 7% del problema y creer
-            # que se comparó todo. La decisión la sigue tomando
-            # godel_active(); acá solo se mira cuál rama la sostuvo.
-            ent = float(serie.entropy[i]) >= umbral
-            vit = int(serie.vitality[i]) == 9
-            if ent and vit:
-                n_ambas += 1
-            elif ent:
-                n_solo_ent += 1
-            else:
-                n_solo_vit += 1
+            # DESGLOSE DE LAS RAMAS: DESDE LA VERSIÓN 4.0.0 HAY UNA SOLA.
+            # La máscara era `(entropy >= P90) OR (vitality == 9)` y este
+            # desglose existía para ver cuál rama la sostenía -- fue lo que
+            # mostró que vitality aportaba el 93% de los disparos de BTC.
+            # Ese desglose cumplió su función: llevó a descubrir que la
+            # rama de vitality usaba n_events, una desviación del legacy, y
+            # a sacarla del filtro. Hoy la máscara es `entropy > p66` y
+            # todos los disparos son de entropía por construcción.
+            #
+            # Los tres campos se conservan para no romper el contrato del
+            # JSON, y siguen sumando n_post_mask. Que solo_vitality y
+            # ambas queden en cero es información, no un bug: es la forma
+            # que tiene el reporte de decir que ya no hay un OR.
+            n_solo_ent += 1
             # La muestra entró a la máscara; ahora, ¿entró con entropía
             # propia o con una arrastrada de un día GDELT anterior?
             if bool(serie.forward_filled[i]):
@@ -695,9 +701,9 @@ def measure_folds(
             n_train_days=val_ini,
             val_start=str(serie.fechas[val_ini]) if val_ini < n else None,
             val_end=str(serie.fechas[val_fin - 1]) if val_fin - 1 < n else None,
-            p90_used=round(umbrales.representativo, 6),
-            p90_source=umbrales.fuente,
-            p90_n_obs=umbrales.n_obs,
+            umbral_used=round(umbrales.representativo, 6),
+            umbral_source=umbrales.fuente,
+            umbral_n_obs=umbrales.n_obs,
             percentile_mode=percentile_mode,
             n_total=n_total,
             n_post_mask=n_post,
@@ -793,7 +799,7 @@ def measure_asset(
     ohlcv_root: Path,
     lookback: int,
     n_folds: int,
-    p90_global_default: float,
+    umbral_global_default: float,
     patterns: Sequence[str] = DEFAULT_OHLCV_PATTERNS,
     percentile_mode: str = PercentileMode.ACUMULADO,
     rolling_window: int = ROLLING_WINDOW_DEFAULT,
@@ -874,7 +880,7 @@ def measure_asset(
     serie = build_serie_derivada(resultado)
     folds = measure_folds(
         serie, lookback=lookback, n_folds=n_folds,
-        p90_global_default=p90_global_default,
+        umbral_global_default=umbral_global_default,
         percentile_mode=percentile_mode, rolling_window=rolling_window,
     )
     oof = sum(f.n_post_mask for f in folds)
@@ -992,7 +998,7 @@ def render_text(mediciones: Sequence[AssetMeasurement], *, lookback: int) -> str
                 out.append(
                     f"  {f.fold:>4}  {f.n_train_days:>5}  "
                     f"{str(f.val_start):>10}..{str(f.val_end):<10}  "
-                    f"{f.p90_used:>7.4f}  {f.n_total:>5}  {f.n_post_mask:>6}  "
+                    f"{f.umbral_used:>7.4f}  {f.n_total:>5}  {f.n_post_mask:>6}  "
                     f"{f.n_post_propia:>6}  {f.n_post_arrastrada:>6}  "
                     f"{f.tasa_disparo * 100:>4.1f}%  {f.n_solo_entropia:>5}  "
                     f"{f.n_solo_vitality:>5}  {f.n_ambas_ramas:>5}  "
@@ -1046,7 +1052,7 @@ def build_parser() -> argparse.ArgumentParser:
                         f"(_LOOKBACK_DEFAULT del legacy).")
     p.add_argument("--n-folds", type=int, default=5,
                    help="Folds walk-forward de ventana expansiva. Default 5.")
-    p.add_argument("--p90-global-default", type=float, required=True,
+    p.add_argument("--umbral-global-default", type=float, required=True,
                    help="Default global del P90 para cold-start. SIN valor "
                         "por defecto a propósito: compute_adaptive_percentile() "
                         "documenta que para P90 no hay default legacy "
@@ -1097,7 +1103,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             measure_asset(
                 a, ohlcv_root=root, lookback=args.lookback,
                 n_folds=args.n_folds,
-                p90_global_default=args.p90_global_default,
+                umbral_global_default=args.umbral_global_default,
                 patterns=args.ohlcv_pattern,
                 percentile_mode=modo, rolling_window=args.rolling_window,
             )
