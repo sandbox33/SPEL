@@ -66,6 +66,21 @@ entorno desde el día uno en el código nuevo.
 GDELT real, `core/scoring.py` calcula un Gold Score real a partir de eso,
 con un test que corre en CI y pasa.
 
+> **🔵 FASE 1 CERRADA — 4-sep-2026, con resultado NEGATIVO medido.** El criterio de
+> arriba se cumplió en su parte de pipeline: ingestion GDELT y OHLCV reales, scoring
+> corriendo, 661 tests en CI. `gold_score` sigue siendo `None` por diseño (le faltan
+> inputs que ningún módulo produce todavía — ver `GOLD_SCORE_BLOCKED_REASON`), así que
+> esa parte del criterio no se cumplió y no se va a forzar.
+>
+> Lo que cerró la fase no fue el checklist sino su pregunta de fondo: **la máscara
+> Gödel no discrimina dirección** (p = 0,68 en BTC, 0,42 en XAU, con n de 1.211 y 823
+> — o sea, con potencia). Sí discrimina magnitud en BTC (ratio 1,246, p = 3,4×10⁻⁹).
+> Ver la sección de Fase 2, reorientada por ese resultado, y `decision-log.md` para el
+> método completo.
+>
+> Cerrada ≠ exitosa. El pipeline es correcto y está medido; la hipótesis que ese
+> pipeline existía para probar, no.
+
 ### Estado real, auditado (no estimado) — post-patch 0017
 
 **`core/scoring.py`: cumplido y más.** 8 funciones puras, cada una auditada
@@ -78,24 +93,45 @@ signals cuya prioridad se confirmó empíricamente), classify_gdelt_event,
 compute_adaptive_percentile. 201 tests, benchmark A/B/C entre las 3
 lógicas de kill signal.
 
-**`ingestion/`: parcial.** DerivAdapter con fetch_async() nativo (la
-trampa de reentrancia de asyncio.run() documentada en sesiones
-anteriores, resuelta y verificada con contador real). **GDELT: 0%
-portado.** Esto NO es un descuido — es el bloqueante real del criterio
-de "terminado" de esta fase. `gdelt_foundation.py` (900 líneas),
-`spel_bulk_harvester.py` (1083), `spel_ingest_incremental.py` (518) no
-tienen equivalente en el repo nuevo todavía.
+**`ingestion/`: portado y en uso.** DerivAdapter con fetch_async() nativo
+(la trampa de reentrancia de asyncio.run() documentada en sesiones
+anteriores, resuelta y verificada con contador real), TwelveDataAdapter
+con fixtures de capturas reales, y el contrato de datos OHLCV.
+
+**~~GDELT: 0% portado.~~ CORREGIDO el 6-sep — la afirmación era falsa.**
+El pipeline existe, corre y produjo los datos con los que se cerró Fase 1:
+`ingestion/gdelt.py` (223 líneas), `gdelt_aggregation.py` (170) y
+`gdelt_series.py` (167) — descarga, agregación diaria por activo y
+persistencia JSONL, 41 tests. `ingestion/training_dataset.py` une esa
+serie con el OHLCV. La entropía histórica de BTC y XAU (3.998 días por
+activo) se importó con `tools/import_gdelt_entropy.py`.
+
+Lo que sigue sin portarse de esa familia es el harvester masivo
+(`spel_bulk_harvester.py`, 1083 líneas, corre sobre BigQuery — descartado
+por costo) y la ingestion a nivel de evento individual que
+`compute_mass_panic_index` necesitaría para su fórmula legacy original.
+Eso es un subconjunto, no el pipeline entero.
 
 **`execution/` + `governance/`:** circuit_breaker, execution_guard,
 secrets (detección de entorno real, no rutas fijas), persistence (4
 streams, con el mismo fix de detección de entorno tras un hallazgo de
 auditoría — DRIVE_ROOT estaba hardcodeado, corregido).
 
-**Orquestador: 0% portado.** `spel_orchestrator_v10.py` (735 líneas) es
-el main loop real del legacy — corre BMA, exporta JSON de estado,
-watchdog. No existe versión nueva. `.github/workflows/tests.yml`
-corre la suite en cada push, pero no orquesta nada del sistema todavía
-— es CI, no el orquestador de trading.
+**~~Orquestador: 0% portado.~~ CORREGIDO el 6-sep — la afirmación era
+falsa.** `orchestration/cycle.py` (266 líneas, 19 tests) corre el ciclo de
+scoring sobre los 5 activos con clasificación GDELT: vitality_tesla,
+nash_frozen_7d y godel_active, con el criterio sellado en
+`godel_criteria_version`.
+
+Lo que NO tiene todavía, y es lo que distingue "hay orquestador" de "hay
+main loop": no exporta JSON de estado, no tiene watchdog, no calcula
+`gold_score` (bloqueado por inputs que no existen — ver
+`GOLD_SCORE_BLOCKED_REASON`) y nada lo dispara periódicamente. Del
+`spel_orchestrator_v10.py` legacy (735 líneas) está portada la parte de
+scoring, no la de operación continua.
+
+`.github/workflows/tests.yml` corre la suite en cada push, pero no
+orquesta nada del sistema — es CI, no el orquestador de trading.
 
 **Dashboard: 0% portado, a propósito.** Los 8 archivos de UI legacy
 (main_ui_vFinal.py, dashboard_fx.py, spel_hud.py, spel_graph_tab.py,
@@ -106,27 +142,56 @@ plataforma actuales (Android, Colab+Drive). No se portan — Fase 3 ya
 decidía construir algo nuevo y más simple, no re-crear estos 8
 archivos.
 
-## Fase 2 — Diagnosticar el modelo antes de portarlo ciego (esta semana)
+## Fase 2 — REORIENTADA (6-sep-2026): dimensionamiento, no dirección
 
-La precisión de validación en ~0.50 no se hereda al código nuevo sin
-entender por qué pasó. Tres hipótesis a descartar, en este orden (cada una
-es una prueba de 15-30 minutos, no una investigación abierta):
-1. Fuga de horizonte en las features (¿alguna columna usa información del
-   futuro respecto al target?)
-2. Arquitectura insuficiente para la señal (64 hidden units, 1 capa — ¿da
-   más que ruido con datos reales, no sintéticos?)
-3. La señal no está en esas 20 columnas con ese lookback — la hipótesis
-   más incómoda, y la que hay que descartar con datos reales, no evitar.
+**La hipótesis 3 quedó confirmada, con datos reales.** Este plan listaba tres
+hipótesis para explicar la accuracy de ~0.50, y la tercera —"la señal no
+está ahí"— era la más incómoda. La validación del 4-sep la contestó, y no
+hizo falta entrenar nada para hacerlo.
 
-**Criterio de terminado**: un diagnóstico con causa identificada y evidencia
-(no "probablemente es X"), antes de escribir una línea de `execution/`.
+Medido sobre datos reales, criterio `4.0.0-entropy_state_p66`, con `n` post-máscara
+de **1.211** (BTC, 5/5 folds) y **823** (XAU, 4/5) — o sea con potencia suficiente,
+no por falta de muestras:
 
-**Estado: no arrancó.** Este es el siguiente paso genuino del plan — no
-más funciones de scoring, no el dashboard, no GDELT todavía. Necesita
-datos reales (no sintéticos) para las 3 hipótesis, lo cual a su vez
-depende parcialmente de que exista algo de ingestion GDELT real
-(Fase 1 incompleta) o de reusar el dataset legacy ya generado, si
-sigue siendo válido — a confirmar antes de arrancar.
+| | dirección (chi²) | magnitud (Mann-Whitney) |
+|---|---|---|
+| BTC | 51,81% vs 52,53%, **p = 0,68** | ratio **1,246**, **p = 3,4×10⁻⁹** |
+| XAU | 50,98% vs 52,60%, **p = 0,42** | ratio 1,115, p = 0,56 |
+
+**La máscara no discrimina dirección. Sí discrimina magnitud, y solo en BTC.**
+Coincide con la literatura sobre índices de incertidumbre basados en noticias, que
+predicen magnitud y no signo (el EPU correlaciona 0,73 con el VIX). Detalle completo
+en `decision-log.md`.
+
+### Qué cambia en el plan
+
+**El modelo NO debe ser un clasificador direccional filtrado por entropía.** Esa era
+la arquitectura implícita: entrenar un LSTM para predecir el signo del retorno, usando
+la máscara Gödel para quedarse con los días "predecibles". La medición dice que esos
+días no son direccionalmente más predecibles que el resto.
+
+**La vía con fundamento medido es dimensionamiento de posición.** Un régimen que
+multiplica la volatilidad por 1,25 es información accionable para decidir *cuánto*
+arriesgar. No lo es para decidir *de qué lado*.
+
+Eso reordena lo que viene: la pregunta ya no es "¿qué arquitectura predice mejor el
+signo?" sino **"¿qué métrica valida un modelo de dimensionamiento?"** — porque la
+accuracy direccional deja de aplicar y no hay reemplazo obvio. Esa pregunta hay que
+contestarla antes de escribir código.
+
+**Advertencia sobre el `n`:** 1.211 y 823 se midieron para una pregunta direccional
+(binomial sobre aciertos, +5pp sobre 0,50). Una pregunta sobre magnitud tiene otra
+potencia y otro umbral. **El `n` no se hereda entre preguntas distintas** — hay que
+volver a dimensionarlo.
+
+**Criterio de terminado (nuevo)**: una métrica de validación definida y justificada
+para dimensionamiento, con su `n` mínimo calculado, antes de escribir una línea de
+trainer o de `execution/`.
+
+**Lo que sigue siendo válido del diagnóstico original:** las hipótesis 1 y 2 (fuga de
+horizonte, arquitectura insuficiente) nunca se descartaron formalmente. Ya no bloquean
+—porque la vía direccional se abandona— pero si alguna vez se retoma un modelo
+direccional, siguen pendientes.
 
 ### Los checkpoints legacy NO son base operativa (2026-08-24)
 
@@ -213,13 +278,13 @@ DESGLOSADA, porque la mayoría de esas líneas no debían portarse nunca:
 
 | Categoría | Líneas legacy | Decisión |
 |---|---:|---|
-| GDELT / ingestion de datos | 5,773 | Pendiente — bloqueante real de Fase 1 |
+| GDELT / ingestion de datos | 5,773 | **Portado lo que se usa** — pipeline completo (descarga, agregación, persistencia, join). Sin portar: harvester BigQuery e ingestion a nivel de evento |
 | Dashboard / UI / Terminal | 7,020 | **No se porta** — 100% Streamlit, fuera de plataforma. Fase 3 construye otra cosa |
 | Auditoría / guardianes / monitoreo | 4,371 | No planeado para F1-F4 |
-| ML / entrenamiento | 4,303 | Bloqueado por Fase 2 |
+| ML / entrenamiento | 4,303 | Bloqueado por Fase 2, y **reorientado**: la vía direccional quedó descartada con medición (6-sep) |
 | Scoring / matemática | 3,868 | Mayormente portado (`core/scoring.py`) |
 | Setup / infra (Colab, Drive, Telegram) | 2,886 | Reemplazado por detección de entorno (patrón `secrets.py`) |
-| Orquestación / main loop | 2,818 | Pendiente — 0% portado |
+| Orquestación / main loop | 2,818 | **Parcial** — `orchestration/cycle.py` corre el ciclo de scoring; falta operación continua (watchdog, export de estado, disparo periódico) |
 
 **Terminal institucional:** los 8 archivos de dashboard legacy
 (`main_ui_vFinal.py`, `dashboard_fx.py`, `spel_hud.py`,

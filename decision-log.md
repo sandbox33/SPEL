@@ -649,6 +649,75 @@ distribución de estados.
 
 ---
 
+## 2026-09-04 — La máscara Gödel no discrimina dirección. Fase 1 cierra con resultado negativo
+
+**Fuente:** validación sobre datos reales, medida el 4-sep-2026 con el criterio
+`4.0.0-entropy_state_p66`. `n` post-máscara: **1.211** en BTC (5/5 folds estables) y **823** en
+XAU (4/5). Los dos superan el umbral de `DEFENDIBLE`, así que el resultado **no** es "no había
+muestras": es un negativo medido con potencia suficiente.
+
+### Dirección — no discrimina
+
+Chi-cuadrado, tasa de aciertos direccionales dentro vs. fuera del régimen:
+
+| activo | dentro del régimen | fuera | p |
+|---|---|---|---|
+| BTC | 51,81% [49,14–54,47] | 52,53% [50,79–54,26] | **0,68** |
+| XAU | 50,98% [47,78–54,18] | 52,60% [50,58–54,61] | **0,42** |
+
+Los intervalos de confianza se solapan casi por completo, y en los dos activos la tasa *dentro*
+del régimen es **más baja** que fuera. Autocorrelación de retornos en BTC: −0,028 dentro y
+−0,026 fuera — indistinguibles.
+
+### Magnitud — sí discrimina, y solo en BTC
+
+Mann-Whitney sobre la magnitud de los retornos:
+
+| activo | ratio de volatilidad | p |
+|---|---|---|
+| BTC | 1,246 | **3,4×10⁻⁹** |
+| XAU | 1,115 | 0,56 |
+
+En BTC el efecto es grande y la significancia no deja lugar a duda. En XAU el ratio apunta en la
+misma dirección pero no alcanza significancia.
+
+### Interpretación: la hipótesis original estaba mal formulada
+
+Esto **coincide con la literatura** sobre índices de incertidumbre construidos a partir de
+noticias: predicen magnitud, no signo. El EPU (Economic Policy Uncertainty) correlaciona 0,73
+con el VIX, que es un índice de volatilidad, no de dirección.
+
+Dicho de otro modo: la entropía geopolítica de GDELT mide **cuánta turbulencia hay**, no **hacia
+dónde va el precio**. Pedirle que filtre días direccionalmente predecibles era pedirle algo que
+ese tipo de índice no hace. El resultado negativo no invalida la señal — invalida el uso que se
+le estaba dando.
+
+### Consecuencia para Fase 2
+
+La vía con fundamento medido es **dimensionamiento de posición**, no clasificación direccional
+filtrada por entropía. Un régimen que multiplica la volatilidad por 1,25 es información
+accionable para decidir *cuánto* arriesgar; no lo es para decidir *de qué lado*. Reflejado en
+`BLUEPRINT.md`.
+
+### Nota metodológica: el umbral de dos colas
+
+`OOF_MIN_DEFENDIBLE = 620` corresponde a una prueba de **una cola** (H1 unilateral, "el edge es
+positivo"). El equivalente de **dos colas** —que es el que corresponde para auditoría, cuando no
+se fija de antemano el signo del edge— es **786** con el mismo método (binomial exacto, alfa
+0,05, potencia 80%, +5pp sobre 0,50).
+
+> **Recalculado, no citado.** El número que suele circular para dos colas es 783, que sale de la
+> **aproximación normal**; esa misma aproximación da 616 para una cola, no 620. La diferencia no
+> es un error: es que 620 salió del binomial exacto y 783 de la normal, y emparejarlos mezcla dos
+> métodos. Los pares consistentes son **620/786** (exacto) o **616/783** (normal).
+
+Los dos activos superan ambos umbrales (1.211 y 823 contra 786), así que la distinción **no
+cambia este veredicto**. Sí cambiaría el de una corrida futura cuyo OOF caiga entre 620 y 785.
+La constante no se movió: cambiar un umbral de veredicto es una decisión de criterio con su
+propia medición, no un ajuste de documentación.
+
+---
+
 ## Principios que se sostuvieron toda la sesión
 
 - Ningún número entra sin fuente verificada contra el código real (no contra memoria de sesiones anteriores, no contra texto pegado sin auditar).
