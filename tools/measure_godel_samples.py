@@ -5,16 +5,17 @@ Mide cuántas muestras sobreviven la máscara Gödel. NO entrena nada.
 
 LA PREGUNTA QUE CONTESTA, y por qué es la primera que hay que contestar:
 el proyecto entrena sobre un subconjunto filtrado — solo los días donde
-`(entropy_shannon >= P90) OR (vitality_tesla == 9)`. Nadie midió nunca
-cuántos días sobreviven ese filtro. Sin ese número, ninguna comparación de
+`entropy_shannon > p66_entropy`, o sea los del tercil superior de entropía
+(GODEL_CRITERIA_VERSION 4.0.0). Nadie midió nunca cuántos días sobreviven
+ese filtro. Sin ese número, ninguna comparación de
 modelos es defendible: un modelo que "mejora" sobre 40 muestras de
 validación no mejoró nada, y no hay forma de saberlo sin contar primero.
 Este tool cuenta. La decisión de entrenar o no viene después, con el número
 en la mano.
 
 REGLA DE INTEGRIDAD TEMPORAL — NO NEGOCIABLE:
-el P90 se recalcula EN CADA FOLD usando solo los días anteriores al inicio
-de su ventana de validación. Nunca sobre el dataset completo. Ese fue
+el umbral se recalcula EN CADA FOLD usando solo los días anteriores al
+inicio de su ventana de validación. Nunca sobre el dataset completo. Ese fue
 exactamente el leakage que invalidó el trabajo anterior: un umbral que vio
 el futuro selecciona las muestras "difíciles" con información que en
 producción no existe, y el resultado se ve bien y no significa nada.
@@ -93,7 +94,34 @@ LOOKBACK_DEFAULT = 63
 #:       (binomial exacto).
 #: 100 = primer n cuyo IC 95% no cruza 0.50.
 #:  20 = mínimo por clase para que el desbalance no domine la métrica.
+#:
+#: 620 ES DE UNA COLA, y eso importa para leer el veredicto. Corresponde a
+#: H1 unilateral ("el edge es POSITIVO"), alfa 0.05. La prueba de DOS
+#: COLAS —que es la que corresponde cuando no se fija de antemano el signo
+#: del edge, o sea la situación de auditoría— pide **786** con el mismo
+#: método (binomial exacto, alfa 0.05, potencia 80%, +5pp sobre 0.50).
+#:
+#: Recalculado acá y no citado: con la aproximación normal los mismos
+#: parámetros dan 616 y 783, y ese 783 es el número que suele circular. La
+#: diferencia con 786 no es un error de nadie: es que 620 salió del
+#: binomial exacto y 783 de la aproximación normal. Emparejar uno con otro
+#: sería mezclar dos métodos. Los pares consistentes son 620/786 (exacto)
+#: o 616/783 (normal).
+#:
+#: PARA AUDITORÍA APLICA EL DE DOS COLAS (786). La constante NO se cambia
+#: en este PR a propósito: mover un umbral de veredicto es una decisión de
+#: criterio con su propia medición, no un ajuste de documentación. Lo que
+#: se registra acá es que un OOF entre 620 y 785 alcanza el veredicto
+#: DEFENDIBLE con el criterio unilateral y NO lo alcanzaría con el
+#: bilateral. Medición del 4-sep-2026: BTC n=1211 y XAU n=823 superan
+#: ambos umbrales, así que la distinción no cambia ese veredicto -- pero
+#: sí cambiaría el de una corrida futura que caiga en esa franja.
 OOF_MIN_DEFENDIBLE = 620
+
+#: El equivalente bilateral de OOF_MIN_DEFENDIBLE. Documentado y no usado:
+#: existe para que la distinción esté escrita en el código y no solo en el
+#: decision-log. Ver el comentario de arriba.
+OOF_MIN_DEFENDIBLE_DOS_COLAS = 786
 OOF_MIN_PARA_CORRER = 150
 FOLD_MIN_N = 100
 FOLD_MIN_CLASE = 20
@@ -110,7 +138,7 @@ class PercentileMode:
     de 284 (BTC) y 68 (XAU), y el diagnóstico mostró que la causa no es
     escasez de señal sino un umbral inalcanzable. La entropía deriva a la
     baja de forma monótona, y un percentil ACUMULADO arrastra la cola de
-    2015-2018 para siempre: en XAU, el P90 de cuatro años consecutivos queda
+    2015-2018 para siempre: en XAU, el umbral de cuatro años consecutivos queda
     por debajo del umbral global, y quedan 1.077 días recientes sin una sola
     muestra en ambos activos. Cambiar el criterio sin medir el impacto sobre
     `n` sería tocar el corazón del sistema a ciegas.
@@ -169,7 +197,7 @@ class FoldMeasurement:
     val_end: Optional[str]
     umbral_used: float
     umbral_source: str
-    umbral_n_obs: int          # cuántos días de TRAIN alimentaron el P90
+    umbral_n_obs: int          # cuántos días de TRAIN alimentaron el umbral
     n_total: int            # candidatos en validación (los que tienen i >= lookback)
     n_post_mask: int        # los que además pasan la máscara Gödel
     n_post_propia: int      # de los post-máscara, con entropía DEL PROPIO DÍA
@@ -180,14 +208,18 @@ class FoldMeasurement:
     #: Qué criterio de percentil produjo estos números. Default ACUMULADO =
     #: el comportamiento de siempre.
     percentile_mode: str = PercentileMode.ACUMULADO
-    # ── DESGLOSE DE LAS DOS RAMAS DEL OR ─────────────────────────────────
-    # La máscara es (entropy >= P90) OR (vitality == 9). Los tres campos de
-    # abajo suman exactamente n_post_mask y dicen cuál rama sostuvo cada
-    # disparo. Importa para interpretar cualquier comparación de criterios:
-    # si el percentil solo mueve la rama de entropía y esa rama aporta el
-    # 7% de los disparos, cambiarlo no puede arreglar el problema.
-    n_solo_entropia: int = 0    # entropía sobre el umbral, vitality != 9
-    n_solo_vitality: int = 0    # vitality == 9, entropía bajo el umbral
+    # ── DESGLOSE DE RAMAS — HISTÓRICO, YA NO HAY DOS ─────────────────────
+    # La máscara ERA `(entropy >= P90) OR (vitality == 9)` y estos tres
+    # campos decían cuál rama sostenía cada disparo. Ese desglose cumplió su
+    # función: mostró que vitality aportaba el 93% de los disparos de BTC, y
+    # eso llevó a descubrir que esa rama usaba n_events —una desviación del
+    # legacy— y a sacarla del filtro (versión 4.0.0).
+    # Hoy la máscara es `entropy > p66` y todos los disparos son de entropía
+    # por construcción. Los campos se conservan para no romper el contrato
+    # del JSON y siguen sumando n_post_mask; que dos queden en cero es
+    # información, no un bug: es cómo el reporte dice que ya no hay un OR.
+    n_solo_entropia: int = 0    # hoy: SIEMPRE == n_post_mask
+    n_solo_vitality: int = 0    # hoy: siempre 0 -- vitality no entra
     n_ambas_ramas: int = 0      # las dos a la vez
     #: n_post_mask / n_total. Un fold con 2 de 714 y otro con 172 de 710 son
     #: problemas distintos, y mirando solo el conteo se ven parecidos.
@@ -385,7 +417,7 @@ class SerieDerivada:
     `forward_filled[i]` marca que la entropía de ese día NO es suya: viene
     arrastrada de un día GDELT anterior (`build_training_dataset` hace
     forward-fill). Importa porque la máscara dispara sobre
-    `entropy >= P90`, así que un día puede entrar al conteo por una
+    `entropy > p66`, así que un día puede entrar al conteo por una
     entropía que no le pertenece. Un n de 700 con 400 arrastradas no es
     700, y sin este desglose no hay forma de saberlo."""
     fechas: list[date]
@@ -419,7 +451,8 @@ def build_serie_derivada(result: BuildDatasetResult) -> SerieDerivada:
     `orchestration/cycle.py::_build_windows`) y `entropy[:i]` (sin el
     actual). Nunca mira hacia adelante, así que calcularlo una sola vez
     para toda la serie da exactamente lo mismo que recalcularlo por fold —
-    a diferencia del P90, que sí es un umbral de decisión y por eso va por
+    a diferencia del umbral de la máscara, que sí es un umbral de
+    decisión y por eso va por
     fold.
     """
     filas = result.rows
@@ -457,7 +490,7 @@ def walk_forward_splits(n: int, n_folds: int) -> list[tuple[int, int]]:
 
     Expansiva y no deslizante porque con series cortas —que es justo lo que
     este tool sospecha que hay— una ventana deslizante desperdicia historia
-    que el P90 necesita para no caer al default global.
+    que el umbral necesita para no caer al default global.
     """
     if n_folds < 1:
         raise ValueError(f"n_folds debe ser >= 1, recibido: {n_folds}")
@@ -516,7 +549,7 @@ class Umbrales:
 
     `representativo` es la MEDIANA de `por_dia`, siempre en unidades de
     entropía. En ACUMULADO eso es exactamente el único valor, así que la
-    columna P90 del reporte no cambia. En los modos móviles es lo que hace
+    columna UMBRAL del reporte no cambia. En los modos móviles es lo que hace
     que esa misma columna siga siendo comparable entre criterios: reportar
     el z crudo del modo ZSCORE ahí pondría un número de otra escala (y de
     otro signo) al lado de umbrales de entropía."""
@@ -636,7 +669,7 @@ def measure_folds(
     rolling_window: int = ROLLING_WINDOW_DEFAULT,
 ) -> list[FoldMeasurement]:
     """
-    Mide cada fold. El P90 de cada uno sale SOLO de la entropía de los días
+    Mide cada fold. El umbral de cada uno sale SOLO de la entropía de los días
     anteriores al inicio de su validación — esa rebanada es la regla de
     integridad temporal hecha código, y es la línea que no se cruza.
     """
@@ -925,14 +958,17 @@ def render_comparison(
     """
     Los tres criterios sobre los mismos datos, lado a lado.
 
-    Muestra tasa y no solo conteo, y desglosa las dos ramas del OR: si un
-    criterio de percentil mueve el n pero la rama de entropía sigue
-    aportando una fracción mínima de los disparos, el cuello está en otro
-    lado y la comparación lo deja ver en vez de esconderlo.
+    Muestra tasa y no solo conteo. El desglose por rama se conserva pero
+    desde la versión 4.0.0 ya no hay dos ramas: la máscara es
+    `entropy > p66` y todos los disparos son de entropía por construcción.
+    Ese desglose existía para ver si un criterio de percentil podía mover
+    el n cuando la rama de entropía aportaba una fracción mínima de los
+    disparos -- y fue lo que mostró que no podía, porque el 93% venía de
+    vitality. Cumplió su función y llevó a sacar esa rama del filtro.
     """
     out = [
         "═══ COMPARACIÓN DE CRITERIOS DE PERCENTIL ═══",
-        f"lookback={lookback} · máscara: (entropy >= P90) OR (vitality == 9)",
+        f"lookback={lookback} · máscara: entropy > p66  (tercil superior)",
         "Ningún modo cambia core/scoring.py: los tres llaman a",
         "compute_adaptive_percentile() con distinta historia.",
         "",
@@ -969,8 +1005,8 @@ def render_comparison(
 def render_text(mediciones: Sequence[AssetMeasurement], *, lookback: int) -> str:
     out: list[str] = [
         "═══ MEDICIÓN DE MUESTRAS POST-MÁSCARA GÖDEL ═══",
-        f"lookback={lookback} · máscara: (entropy >= P90) OR (vitality == 9)",
-        "P90 recalculado por fold, solo con días anteriores a su validación.",
+        f"lookback={lookback} · máscara: entropy > p66  (tercil superior)",
+        "Umbral recalculado por fold, solo con días anteriores a su validación.",
         "",
     ]
     for m in mediciones:
@@ -990,7 +1026,7 @@ def render_text(mediciones: Sequence[AssetMeasurement], *, lookback: int) -> str
         if m.folds:
             out.append("")
             out.append(
-                "  fold  train  validación                  P90      "
+                "  fold  train  validación               UMBRAL      "
                 "n_tot  n_mask  propia  arrast   tasa  s_ent  s_vit  ambas"
                 "   sube   baja  estable"
             )
@@ -1015,7 +1051,8 @@ def render_text(mediciones: Sequence[AssetMeasurement], *, lookback: int) -> str
         )
         out.append(
             f"  Tasa de disparo OOF: {m.tasa_disparo_oof * 100:.1f}%"
-            f"   ·   ramas del OR: solo_entropía={m.oof_solo_entropia}, "
+            f"   ·   desglose histórico (ya no hay OR): "
+            f"solo_entropía={m.oof_solo_entropia}, "
             f"solo_vitality={m.oof_solo_vitality}, ambas={m.oof_ambas_ramas}"
         )
         out.append(f"  VEREDICTO: {m.verdict} — {m.verdict_reason}")
@@ -1053,9 +1090,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--n-folds", type=int, default=5,
                    help="Folds walk-forward de ventana expansiva. Default 5.")
     p.add_argument("--umbral-global-default", type=float, required=True,
-                   help="Default global del P90 para cold-start. SIN valor "
+                   help="Default global del umbral para cold-start. SIN valor "
                         "por defecto a propósito: compute_adaptive_percentile() "
-                        "documenta que para P90 no hay default legacy "
+                        "documenta que para este umbral no hay default legacy "
                         "confirmado y debe proveerse explícitamente.")
     p.add_argument("--percentile-mode", choices=PercentileMode.todos(),
                    default=PercentileMode.ACUMULADO,
