@@ -38,6 +38,10 @@ from core.scoring import (
     compute_entropy_fibonacci_lags,
     compute_gold_score_bma,
     compute_godel_p66,
+    compute_godel_score,
+    GodelScoreResult,
+    VAL_DIR_SIN_INFERENCIA,
+    BMA_WEIGHTS,
     compute_godel_p90,
     compute_mass_panic_index,
     MIN_WINDOW_FOR_PERCENTILE,
@@ -1941,3 +1945,132 @@ def test_compute_godel_p66_recorta_con_el_mecanismo_compartido():
 
     assert any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
                and n.func.id == "_ventana_movil" for n in ast.walk(fn))
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  compute_godel_score -- el tercer input de gold_score
+#
+#  PORT LITERAL de spel_score_engine.py:94. Se auditó la IMPLEMENTACIÓN,
+#  no el comentario -- el mismo error se cometió tres veces en este repo
+#  (vitality_tesla 44,8%, mass_panic_index 4,1%, fibonacci_lags 0,0%),
+#  siempre por seguir un doc en vez del código que corrió.
+# ══════════════════════════════════════════════════════════════════════════
+
+def test_godel_score_es_val_dir_cuando_la_mascara_dispara():
+    """`godel_score = float(godel_active) * val_dir if godel_active else 0.0`.
+    Dentro de la rama, `float(godel_active)` vale 1.0 -- o sea, el score ES
+    val_dir, sin transformación."""
+    for val_dir in (0.0, 0.25, 0.5, 0.5614, 0.9, 1.0):
+        r = compute_godel_score(godel_is_active=True, val_dir=val_dir)
+        assert r.value == pytest.approx(val_dir), (
+            "el port aplicó alguna transformación que el legacy no tiene")
+        assert r.has_inference is True
+        assert r.godel_is_active is True
+
+
+def test_godel_score_es_cero_cuando_la_mascara_no_dispara():
+    """La rama `else 0.0`, con val_dir presente y alto: si el score no
+    fuera 0.0 acá, el `if godel_active` se habría perdido en el port."""
+    r = compute_godel_score(godel_is_active=False, val_dir=0.95)
+
+    assert r.value == 0.0
+    assert r.godel_is_active is False
+
+
+def test_godel_score_reproduce_la_formula_del_legacy_literal():
+    """Se replica la línea 94 tal cual y se compara valor por valor, en vez
+    de confiar en la lectura del docstring."""
+    def legacy(godel_active: bool, val_dir: float) -> float:
+        return float(godel_active) * val_dir if godel_active else 0.0
+
+    for activo in (True, False):
+        for val_dir in (0.0, 0.1, 0.5, 0.73, 1.0):
+            assert compute_godel_score(activo, val_dir).value == pytest.approx(
+                legacy(activo, val_dir)), f"activo={activo} val_dir={val_dir}"
+
+
+# ─── Sin LSTM: 0.0, no un número fabricado ────────────────────────────────
+
+def test_sin_inferencia_el_score_es_cero_y_no_el_neutro_de_val_dir():
+    """LA DECISIÓN QUE MÁS IMPORTA DE ESTE PORT.
+
+    El legacy define `val_dir = inference_result.get("val_dir", 0.5)`, y
+    ese 0.5 podría parecer el valor a usar cuando no hay modelo. NO lo es:
+    en el legacy ese 0.5 nunca llega a la fórmula, porque las MISMAS tres
+    ramas OFFLINE que lo devuelven ponen `godel_activo=False`, y entonces
+    el score sale 0.0.
+
+    O sea: el legacy corriendo sin torch produce godel_score = 0.0. Este
+    port hace lo mismo. Devolver 0.5 sería fabricar una salida de modelo
+    sin modelo."""
+    r = compute_godel_score(godel_is_active=True, val_dir=None)
+
+    assert r.value == 0.0
+    assert r.value != VAL_DIR_SIN_INFERENCIA, (
+        "se está usando el default de val_dir para fabricar un score")
+    assert r.has_inference is False
+
+
+def test_el_default_de_val_dir_del_legacy_esta_documentado_pero_no_se_usa():
+    """La constante existe para dejar registro de qué dice el legacy, no
+    para alimentar la fórmula. Si algún día el score devuelve 0.5 sin
+    modelo, este test lo detecta."""
+    assert VAL_DIR_SIN_INFERENCIA == 0.5
+    assert compute_godel_score(True, None).value == 0.0
+    assert compute_godel_score(False, None).value == 0.0
+
+
+def test_el_cero_por_mascara_inactiva_se_distingue_del_cero_por_falta_de_modelo():
+    """Los dos casos dan `value == 0.0` y significan cosas distintas. Sin
+    `reason` y `has_inference` serían indistinguibles en un artefacto
+    persistido -- el mismo problema que VitalityResult.degraded y
+    NashFrozenResult.insufficient_data ya resuelven así en este módulo."""
+    sin_mascara = compute_godel_score(godel_is_active=False, val_dir=0.8)
+    sin_modelo = compute_godel_score(godel_is_active=True, val_dir=None)
+
+    assert sin_mascara.value == sin_modelo.value == 0.0
+    assert sin_mascara.reason != sin_modelo.reason
+    assert sin_mascara.has_inference is True
+    assert sin_modelo.has_inference is False
+    assert isinstance(sin_mascara, GodelScoreResult)
+
+
+def test_sin_lstm_el_gold_score_no_puede_alcanzar_execute():
+    """Consecuencia estructural, no una preferencia: con el componente
+    Gödel en 0.0, el gold_score queda acotado por la suma de los otros dos
+    pesos. Un sistema sin modelo NO puede emitir una orden de ejecución
+    por esta vía.
+
+    Si este test se pone en rojo, o apareció un LSTM (y entonces hay que
+    actualizarlo a conciencia) o alguien fabricó el componente Gödel."""
+    for tipo, techo_esperado in (("native", 0.60), ("synthetic", 0.45)):
+        w = BMA_WEIGHTS[tipo]
+        techo = w["te_entropy"] + w["backbone"]      # godel aporta 0.0
+        assert techo == pytest.approx(techo_esperado)
+        assert techo < 0.65, "el techo alcanza EXECUTE_WEAK"
+        assert techo < 0.85, "el techo alcanza EXECUTE_STRONG"
+
+    # Y comprobado de punta a punta, con los componentes en su máximo.
+    r = compute_gold_score_bma(
+        godel_score=compute_godel_score(True, None).value,
+        te_score=1.0, backbone_score=1.0, asset="BTC",
+        entropy_shannon=0.30, p66_entropy=0.40,
+    )
+    assert r.gold_score == pytest.approx(0.60)
+    assert r.action is not GoldScoreAction.EXECUTE_WEAK
+    assert r.action is not GoldScoreAction.EXECUTE_STRONG
+
+
+# ─── La advertencia sobre poder predictivo vive en el docstring ───────────
+
+def test_el_docstring_de_gold_score_advierte_que_no_predice():
+    """Los números están medidos y el docstring es donde alguien los va a
+    leer antes de usar la función. Si desaparecen, el próximo lector toma
+    un promedio ponderado sin significancia por una recomendación."""
+    doc = compute_gold_score_bma.__doc__
+
+    assert "NO PREDICE" in doc or "NO ES UNA SEÑAL OPERATIVA" in doc
+    for dato in ("Bonferroni", "Benjamini-Hochberg", "0,4133", "0,5921", "99,2%"):
+        assert dato in doc, f"falta el dato medido: {dato}"
+    assert "pesos" in doc.lower() and "nunca" in doc.lower(), (
+        "falta que los pesos 0.40/0.30/0.30 tampoco se midieron")

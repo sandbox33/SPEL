@@ -10,17 +10,24 @@ ocasión): `vitality_tesla`, `nash_frozen_7d`, `godel_active` -- las 3
 dependen SOLO de la serie GDELT persistida (`ingestion/gdelt_series.py`),
 ninguna necesita precio/OHLCV todavía.
 
-QUÉ NO CALCULA, a propósito, y por qué: `gold_score` (compute_gold_score_bma
-en core/scoring.py) necesita `godel_score`, `te_score` y `backbone_score`
-como inputs -- el propio docstring del módulo scoring.py lo dice:
-"Pendiente (fear_momentum, backbone_score real / TE real -- acá son
-inputs externos al gold_score, no calculados por este módulo todavía)".
-No existe ninguna función en el repo que produzca esos 3 valores desde
-datos reales. Inventar un valor placeholder para poder "mostrar un
-gold_score" sería exactamente el tipo de "código que funciona pero miente
-sobre lo que hace" que motivó el reinicio del 13 de agosto -- así que
-este módulo no lo hace. `gold_score` sale siempre None, con la razón
-exacta en `gold_score_blocked_reason`.
+`gold_score` YA SE CALCULA, con las tres funciones de componente reales:
+`compute_godel_score` (core/scoring.py), `compute_transfer_entropy_proxy`
+y `compute_backbone_score` (core/price_signals.py). Eso cierra el criterio
+de Fase 1 de BLUEPRINT.md.
+
+Hace falta pasarle `closes_por_activo`: este módulo lee solo la serie
+GDELT persistida, y dos de los tres componentes necesitan precio. Sin
+cierres, `gold_score` sale None con el motivo en
+`gold_score_blocked_reason` -- que ahora dice la verdad (faltan datos, no
+faltan funciones).
+
+QUE SE CALCULE NO ES QUE PREDIGA, y este módulo no deja que se confunda:
+todo resultado con gold_score trae `gold_score_warning` pegado. te_score y
+backbone_score fueron medidos y NO son significativos (cero supervivientes
+a Bonferroni y a Benjamini-Hochberg; holdout p=0.4133 y p=0.5921; un
+backtest en BTC perdió el 99,2% del capital), godel_score vale 0.0
+mientras no exista el LSTM, y los pesos 0.40/0.30/0.30 nunca se
+calibraron. Ver el docstring de compute_gold_score_bma().
 
 QUÉ ACTIVOS CUBRE, y por qué esa lista exacta: los 5 activos con
 clasificación GDELT real y funcional -- NVDA/XAU/BTC/NIFTY50
@@ -74,16 +81,23 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Mapping, Sequence
 
 from core.scoring import (
     GODEL_CRITERIA_VERSION,
+    GoldScoreResult,
     NashFrozenResult,
     VitalityResult,
     compute_godel_p66,
+    compute_godel_score,
+    compute_gold_score_bma,
     compute_nash_frozen_7d,
     compute_vitality_tesla,
     godel_active,
+)
+from core.price_signals import (
+    compute_backbone_score,
+    compute_transfer_entropy_proxy,
 )
 from ingestion.gdelt_series import read_series
 
@@ -93,21 +107,51 @@ logger = logging.getLogger("spel.orchestration.cycle")
 #: docstring del módulo para por qué esta lista exacta, ni más ni menos.
 DEFAULT_CYCLE_ASSETS: tuple[str, ...] = ("NVDA", "XAU", "BTC", "NIFTY50", "EURUSD")
 
-#: Motivo fijo, reusado en todo resultado -- gold_score está bloqueado
-#: por la MISMA razón para cualquier activo, no varía caso a caso.
-GOLD_SCORE_BLOCKED_REASON = (
-    "gold_score_bma() requiere godel_score/te_score/backbone_score reales "
-    "como input -- ninguno tiene función que lo calcule todavía en este "
-    "repo (ver docstring de core/scoring.py, línea 6: 'Pendiente'). No se "
-    "inventa un valor placeholder para simular que esto ya funciona."
+#: ~~GOLD_SCORE_BLOCKED_REASON~~ -- ERA FACTUALMENTE FALSA y se corrigió.
+#:
+#: Decía: "gold_score_bma() requiere godel_score/te_score/backbone_score
+#: reales como input -- NINGUNO tiene función que lo calcule todavía".
+#: Los tres la tienen:
+#:   · te_score y backbone_score, desde el 18 de agosto
+#:     (core/price_signals.py).
+#:   · godel_score, desde este patch (core.scoring.compute_godel_score).
+#: El texto viejo sobrevivió a la existencia de dos de las tres funciones
+#: sin que nadie lo notara -- la misma clase de afirmación desactualizada
+#: que este proyecto ya encontró en BLUEPRINT.md ("GDELT 0% portado").
+#:
+#: Lo que SÍ falta es de otro tipo, y por eso el nombre cambió: no falta
+#: una función, faltan DATOS DE PRECIO. Este módulo lee solo la serie
+#: GDELT persistida; te_score y backbone_score necesitan `closes`.
+GOLD_SCORE_SIN_PRECIO_REASON = (
+    "gold_score no se calculó para este activo: te_score y backbone_score "
+    "necesitan una serie de cierres, y este ciclo solo lee la serie GDELT "
+    "persistida. Pasar `closes_por_activo` a run_scoring_cycle() lo "
+    "desbloquea. Las tres funciones de componente existen "
+    "(core/price_signals.py y core.scoring.compute_godel_score)."
+)
+
+#: Advertencia que viaja pegada a todo gold_score calculado. No es
+#: decorativa: dos de los tres componentes fueron MEDIDOS y no son
+#: significativos, y los pesos nunca se midieron. Ver el docstring de
+#: compute_gold_score_bma() para los números.
+GOLD_SCORE_SIN_PODER_PREDICTIVO = (
+    "Este gold_score SE CALCULA pero NO PREDICE. te_score y backbone_score "
+    "no sobrevivieron corrección por multiplicidad (Bonferroni ni "
+    "Benjamini-Hochberg; holdout p=0.4133 y p=0.5921; un backtest en BTC "
+    "perdió 99.2% del capital). godel_score vale 0.0 sin LSTM. Los pesos "
+    "0.40/0.30/0.30 nunca se calibraron. No usar como señal operativa."
 )
 
 
 @dataclass(frozen=True)
 class AssetCycleResult:
-    """Resultado de un ciclo para un activo. gold_score es SIEMPRE None
-    hoy -- ver GOLD_SCORE_BLOCKED_REASON. Ningún campo numérico se
-    inventa cuando no hay datos suficientes; data_status manda."""
+    """Resultado de un ciclo para un activo. Ningún campo numérico se
+    inventa cuando no hay datos suficientes; data_status manda.
+
+    `gold_score` es None cuando no se pudo calcular (falta precio o falta
+    historia), y un GoldScoreResult cuando sí. Los dos casos se
+    distinguen sin ambigüedad: `gold_score_blocked_reason` está poblado
+    solo en el primero, `gold_score_warning` solo en el segundo."""
 
     asset: str
     data_status: str  # "ok" | "cold_start_no_data" | "cold_start_current_day_invalid"
@@ -115,8 +159,8 @@ class AssetCycleResult:
     vitality_tesla: VitalityResult | None
     nash_frozen: NashFrozenResult | None
     godel_is_active: bool | None
-    gold_score: None
-    gold_score_blocked_reason: str
+    gold_score: GoldScoreResult | None
+    gold_score_blocked_reason: str | None
     #: Con qué criterio de percentil se calculó `godel_is_active`, SELLADO
     #: en el momento del cálculo (core.scoring.GODEL_CRITERIA_VERSION).
     #:
@@ -133,6 +177,11 @@ class AssetCycleResult:
     #: criterio: el campo trae la versión de este build, no la de un
     #: cálculo que no ocurrió.
     godel_criteria_version: str = GODEL_CRITERIA_VERSION
+    #: Poblado SOLO cuando `gold_score` no es None. Viaja pegado al número
+    #: a propósito: un gold_score suelto en un log o en un artefacto se
+    #: lee como una recomendación, y no lo es. Ver
+    #: GOLD_SCORE_SIN_PODER_PREDICTIVO.
+    gold_score_warning: str | None = None
 
 
 def _build_windows(asset: str) -> tuple[list, list[float], list[float], float | None]:
@@ -163,6 +212,8 @@ def run_scoring_cycle(
     assets: Sequence[str] = DEFAULT_CYCLE_ASSETS,
     *,
     p66_entropy_global_default: float,
+    closes_por_activo: Mapping[str, Sequence[float]] | None = None,
+    val_dir_por_activo: Mapping[str, float] | None = None,
 ) -> dict[str, AssetCycleResult]:
     """
     Corre vitality_tesla + nash_frozen_7d + godel_active para cada activo
@@ -186,6 +237,18 @@ def run_scoring_cycle(
             porque el umbral que alimenta es el del tercil superior, no un
             P90. El nombre viejo describía un término que nunca cambió un
             resultado -- ver core.scoring.godel_active().
+        closes_por_activo: serie de cierres por activo, orden cronológico.
+            Es lo único que separa a `gold_score` de calcularse: te_score y
+            backbone_score la necesitan. Este módulo NO la va a buscar --
+            sigue sin tocar red ni ingestion en vivo; el caller decide de
+            dónde salen los cierres. Un activo ausente del mapa reporta
+            `gold_score=None` con motivo, no un error.
+        val_dir_por_activo: confianza direccional de un modelo entrenado,
+            por activo. HOY NADIE LA PRODUCE en este repo, y el default de
+            None es lo correcto: `compute_godel_score` devuelve 0.0 con
+            `has_inference=False` en vez de fabricar un número. El
+            parámetro existe para que, cuando Fase 2 entregue un modelo,
+            enchufarlo no requiera tocar la firma.
 
     Raises:
         ValueError: si algún asset en `assets` no tiene
@@ -211,7 +274,11 @@ def run_scoring_cycle(
             results[asset] = AssetCycleResult(
                 asset=asset, data_status="cold_start_no_data", n_days_history=0,
                 vitality_tesla=None, nash_frozen=None, godel_is_active=None,
-                gold_score=None, gold_score_blocked_reason=GOLD_SCORE_BLOCKED_REASON,
+                gold_score=None,
+                gold_score_blocked_reason=(
+                    "sin historia GDELT persistida: no hay máscara que "
+                    "evaluar, así que tampoco hay componente Gödel."
+                ),
             )
             continue
 
@@ -249,13 +316,47 @@ def run_scoring_cycle(
             p66_entropy=p66.value,
         )
 
+        # ── gold_score: los tres componentes, con funciones reales ──
+        closes = (closes_por_activo or {}).get(asset)
+        gold, motivo_bloqueo, aviso = None, GOLD_SCORE_SIN_PRECIO_REASON, None
+
+        if closes is not None:
+            # godel_score: PORT del legacy. val_dir=None mientras no haya
+            # LSTM -> componente en 0.0, igual que el legacy sin torch.
+            componente_godel = compute_godel_score(
+                godel_is_active=godel,
+                val_dir=(val_dir_por_activo or {}).get(asset),
+            )
+            te = compute_transfer_entropy_proxy(closes)
+            backbone = compute_backbone_score(closes)
+
+            gold = compute_gold_score_bma(
+                godel_score=componente_godel.value,
+                te_score=te.value,
+                backbone_score=backbone.value,
+                asset=asset,
+                entropy_shannon=current_entropy,
+                p66_entropy=p66.value,
+            )
+            motivo_bloqueo, aviso = None, GOLD_SCORE_SIN_PODER_PREDICTIVO
+            logger.info(
+                "cycle: %s gold_score=%.4f (godel=%.4f has_inference=%s, "
+                "te=%.4f insuf=%s, backbone=%.4f insuf=%s) action=%s -- %s",
+                asset, gold.gold_score, componente_godel.value,
+                componente_godel.has_inference,
+                te.value, te.insufficient_data,
+                backbone.value, backbone.insufficient_data,
+                gold.action.value, GOLD_SCORE_SIN_PODER_PREDICTIVO,
+            )
+
         results[asset] = AssetCycleResult(
             asset=asset, data_status="ok", n_days_history=len(valid_days),
             vitality_tesla=vitality, nash_frozen=nash, godel_is_active=godel,
-            gold_score=None, gold_score_blocked_reason=GOLD_SCORE_BLOCKED_REASON,
+            gold_score=gold, gold_score_blocked_reason=motivo_bloqueo,
             # Sellado en el momento del cálculo, no heredado del default:
             # es este godel el que se calculó con este criterio.
             godel_criteria_version=GODEL_CRITERIA_VERSION,
+            gold_score_warning=aviso,
         )
         logger.info(
             "cycle: %s vitality=%d(%s) nash_frozen=%s godel_active=%s (%d días)",
