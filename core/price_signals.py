@@ -33,15 +33,21 @@ insufficient_data ya evitan en el resto de este repo. Acá se hace lo
 mismo: `insufficient_data=True` explícito, el valor numérico es
 placeholder marcado como tal, no un 0.0/0.5 mudo.
 
-QUÉ NO ESTÁ ACÁ, a propósito: `godel_score`. En el legacy,
-`godel_score = float(godel_active) * val_dir if godel_active else 0.0`
--- depende de `val_dir`, la salida de INFERENCIA DE UN MODELO LSTM
-entrenado (capa_c_inference.SPELInferenceEngine), que es el mismo
-componente bloqueado en Fase 2 (~0.50 val_accuracy, diagnóstico sin
-arrancar). No hay nada que portar acá todavía -- godel_score sigue
-bloqueado hasta que Fase 2 resuelva el modelo. Cuando el LSTM esté
-entrenado y sirviendo inferencia real, ESE es el momento de portar
-`_run_inference` -- no antes, y no con un valor inventado mientras tanto.
+QUÉ NO ESTÁ ACÁ, y por qué: `godel_score` vive en `core/scoring.py`
+(`compute_godel_score`), no en este módulo -- depende de la máscara, no
+del precio. Se portó del legacy con la fórmula literal:
+
+    godel_score = float(godel_active) * val_dir if godel_active else 0.0
+
+ACTUALIZACIÓN: este bloque decía que "no hay nada que portar todavía".
+Eso era cierto para `val_dir` y dejó de serlo para la función. `val_dir`
+—la confianza direccional de un LSTM entrenado
+(capa_c_inference.SPELInferenceEngine)— sigue sin existir en este repo, y
+`compute_godel_score(godel_is_active, val_dir=None)` devuelve 0.0 con
+`has_inference=False` en vez de fabricar un número. Es lo mismo que hace
+el legacy cuando corre sin torch. Cuando el LSTM sirva inferencia real,
+lo que hay que portar es `_run_inference` -- y ahí la función ya está
+esperando el `val_dir`, no hace falta tocarla.
 
 _ASSET_TYPE_MAP y _WEIGHTS del archivo fuente NO se portan -- ya existe
 una versión propia, auditada y testeada en core/scoring.py::BMA_WEIGHTS

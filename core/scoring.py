@@ -1155,6 +1155,149 @@ def compute_entropy_delta_lags(
     return DeltaLagResult(deltas=deltas, available_lags=tuple(available))
 
 
+# ─── godel_score: el tercer input de gold_score ─────────────────────────────
+
+#: Default de `val_dir` en el legacy cuando NO hay inferencia disponible
+#: (spel_score_engine.py, las tres ramas OFFLINE de `_run_inference`).
+#: 0.5 es "sin skill direccional": una moneda.
+#:
+#: Se documenta pero NO se usa para fabricar un godel_score. En el legacy
+#: ese 0.5 nunca llega a la fórmula: las mismas ramas que lo devuelven
+#: ponen `godel_activo=False`, y entonces el score sale 0.0 igual. Ver
+#: compute_godel_score().
+VAL_DIR_SIN_INFERENCIA = 0.5
+
+
+@dataclass(frozen=True)
+class GodelScoreResult:
+    """Nunca un float pelado, por la misma razón que VitalityResult y
+    NashFrozenResult: `value == 0.0` significa DOS cosas distintas -- que
+    la máscara no disparó, o que disparó pero no hay modelo que diga con
+    cuánta confianza. Sin `reason`, las dos se ven idénticas en un
+    artefacto persistido."""
+    value: float             # [0,1] -- el componente Gödel del gold_score
+    godel_is_active: bool
+    has_inference: bool      # False = no hay val_dir de un modelo real
+    reason: str
+
+
+def compute_godel_score(
+    godel_is_active: bool,
+    val_dir: float | None,
+) -> GodelScoreResult:
+    """
+    El componente Gödel del gold_score. PORT LITERAL de
+    `spel_score_engine.py::SpelScoreEngine.compute`, línea 94:
+
+        val_dir     = inference_result.get("val_dir", 0.5)
+        godel_score = float(godel_active) * val_dir if godel_active else 0.0
+
+    O sea: `val_dir` si la máscara disparó, `0.0` si no. El
+    `float(godel_active) *` es un no-op dentro de la rama (vale 1.0);
+    se porta el efecto, no el ruido.
+
+    SE AUDITÓ LA IMPLEMENTACIÓN, NO EL COMENTARIO. Esa distinción no es
+    retórica en este repo: el mismo error se cometió tres veces --
+    `vitality_tesla` (44,8% de coincidencia con los datos reales),
+    `compute_mass_panic_index` (4,1%) y `compute_entropy_fibonacci_lags`
+    (0,0%), las tres veces por seguir un comentario o un doc en vez del
+    código que efectivamente corrió.
+
+    QUÉ ES `val_dir`: la confianza direccional que sale de la inferencia
+    de un LSTM entrenado (`capa_c_inference.SPELInferenceEngine`). Es una
+    accuracy en [0,1], donde 0.5 es "sin skill".
+
+    ══ NO HAY LSTM EN ESTE REPO, Y ESO NO SE DISIMULA ══
+
+    `val_dir=None` significa "no hay inferencia disponible", y entonces
+    esta función devuelve 0.0 con `has_inference=False`.
+
+    Eso NO es una invención: es exactamente lo que el legacy hace en
+    nuestra situación. Sus tres ramas OFFLINE de `_run_inference` (sin
+    torch, sin checkpoint cargado, o excepción) devuelven
+    `godel_activo=False` junto con `val_dir=0.5`, y la fórmula da 0.0.
+    El legacy corriendo sin modelo produce godel_score = 0.0, y este port
+    hace lo mismo.
+
+    La alternativa —pasar el 0.5 y devolverlo cuando la máscara dispara—
+    sería fabricar un número de modelo sin modelo. `core/price_signals.py`
+    ya había dejado esa decisión por escrito ("no con un valor inventado
+    mientras tanto") y este PR la sostiene, no la revierte.
+
+    CONSECUENCIA, dicha en voz alta porque importa: mientras no exista el
+    LSTM, el componente Gödel aporta 0.0 SIEMPRE, y por lo tanto el peso
+    de 0.40 (activos nativos) o 0.55 (sintéticos) no contribuye nada. El
+    gold_score queda acotado por la suma de los otros dos pesos -- 0.60 en
+    nativos, 0.45 en sintéticos -- así que NO PUEDE alcanzar los umbrales
+    de EXECUTE_WEAK (0.65) ni EXECUTE_STRONG (0.85). Un sistema sin modelo
+    no puede emitir una orden de ejecución por esta vía, y eso es
+    deseable, no un defecto a corregir bajando umbrales.
+
+    ══ HALLAZGO: EL COMPONENTE ES INERTE AUNQUE APAREZCA EL LSTM ══
+
+    Y no solo mientras no haya modelo. Con `compute_gold_score_bma` tal
+    como está hoy, el término `w_godel * godel_score` NO PUEDE aportar a
+    ningún gold_score distinto de cero, ni con un val_dir de 1.0:
+
+      · Si la máscara dispara, `compute_gold_score_bma` levanta el
+        kill_signal por `godel_active` y pone el score en 0.0, sin mirar
+        el componente.
+      · Si la máscara NO dispara, esta función devuelve 0.0 por la rama
+        `else` del legacy.
+
+    Los dos casos son exhaustivos.
+
+    LA CAUSA NO ESTÁ EN NINGUNA DE LAS DOS FUENTES LEGACY:
+      · `spel_score_engine.py` usa `godel_active` para PONDERAR (es esta
+        misma fórmula) y no mata por él.
+      · `spel_bayesian_core.py` mata solo por Shannon > 0.42 y KL > 0.20,
+        y nunca llama a `godel_active`.
+    La rama de kill por `godel_active` es un agregado del port, ya
+    identificado como tal en la auditoría del PR #17 -- que lo dejó
+    explícitamente como tarea aparte. Este patch NO la toca: cambiar la
+    lógica de `compute_gold_score_bma` es una decisión de criterio con su
+    propia medición, no un efecto colateral de portar una fórmula.
+
+    Hay un test que fija este comportamiento
+    (`test_HALLAZGO_el_componente_godel_nunca_aporta_al_gold_score_final`)
+    para que, si algún día cambia, sea a conciencia.
+
+    Args:
+        godel_is_active: salida de `godel_active()`.
+        val_dir: confianza direccional del modelo, en [0,1]. `None`
+            cuando no hay inferencia -- que es el caso de este repo hoy.
+
+    Returns:
+        GodelScoreResult. `value` es 0.0 en dos casos distintos y
+        `reason` los separa.
+    """
+    if not godel_is_active:
+        return GodelScoreResult(
+            value=0.0, godel_is_active=False,
+            has_inference=val_dir is not None,
+            reason="la máscara no disparó: godel_active=False",
+        )
+
+    if val_dir is None:
+        logger.info(
+            "godel_score: máscara activa pero sin inferencia disponible "
+            "(val_dir=None) -- componente en 0.0, igual que el legacy sin torch."
+        )
+        return GodelScoreResult(
+            value=0.0, godel_is_active=True, has_inference=False,
+            reason=(
+                "la máscara disparó pero no hay val_dir: ningún modelo "
+                "entrenado sirve inferencia en este repo. No se sustituye "
+                "por un valor neutro -- ver compute_godel_score()."
+            ),
+        )
+
+    return GodelScoreResult(
+        value=float(val_dir), godel_is_active=True, has_inference=True,
+        reason="val_dir de inferencia real",
+    )
+
+
 # ─── gold_score_bma ─────────────────────────────────────────────────────────
 
 #: spel_bayesian_core.py::NATIVE_ASSETS -- activos con backbone LSTM real.
@@ -1231,6 +1374,34 @@ def compute_gold_score_bma(
 ) -> GoldScoreResult:
     """
     gold_score -- Bayesian Model Averaging de 3 componentes.
+
+    ╔══════════════════════════════════════════════════════════════════╗
+    ║  ESTO NO ES UNA SEÑAL OPERATIVA. QUE CALCULE NO ES QUE PREDIGA.  ║
+    ╚══════════════════════════════════════════════════════════════════╝
+
+    Dos de sus tres inputs FUERON MEDIDOS y NO son significativos:
+
+      · `te_score` y `backbone_score` (core/price_signals.py): corrección
+        por multiplicidad con Bonferroni Y con Benjamini-Hochberg dio
+        CERO supervivientes. En holdout, p = 0,4133 y p = 0,5921. Un
+        backtest sobre BTC perdió el 99,2% del capital.
+      · `godel_score` (compute_godel_score) vale 0.0 mientras no exista un
+        LSTM que sirva `val_dir`, que es hoy y hasta que Fase 2 lo
+        resuelva.
+
+    Y LOS PESOS TAMPOCO SE MIDIERON NUNCA. El 0.40/0.30/0.30 viene del
+    legacy marcado como "inamovible (Regla 13)", pero esa etiqueta
+    documenta una decisión de gobernanza, no un ajuste empírico: no hay
+    backtest, validación cruzada ni optimización detrás de esos tres
+    números. Un promedio ponderado de tres componentes sin poder
+    predictivo demostrado, con pesos sin calibrar, no adquiere poder
+    predictivo por combinarlos.
+
+    Para qué sirve entonces: el criterio de cierre de Fase 1 pedía que el
+    Gold Score SE CALCULE de punta a punta con funciones reales, y esto lo
+    cumple. Cualquier uso operativo necesita antes que Fase 2 produzca
+    componentes con significancia medida. Quien lea un número de acá y lo
+    tome por una recomendación está leyendo mal la función.
 
     PORT de spel_bayesian_core.py::compute_gold_score_bma (Regla 13),
     con una diferencia deliberada -- ver SÍNTESIS DE KILL SIGNAL abajo.
