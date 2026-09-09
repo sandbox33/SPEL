@@ -1,11 +1,19 @@
 """
 core/scoring.py
 ================
-`vitality_tesla` (cascada B->A->C), condición Gödel, `nash_frozen_7d`,
-`mass_panic_index`, `entropy_fibonacci_lags` y `gold_score_bma`.
+`entropy_state` (Capa 1), condición Gödel, `vitality_tesla` (cascada
+B->A->C), `nash_frozen_7d`, `godel_score` y `gold_score_bma`.
 Pendiente (fear_momentum, backbone_score real / TE real -- acá son
 inputs externos al gold_score, no calculados por este módulo todavía):
 ver ESTADO.md.
+
+RETIRADAS EL 9-SEP-2026, por no tener ningún consumidor en producción:
+`compute_godel_p90`, `compute_mass_panic_index`,
+`compute_entropy_fibonacci_lags` y `compute_entropy_delta_lags`. El código
+completo vive en la rama `archive/core-scoring-pre-retiro-20260909`; el
+motivo de cada una, en `decision-log.md`. Los hallazgos #1 y #3 de abajo se
+conservan porque son auditorías del LEGACY que siguen siendo ciertas y le
+sirven a quien retome esos features -- no describen código de este módulo.
 
 HALLAZGOS DE ESTA SESIÓN (verificados contra fuente, no supuestos --
 "Modo Investigador": diagnosticar antes de construir):
@@ -16,9 +24,12 @@ HALLAZGOS DE ESTA SESIÓN (verificados contra fuente, no supuestos --
        de evento que no existe en el repo nuevo todavía.
      - spel_ingest_incremental.py: z-score de entropy_shannon vs ventana
        de 7d. Sí portable al nivel agregado en que ya trabaja este módulo.
-     compute_mass_panic_index() sintetiza ambas (ver su docstring) --
-     NINGUNA de las 2 tiene evidencia empírica (a diferencia de B en
-     vitality_tesla, que sí la tiene). Marcado EXPERIMENTAL a propósito.
+     El port sintetizaba ambas y estaba marcado EXPERIMENTAL: NINGUNA de
+     las 2 tiene evidencia empírica (a diferencia de B en vitality_tesla,
+     que sí la tiene). Esa función se retiró el 9-sep por no tener
+     consumidor, y además coincidía solo 4,1% con el legacy. El hallazgo
+     queda porque el conflicto de fórmulas es del legacy y sobrevive a la
+     función: quien retome mass_panic_index tiene que resolverlo igual.
 
   #2 nash_frozen_7d NO mide rango de precio / ATR / iliquidez -- mide
      estabilidad del entropía GDELT (Equilibrio de Nash informacional).
@@ -41,6 +52,12 @@ HALLAZGOS DE ESTA SESIÓN (verificados contra fuente, no supuestos --
      ENTROPY_SCHEMA usa date (no datetime), confirmando agregación
      diaria del pipeline GDELT. La cadencia de 1m de Deriv sigue siendo
      correcta para features intradía de OHLCV -- no para este.
+     NOTA (9-sep): la función que implementaba esto se retiró, y con un
+     hallazgo que corrige a este mismo párrafo -- el legacy
+     `add_fibonacci_lags` desplaza `log_return`, NO entropía; el port
+     había seguido el comentario de gdelt_foundation.py en vez del código,
+     y la coincidencia era del 0,0%. Lo de "en DÍAS" sigue siendo cierto;
+     lo que se desplaza, no era lo que este párrafo decía.
 
   #4 gold_score / BMA: SÍ es Bayesian Model Averaging real, con pesos
      "inamovibles" (Regla 13, spel_bayesian_core.py) -- una sesión
@@ -142,9 +159,9 @@ MIN_WINDOW_FOR_PERCENTILE = 3
 #: Ventana móvil de los estadísticos de la máscara Gödel. 252 = días
 #: hábiles de un año.
 #:
-#: La usan las DOS ramas del OR: el P90 de entropía (compute_godel_p90,
-#: desde la versión 2.0.0) y el tercil de n_events del nivel primario de
-#: vitality_tesla (desde la 3.0.0). Es una sola constante a propósito --
+#: La usan el umbral de la máscara (compute_godel_p66, y antes su gemela
+#: compute_godel_p90, retirada el 9-sep) y el tercil de n_events del nivel
+#: primario de vitality_tesla (desde la 3.0.0). Es una sola constante --
 #: el defecto que ambas corrigen es el mismo (una serie con tendencia
 #: comparada contra su propia cola vieja) y tener dos ventanas distintas
 #: obligaría a justificar por qué difieren.
@@ -157,7 +174,7 @@ def _ventana_movil(historia: Sequence[float] | None, window: int) -> list[float]
 
     Existe para que las dos ramas de la máscara recorten igual: cuando el
     tercil de vitality_tesla se pasó a ventana móvil, copiar el `[-window:]`
-    de compute_godel_p90() habría creado dos mecanismos paralelos que
+    del umbral de la máscara habría creado dos mecanismos paralelos que
     pueden divergir en silencio. Es una función de tres líneas justamente
     porque el recorte es todo lo que comparten -- qué se hace después con
     esa ventana (percentil adaptativo vs. tercil) es distinto en cada rama
@@ -333,7 +350,7 @@ def compute_vitality_tesla(
 
     WARM-UP: con menos de `n_events_rolling_window` observaciones la
     ventana es toda la historia disponible -- de facto el criterio
-    acumulado, igual que en compute_godel_p90(). No hay alternativa sin
+    acumulado, igual que en compute_godel_p66(). No hay alternativa sin
     inventar observaciones que no existen. El piso de
     MIN_WINDOW_FOR_PERCENTILE sigue mandando por debajo de 3 puntos.
 
@@ -464,7 +481,7 @@ def entropy_state(
 
     WARM-UP: mientras haya menos de `window` observaciones ANTERIORES al
     día, devuelve ENTROPY_STATE_WARMUP (None). A diferencia de
-    compute_godel_p90(), que degrada a ventana expandible, acá no se
+    compute_godel_p66(), que degrada a ventana expandible, acá no se
     degrada: un tercil es una afirmación sobre la posición relativa dentro
     de una distribución, y con media ventana esa posición no es comparable
     con la de un día en régimen. Un umbral degradado sigue siendo un
@@ -580,7 +597,7 @@ def godel_active(entropy_shannon: float, p66_entropy: float) -> bool:
 #:        historia previa, sin ventana.
 #:   2.0.0-rolling_252d -- P90 de entropía sobre ventana móvil de 252
 #:        observaciones con desplazamiento de un día. Ver
-#:        compute_godel_p90() para la medición que lo motivó.
+#:        compute_godel_p66() para la medición que lo motivó.
 #:   3.0.0-rolling_252d_vitality -- la MISMA ventana móvil aplicada al
 #:        tercil de n_events del nivel primario de vitality_tesla, que
 #:        arrastraba la misma deriva sin corregir. Ver
@@ -607,9 +624,10 @@ def compute_godel_p66(
     El umbral que consume godel_active(): el borde del TERCIL SUPERIOR de
     la entropía, sobre ventana móvil que termina el día anterior.
 
-    Gemela exacta de compute_godel_p90() -- mismo `_ventana_movil`, misma
-    ventana, mismo `compute_adaptive_percentile`. Lo único que cambia es
-    el percentil que se pide: GODEL_MASK_PERCENTILE (66.0) en vez de 90.
+    Hasta el 9-sep tuvo una gemela, `compute_godel_p90`, idéntica salvo
+    por el percentil que pedía. Se retiró: quedó sin consumidor al pasar
+    la máscara a P66, y mantener dos funciones que solo difieren en una
+    constante invita a que alguien use la que no corresponde.
 
     Por qué 66 y no 90: ver godel_active(). En resumen, la máscara ya
     operaba de facto con P66 -- la rama del P90 estaba lógicamente
@@ -645,99 +663,6 @@ def compute_godel_p66(
         percentile=GODEL_MASK_PERCENTILE, global_default=global_default,
     )
 
-
-def compute_godel_p90(
-    entropy_history: Sequence[float] | None,
-    global_default: float,
-    *,
-    window: int = GODEL_ROLLING_WINDOW_DAYS,
-) -> AdaptivePercentileResult:
-    """
-    El P90 de la entropía sobre una VENTANA MÓVIL de `window`
-    observaciones que TERMINA EN EL DÍA ANTERIOR.
-
-    YA NO ALIMENTA LA MÁSCARA. Desde la versión 4.0.0 el umbral del filtro
-    es compute_godel_p66(): la rama del P90 estaba lógicamente implicada
-    por la del tercil superior y nunca cambió un resultado -- ver
-    godel_active() para la demostración y los números. Esta función se
-    conserva porque calcula correctamente lo que su nombre dice y sirve
-    para medir; simplemente no es el umbral de decisión de nadie.
-
-    NO reimplementa el percentil: recorta la historia y llama a
-    compute_adaptive_percentile(), que sigue siendo la única
-    implementación del percentil adaptativo en el repo. Lo único que
-    cambia respecto del criterio anterior es QUÉ historia recibe.
-
-    POR QUÉ SE CAMBIÓ, con números medidos (tools/measure_godel_samples.py
-    --compare-modes, sobre BTC 5.893 días de precio y XAU 5.383, entropía
-    GDELT 3.998 días por activo, 2015-01-01 a 2025-12-31):
-
-        activo   ACUMULADO   MOVIL   ZSCORE
-        BTC            284     611      544
-        XAU             68     398      350
-
-    La entropía deriva a la baja de forma monótona (BTC de 1.1726 a
-    0.9970 de media entre 2015 y 2025; XAU de 1.3519 a 1.1522). Un
-    percentil acumulado arrastra la cola de 2015-2018 para siempre: en
-    XAU el P90 de cuatro años seguidos queda por debajo del umbral
-    global, y quedan 1.077 días recientes sin una sola muestra en ambos
-    activos.
-
-    POR QUÉ MÓVIL Y NO Z-SCORE, también medido y no por preferencia:
-      · La entropía normalizada no es normal (Jarque-Bera p ~ 1e-141 en
-        BTC y 1e-169 en XAU; skew -0.54 y -0.46; curtosis en exceso
-        +1.73 y +2.03), así que el Phi^-1(0.90) = 1.2816 que usa el modo
-        ZSCORE impone un umbral entre 21% y 27% por encima del percentil
-        90 empírico real (1.0582 y 1.0118).
-      · La desviación de la ventana móvil está inflada por la propia
-        tendencia: aporta el 38% de la dispersión en BTC y el 47% en XAU.
-      El percentil empírico no sufre ninguna de las dos.
-
-    EFECTO SECUNDARIO, más relevante que el conteo: con el criterio
-    acumulado la máscara la dominaba vitality_tesla (225 de 284 disparos
-    en BTC, participación de la entropía 20.8%). Con ventana móvil la
-    entropía pasa a dominar (386 de 611, participación 63.2%; en XAU
-    87.2%). La máscara no cambió -- cambió cuál de sus dos ramas la
-    sostiene.
-
-    EL DESPLAZAMIENTO DE UN DÍA ES PARTE DEL CONTRATO, no un detalle de
-    implementación: `entropy_history` NO incluye el día que se está
-    evaluando. Sin ese desplazamiento habría fuga temporal -- un día se
-    compararía contra un percentil que él mismo movió. Es la misma
-    convención que ya usan el Respaldo A de compute_vitality_tesla y
-    _zscore_last en este módulo.
-
-    WARM-UP -- ventana expandible con lag de un día. Para los primeros
-    `window` días no hay 252 observaciones previas, así que la ventana es
-    todo lo que haya (0...t-1). Eso significa, dicho explícitamente, que
-    esos días usan DE FACTO EL CRITERIO ACUMULADO. Es el 6,3% del dataset
-    medido y no hay alternativa sin fuga temporal: la única forma de dar
-    252 observaciones al día 10 sería tomarlas del futuro. El warm-up se
-    acopla al fallback que compute_adaptive_percentile ya tiene por
-    debajo de 10 y de 100 observaciones -- no se duplica esa lógica acá.
-
-    Args:
-        entropy_history: entropy_shannon en orden cronológico, SIN el día
-            que se evalúa. La ventana son las últimas `window`
-            OBSERVACIONES de esta lista: si el caller ya filtró días
-            inválidos, la ventana abarca más de `window` días de
-            calendario. Quien construye la historia decide qué cuenta
-            como observación.
-        global_default: mismo contrato que compute_adaptive_percentile --
-            para P90 no hay default legacy confirmado, debe proveerse
-            explícitamente.
-        window: tamaño de la ventana. Default GODEL_ROLLING_WINDOW_DAYS.
-
-    Raises:
-        ValueError: si window < 1 (lo lanza `_ventana_movil`). Una ventana
-            vacía no es un criterio más conservador -- devolvería el
-            default global todos los días y eso es un fallo silencioso,
-            no una degradación.
-    """
-    return compute_adaptive_percentile(
-        history=_ventana_movil(entropy_history, window),
-        percentile=90.0, global_default=global_default,
-    )
 
 
 # ─── nash_frozen_7d ─────────────────────────────────────────────────────────
@@ -894,265 +819,8 @@ def compute_nash_frozen_7d(
     )
 
 
-# ─── mass_panic_index ────────────────────────────────────────────────────────
-
-#: Necesita std (ddof=1) -> mínimo 2 puntos.
-MIN_WINDOW_FOR_ZSCORE = 2
-
-#: NO es una constante legacy nombrada -- "2 sigma" es convención
-#: estadística estándar, sin backtest todavía. Ver docstring de la función.
-Z_ENTROPY_PANIC_THRESHOLD = 2.0
-Z_GOLDSTEIN_PANIC_THRESHOLD = -2.0
 
 
-class MassPanicComponent(str, Enum):
-    """Qué señal(es) dispararon el flag. Auditoría obligatoria: un OR de
-    2 señales puede subir falsos positivos si una es ruido puro -- sin
-    este registro no hay forma de saberlo en F2."""
-    NONE = "none"
-    ENTROPY = "entropy"
-    GOLDSTEIN = "goldstein"
-    BOTH = "both"
-
-
-@dataclass(frozen=True)
-class MassPanicResult:
-    flag: bool
-    component: MassPanicComponent
-    z_entropy: float | None
-    z_goldstein: float | None
-    insufficient_data: bool
-    #: Fijo en True -- ninguna de las 2 señales que esto combina tiene
-    #: backtest todavía (ver docstring de compute_mass_panic_index). No
-    #: es un parámetro: no hay forma de que esto sea False hasta que
-    #: exista esa validación.
-    is_experimental: bool = True
-
-
-def _zscore_last(window: Sequence[float] | None, current: float | None) -> float | None:
-    """z-score de `current` contra media/std de `window` (histórica, NO
-    incluye `current` -- misma convención que Fallback A de vitality_tesla).
-    None si faltan datos."""
-    if window is None or current is None or len(window) < MIN_WINDOW_FOR_ZSCORE:
-        return None
-    arr = np.asarray(window, dtype=float)
-    std = float(np.std(arr, ddof=1))
-    if std == 0.0:
-        return 0.0
-    return float((current - np.mean(arr)) / std)
-
-
-def compute_mass_panic_index(
-    entropy_window: Sequence[float] | None,
-    current_entropy: float,
-    goldstein_window: Sequence[float] | None = None,
-    current_goldstein: float | None = None,
-    *,
-    z_entropy_threshold: float = Z_ENTROPY_PANIC_THRESHOLD,
-    z_goldstein_threshold: float = Z_GOLDSTEIN_PANIC_THRESHOLD,
-) -> MassPanicResult:
-    """
-    EXPERIMENTAL -- sin backtest fuera de muestra (ver docstring del
-    módulo, hallazgo #1). A diferencia de vitality_tesla (val_dir=0.5614
-    confirmado), NINGUNA de las 2 señales que esto combina tiene
-    evidencia empírica todavía.
-
-    FUENTES EN CONFLICTO (2, no reconciliables sin adaptar una de ellas):
-      1. spel_bulk_harvester.py + base_adapter.py (SQL):
-         frac(GoldsteinScale < -5) sobre EVENTOS individuales GDELT.
-         No portable tal cual: ese ingestion (a nivel de evento) no
-         existe todavía en el repo nuevo -- `ingestion/` solo tiene
-         DerivAdapter (confirmado con `find ingestion/`).
-      2. spel_ingest_incremental.py:
-         z-score de entropy_shannon vs ventana de 7d, clip [-3,3]. Sí
-         portable -- opera al nivel diario/agregado en el que ya
-         trabaja este módulo.
-
-    SÍNTESIS implementada (no es un port 1:1 de ninguna sola fuente):
-        mass_panic = (z_entropy >= 2.0) OR (z_goldstein <= -2.0)
-      El componente de entropía es la fuente #2, directo.
-      El componente de goldstein ADAPTA la fuente #1: usa z-score de
-      goldstein_mean (ya está en gdelt_foundation.py::ENTROPY_SCHEMA)
-      contra su propia historia, en vez de fracción de eventos --
-      el umbral crudo "-5" del legacy es sobre eventos individuales y
-      no tiene el mismo significado sobre un promedio diario.
-      goldstein_window/current_goldstein son OPCIONALES (ingestion de
-      GDELT con goldstein_mean puede no estar conectada todavía) -- si
-      faltan, el flag se basa solo en entropía, registrado en `component`.
-
-    Validación pendiente (F2): backtest de cada componente por separado
-    contra trades reales. Si uno dispara casi siempre, es ruido -- subir
-    su umbral o quitarlo. Los umbrales de 2.0/-2.0 sigma son un punto de
-    partida convencional, no un valor calibrado.
-    """
-    z_entropy = _zscore_last(entropy_window, current_entropy)
-    z_goldstein = _zscore_last(goldstein_window, current_goldstein)
-
-    if z_entropy is None and z_goldstein is None:
-        return MassPanicResult(
-            flag=False, component=MassPanicComponent.NONE,
-            z_entropy=None, z_goldstein=None, insufficient_data=True,
-        )
-
-    entropy_triggered = z_entropy is not None and z_entropy >= z_entropy_threshold
-    goldstein_triggered = z_goldstein is not None and z_goldstein <= z_goldstein_threshold
-
-    if entropy_triggered and goldstein_triggered:
-        component = MassPanicComponent.BOTH
-    elif entropy_triggered:
-        component = MassPanicComponent.ENTROPY
-    elif goldstein_triggered:
-        component = MassPanicComponent.GOLDSTEIN
-    else:
-        component = MassPanicComponent.NONE
-
-    flag = entropy_triggered or goldstein_triggered
-    if flag:
-        logger.info(
-            "mass_panic_index: flag=True component=%s z_entropy=%s z_goldstein=%s",
-            component.value, z_entropy, z_goldstein,
-        )
-
-    return MassPanicResult(
-        flag=flag, component=component,
-        z_entropy=z_entropy, z_goldstein=z_goldstein,
-        insufficient_data=False,
-    )
-
-
-# ─── entropy_fibonacci_lags ─────────────────────────────────────────────────
-
-FIBONACCI_LAG_DAYS: tuple[int, ...] = (1, 2, 3, 5, 8, 13, 21)
-
-
-@dataclass(frozen=True)
-class FibonacciLagResult:
-    """Valores por lag -- None donde falta historia. Un lag faltante
-    (ej. no hay 21 días todavía) no invalida los demás -- resultado
-    parcial, no todo-o-nada."""
-    lags: dict[int, float | None]
-    available_lags: tuple[int, ...]
-    cadence_days: int
-
-
-def compute_entropy_fibonacci_lags(
-    entropy_history: Sequence[float] | None,
-    *,
-    lag_days: tuple[int, ...] = FIBONACCI_LAG_DAYS,
-) -> FibonacciLagResult:
-    """
-    fibonacci_lag_{1,2,3,5,8,13,21} -- entropy_shannon rezagada N DÍAS.
-
-    CORRECCIÓN DE ESTA SESIÓN (ver docstring del módulo, hallazgo #3):
-    2 turnos atrás se había "confirmado" cadencia de 1 MINUTO para este
-    feature, basada en la granularidad OHLCV de Deriv (Pregunta A). Esa
-    cadencia es real para Deriv, pero NO aplica acá:
-    gdelt_foundation.py dice explícitamente "fibonacci_lag_* -> Entropía
-    en lags 1,2,3,5,8,13,21 DÍAS", y su ENTROPY_SCHEMA usa "date": pl.Date
-    (no datetime) como clave -- confirma agregación diaria, no intradía.
-    spel_backbone_engine.py usa fibonacci_lag_21 + ATR14 para stop-loss
-    en contexto de swing diario, consistente con esto. La cadencia de 1m
-    de Deriv sigue siendo correcta para OTROS features intradía (OHLCV)
-    -- simplemente no para este.
-
-    Args:
-        entropy_history: entropy_shannon diaria, orden cronológico, el
-            ÚLTIMO elemento es HOY. lag_N = entropy_history[-1-N].
-        lag_days: qué lags calcular (default: Fibonacci 1..21).
-
-    Validación pendiente (F2, ver docstring del módulo): las 7 columnas
-    pueden ser redundantes (alta colinealidad entre lags cercanos) --
-    auditar matriz de correlación antes de tratarlas como features
-    definitivas. Acá se calculan las 7 en modo diagnóstico.
-    """
-    if not entropy_history:
-        return FibonacciLagResult(
-            lags={n: None for n in lag_days}, available_lags=(), cadence_days=1,
-        )
-
-    history = list(entropy_history)
-    n_points = len(history)
-
-    lags: dict[int, float | None] = {}
-    available: list[int] = []
-    for n in lag_days:
-        idx = -1 - n
-        if -idx <= n_points:
-            lags[n] = float(history[idx])
-            available.append(n)
-        else:
-            lags[n] = None
-
-    if len(available) < len(lag_days):
-        logger.warning(
-            "entropy_fibonacci_lags: historia insuficiente (%d días) para "
-            "lags %s -- devueltos como None.",
-            n_points, [n for n in lag_days if n not in available],
-        )
-
-    return FibonacciLagResult(lags=lags, available_lags=tuple(available), cadence_days=1)
-
-
-@dataclass(frozen=True)
-class DeltaLagResult:
-    deltas: dict[int, float | None]
-    available_lags: tuple[int, ...]
-
-
-def compute_entropy_delta_lags(
-    entropy_history: Sequence[float] | None,
-    *,
-    lag_days: tuple[int, ...] = FIBONACCI_LAG_DAYS,
-) -> DeltaLagResult:
-    """
-    ΔE_k = E_t - E_{t-k} -- diferencias, no niveles. Formulación
-    ADICIONAL a compute_entropy_fibonacci_lags(), no un reemplazo.
-
-    Por qué no se redujo a un subconjunto {1,5,21} ni se reemplazaron
-    los niveles por deltas en la función existente: la colinealidad
-    entre lags cercanos (Validación pendiente F2 ya documentada en
-    compute_entropy_fibonacci_lags) es una hipótesis razonable, pero
-    confirmarla necesita una matriz de correlación sobre ENTROPÍA REAL
-    -- que no existe todavía (no hay ingestion GDELT corriendo, ver
-    docstring del módulo). Elegir {1,5,21} ahora sería exactamente el
-    tipo de número sin evidencia que este proyecto evita en cada
-    decisión anterior. Niveles y deltas son objetos matemáticos
-    distintos (nivel = dónde está la entropía; delta = cuánto cambió) --
-    tener ambos disponibles deja que la auditoría de F2 compare cuál
-    aporta más, en vez de que esta sesión lo decida a ciegas.
-
-    Un lag_days ya personalizable (compute_entropy_fibonacci_lags(...,
-    lag_days=(1,5,21))) cubre la parte de "reducir el subconjunto" sin
-    código nuevo -- ver ese parámetro si lo que hace falta es menos
-    columnas, no una fórmula distinta.
-
-    Args:
-        entropy_history: igual semántica que compute_entropy_fibonacci_lags
-            (último elemento = hoy).
-        lag_days: qué lags calcular (default: Fibonacci 1..21).
-
-    Validación pendiente (F2): comparar poder predictivo de niveles vs.
-    deltas con datos reales, antes de elegir uno como default del
-    pipeline de features.
-    """
-    if not entropy_history:
-        return DeltaLagResult(deltas={n: None for n in lag_days}, available_lags=())
-
-    history = list(entropy_history)
-    n_points = len(history)
-    current = history[-1]
-
-    deltas: dict[int, float | None] = {}
-    available: list[int] = []
-    for n in lag_days:
-        idx = -1 - n
-        if -idx <= n_points:
-            deltas[n] = float(current - history[idx])
-            available.append(n)
-        else:
-            deltas[n] = None
-
-    return DeltaLagResult(deltas=deltas, available_lags=tuple(available))
 
 
 # ─── godel_score: el tercer input de gold_score ─────────────────────────────
@@ -1201,7 +869,9 @@ def compute_godel_score(
     `vitality_tesla` (44,8% de coincidencia con los datos reales),
     `compute_mass_panic_index` (4,1%) y `compute_entropy_fibonacci_lags`
     (0,0%), las tres veces por seguir un comentario o un doc en vez del
-    código que efectivamente corrió.
+    código que efectivamente corrió. (Las dos últimas se retiraron el
+    9-sep por no tener consumidor; se las cita como precedente de la
+    auditoría, no como código vivo.)
 
     QUÉ ES `val_dir`: la confianza direccional que sale de la inferencia
     de un LSTM entrenado (`capa_c_inference.SPELInferenceEngine`). Es una

@@ -15,7 +15,6 @@ import pytest
 from core.scoring import (
     DEFAULT_GLOBAL_P33,
     DEFAULT_GLOBAL_P66,
-    FIBONACCI_LAG_DAYS,
     MIN_OBS_FOR_HYBRID,
     MIN_OBS_FOR_ROLLING,
     NASH_FROZEN_THRESHOLD,
@@ -28,22 +27,17 @@ from core.scoring import (
     GoldScoreKillReason,
     GoldScoreRegime,
     InvalidThresholdError,
-    MassPanicComponent,
     NashFrozenSource,
     PercentileSource,
     VitalityTier,
     classify_gdelt_event,
     compute_adaptive_percentile,
-    compute_entropy_delta_lags,
-    compute_entropy_fibonacci_lags,
     compute_gold_score_bma,
     compute_godel_p66,
     compute_godel_score,
     GodelScoreResult,
     VAL_DIR_SIN_INFERENCIA,
     BMA_WEIGHTS,
-    compute_godel_p90,
-    compute_mass_panic_index,
     MIN_WINDOW_FOR_PERCENTILE,
     compute_nash_frozen_7d,
     compute_vitality_tesla,
@@ -380,202 +374,6 @@ def test_nash_insufficient_reference_tambien_marcado_cuando_insufficient_data():
     result = compute_nash_frozen_7d([0.5])
     assert result.insufficient_data is True
     assert result.insufficient_reference is True  # 1 punto, muy por debajo de 21
-
-
-# ─── mass_panic_index ────────────────────────────────────────────────────────
-
-def test_panic_insufficient_data_sin_ninguna_ventana():
-    result = compute_mass_panic_index(None, current_entropy=0.5)
-    assert result.insufficient_data is True
-    assert result.component == MassPanicComponent.NONE
-
-
-def test_panic_no_dispara_con_entropia_normal_y_sin_goldstein():
-    # ventana estable, current cerca de la media -> z bajo, no dispara
-    result = compute_mass_panic_index(
-        entropy_window=[0.5, 0.51, 0.49, 0.50, 0.52, 0.48, 0.50],
-        current_entropy=0.50,
-    )
-    assert result.flag is False
-    assert result.component == MassPanicComponent.NONE
-    assert result.insufficient_data is False
-
-
-def test_panic_is_experimental_es_siempre_true():
-    result = compute_mass_panic_index(entropy_window=[0.5, 0.5], current_entropy=0.5)
-    assert result.is_experimental is True
-
-
-def test_panic_dispara_por_entropia_cuando_z_supera_el_umbral():
-    # ventana muy estable (std chico) + salto grande -> z_entropy alto
-    result = compute_mass_panic_index(
-        entropy_window=[0.50, 0.50, 0.51, 0.49, 0.50, 0.50, 0.51],
-        current_entropy=0.90,
-    )
-    assert result.flag is True
-    assert result.component == MassPanicComponent.ENTROPY
-    assert result.z_entropy >= 2.0
-
-
-def test_panic_dispara_por_goldstein_cuando_z_es_muy_negativo():
-    result = compute_mass_panic_index(
-        entropy_window=[0.5, 0.51, 0.49, 0.50, 0.52, 0.48, 0.50],
-        current_entropy=0.50,
-        goldstein_window=[1.0, 1.1, 0.9, 1.0, 1.05, 0.95, 1.0],
-        current_goldstein=-8.0,
-    )
-    assert result.flag is True
-    assert result.component == MassPanicComponent.GOLDSTEIN
-    assert result.z_goldstein <= -2.0
-
-
-def test_panic_component_both_cuando_las_dos_senales_disparan():
-    result = compute_mass_panic_index(
-        entropy_window=[0.50, 0.50, 0.51, 0.49, 0.50, 0.50, 0.51],
-        current_entropy=0.90,
-        goldstein_window=[1.0, 1.1, 0.9, 1.0, 1.05, 0.95, 1.0],
-        current_goldstein=-8.0,
-    )
-    assert result.flag is True
-    assert result.component == MassPanicComponent.BOTH
-
-
-def test_panic_funciona_solo_con_entropia_cuando_no_hay_goldstein():
-    # goldstein_window=None (adapter de GDELT event-level no conectado)
-    result = compute_mass_panic_index(
-        entropy_window=[0.50, 0.50, 0.51, 0.49, 0.50, 0.50, 0.51],
-        current_entropy=0.90,
-        goldstein_window=None,
-        current_goldstein=None,
-    )
-    assert result.insufficient_data is False
-    assert result.z_goldstein is None
-    assert result.component == MassPanicComponent.ENTROPY
-
-
-def test_panic_z_score_es_cero_cuando_la_ventana_no_tiene_varianza():
-    result = compute_mass_panic_index(
-        entropy_window=[0.5, 0.5, 0.5],
-        current_entropy=0.5,
-    )
-    assert result.z_entropy == 0.0
-    assert result.flag is False
-
-
-def test_panic_respeta_umbrales_personalizados():
-    result = compute_mass_panic_index(
-        entropy_window=[0.50, 0.50, 0.51, 0.49, 0.50, 0.50, 0.51],
-        current_entropy=0.55,  # z moderado, no cruzaría 2.0
-        z_entropy_threshold=0.5,  # umbral bajo a propósito -> sí dispara
-    )
-    assert result.flag is True
-    assert result.component == MassPanicComponent.ENTROPY
-
-
-# ─── entropy_fibonacci_lags ─────────────────────────────────────────────────
-
-def test_fib_historia_none_devuelve_todos_los_lags_en_none():
-    result = compute_entropy_fibonacci_lags(None)
-    assert result.available_lags == ()
-    assert all(v is None for v in result.lags.values())
-
-
-def test_fib_historia_vacia_devuelve_todos_los_lags_en_none():
-    result = compute_entropy_fibonacci_lags([])
-    assert result.available_lags == ()
-
-
-def test_fib_cadence_siempre_es_un_dia():
-    result = compute_entropy_fibonacci_lags([0.1, 0.2])
-    assert result.cadence_days == 1
-
-
-def test_fib_valores_exactos_con_historia_completa():
-    # history[i] = i, 22 puntos (índices 0..21) -> lag_N = 21 - N,
-    # verificado a mano para no confiar en la misma lógica que prueba.
-    history = list(range(22))  # [0, 1, 2, ..., 21], hoy = 21
-    result = compute_entropy_fibonacci_lags([float(x) for x in history])
-    assert result.available_lags == FIBONACCI_LAG_DAYS
-    assert result.lags[1] == 20.0
-    assert result.lags[2] == 19.0
-    assert result.lags[3] == 18.0
-    assert result.lags[5] == 16.0
-    assert result.lags[8] == 13.0
-    assert result.lags[13] == 8.0
-    assert result.lags[21] == 0.0
-
-
-def test_fib_resultado_parcial_con_historia_de_diez_dias():
-    # 10 días de historia -> lag 1,2,3,5,8 disponibles; 13,21 no (parcial)
-    history = [float(x) for x in range(10)]
-    result = compute_entropy_fibonacci_lags(history)
-    assert result.available_lags == (1, 2, 3, 5, 8)
-    assert result.lags[8] is not None
-    assert result.lags[13] is None
-    assert result.lags[21] is None
-
-
-def test_fib_un_lag_faltante_no_invalida_los_demas():
-    history = [float(x) for x in range(3)]  # solo alcanza para lag_1 y lag_2
-    result = compute_entropy_fibonacci_lags(history)
-    assert result.lags[1] is not None
-    assert result.lags[2] is not None
-    assert result.lags[3] is None
-
-
-def test_fib_respeta_lag_days_personalizado():
-    history = [float(x) for x in range(5)]
-    result = compute_entropy_fibonacci_lags(history, lag_days=(1, 2))
-    assert set(result.lags.keys()) == {1, 2}
-    assert result.available_lags == (1, 2)
-
-
-# ─── entropy_delta_lags ─────────────────────────────────────────────────────
-
-def test_delta_historia_none_devuelve_todos_en_none():
-    result = compute_entropy_delta_lags(None)
-    assert result.available_lags == ()
-    assert all(v is None for v in result.deltas.values())
-
-
-def test_delta_valores_exactos_con_historia_completa():
-    # history[i]=i, 22 puntos, hoy=21 -> delta_N = 21 - (21-N) = N
-    history = [float(x) for x in range(22)]
-    result = compute_entropy_delta_lags(history)
-    assert result.deltas[1] == 1.0
-    assert result.deltas[5] == 5.0
-    assert result.deltas[21] == 21.0
-
-
-def test_delta_es_negativo_cuando_entropia_bajo():
-    # entropía decreciente: hoy es MENOR que hace N días -> delta negativo
-    history = [float(21 - x) for x in range(22)]  # [21,20,...,0], hoy=0
-    result = compute_entropy_delta_lags(history)
-    assert result.deltas[1] == -1.0  # 0 - 1
-    assert result.deltas[21] == -21.0  # 0 - 21
-
-
-def test_delta_resultado_parcial_no_invalida_los_demas():
-    history = [float(x) for x in range(3)]
-    result = compute_entropy_delta_lags(history)
-    assert result.deltas[1] is not None
-    assert result.deltas[21] is None
-
-
-def test_delta_respeta_lag_days_personalizado():
-    history = [float(x) for x in range(5)]
-    result = compute_entropy_delta_lags(history, lag_days=(1, 2))
-    assert set(result.deltas.keys()) == {1, 2}
-
-
-def test_delta_no_reemplaza_ni_altera_fibonacci_lags_niveles():
-    # ambas funciones coexisten -- delta no es un drop-in replacement
-    history = [float(x) for x in range(22)]
-    niveles = compute_entropy_fibonacci_lags(history)
-    deltas = compute_entropy_delta_lags(history)
-    assert niveles.lags[1] == 20.0  # nivel: el valor de hace 1 día
-    assert deltas.deltas[1] == 1.0   # delta: cuánto cambió en 1 día
-    assert niveles.lags[1] != deltas.deltas[1]
 
 
 # ─── gold_score_bma ─────────────────────────────────────────────────────────
@@ -1079,11 +877,19 @@ def test_benchmark_abc_c_nunca_dispara_menos_que_a_o_b_por_separado():
 
 
 # ══════════════════════════════════════════════════════════════════════════
-#  compute_godel_p90 -- percentil de ventana móvil (GODEL_CRITERIA_VERSION 2)
+#  compute_godel_p66 -- percentil de ventana móvil
 #
-#  Los dos tests que sostienen todo lo demás son
-#  `test_godel_p90_solo_mira_la_ventana_de_252_dias` y
-#  `test_godel_p90_nunca_ve_el_dia_que_se_evalua`: ventana y
+#  ESTE BLOQUE SE PORTÓ DE `compute_godel_p90` AL RETIRAR ESA FUNCIÓN
+#  (9-sep-2026). No se borró con ella: prueba el CONTRATO DE LA VENTANA
+#  MÓVIL, que las dos compartían y que `compute_godel_p66` —la que sigue
+#  viva y la que usa producción— no cubría por su cuenta. Sus dos únicos
+#  tests verificaban el percentil pedido y que llamara a `_ventana_movil`;
+#  nada fijaba que la ventana se tome del final, ni la frontera de un día,
+#  ni el warm-up, ni que `window < 1` lance.
+#
+#  Los dos que sostienen todo lo demás son
+#  `test_godel_p66_solo_mira_la_ventana_de_252_dias` y
+#  `test_godel_p66_la_ventana_termina_en_el_dia_anterior`: ventana y
 #  desplazamiento son las DOS mitades del contrato. Sin la ventana el
 #  criterio vuelve a ser el acumulado que dejó 1.077 días sin muestra;
 #  sin el desplazamiento hay fuga temporal y el número que salga no
@@ -1092,7 +898,7 @@ def test_benchmark_abc_c_nunca_dispara_menos_que_a_o_b_por_separado():
 
 # ─── La ventana: 252 observaciones, ni una más ────────────────────────────
 
-def test_godel_p90_solo_mira_la_ventana_de_252_dias():
+def test_godel_p66_solo_mira_la_ventana_de_252_dias():
     """Historia vieja alta + ventana reciente baja: si el percentil viera
     más de 252 observaciones, la cola vieja lo arrastraría hacia arriba.
     Ese arrastre es exactamente lo que dejó 1.077 días recientes sin una
@@ -1100,7 +906,7 @@ def test_godel_p90_solo_mira_la_ventana_de_252_dias():
     vieja = [10.0] * 3000            # 2015-2018, entropía alta
     reciente = [1.0] * GODEL_ROLLING_WINDOW_DAYS   # el último año
 
-    p90 = compute_godel_p90(vieja + reciente, global_default=1.19)
+    p90 = compute_godel_p66(vieja + reciente, global_default=1.19)
 
     assert p90.n_obs == GODEL_ROLLING_WINDOW_DAYS
     assert p90.value == pytest.approx(1.0), (
@@ -1108,7 +914,7 @@ def test_godel_p90_solo_mira_la_ventana_de_252_dias():
         "arrastrando igual que el criterio acumulado")
 
 
-def test_godel_p90_con_ventana_acumulada_daria_otro_numero():
+def test_godel_p66_con_ventana_acumulada_daria_otro_numero():
     """Contraprueba del anterior: el mismo dato SIN recortar la ventana da
     un umbral inalcanzable. Si este test pasara a dar lo mismo que el
     anterior, es que la ventana dejó de aplicarse."""
@@ -1116,7 +922,7 @@ def test_godel_p90_con_ventana_acumulada_daria_otro_numero():
     reciente = [1.0] * GODEL_ROLLING_WINDOW_DAYS
     serie = vieja + reciente
 
-    movil = compute_godel_p90(serie, global_default=1.19)
+    movil = compute_godel_p66(serie, global_default=1.19)
     acumulado = compute_adaptive_percentile(
         history=serie, percentile=90.0, global_default=1.19)
 
@@ -1124,53 +930,54 @@ def test_godel_p90_con_ventana_acumulada_daria_otro_numero():
     assert acumulado.value == pytest.approx(10.0)
 
 
-def test_godel_p90_la_ventana_se_toma_del_final_no_del_principio():
+def test_godel_p66_la_ventana_se_toma_del_final_no_del_principio():
     """Las últimas 252 observaciones, no las primeras. Un `[:window]` en
     vez de `[-window:]` pasa los tests de tamaño y falla acá."""
     historia = [float(i) for i in range(1000)]
 
-    p90 = compute_godel_p90(historia, global_default=1.19)
+    p66 = compute_godel_p66(historia, global_default=1.19)
 
-    esperado = float(np.percentile(historia[-GODEL_ROLLING_WINDOW_DAYS:], 90))
-    assert p90.value == pytest.approx(esperado)
-    assert p90.value > 900, "está mirando el principio de la serie"
+    esperado = float(np.percentile(historia[-GODEL_ROLLING_WINDOW_DAYS:],
+                                   GODEL_MASK_PERCENTILE))
+    assert p66.value == pytest.approx(esperado)
+    assert p66.value > 750, "está mirando el principio de la serie"
 
 
-def test_godel_p90_la_ventana_avanza_con_el_dia():
+def test_godel_p66_la_ventana_avanza_con_el_dia():
     """Que sea MÓVIL: dos días distintos de la misma serie no comparten
     umbral cuando la serie se mueve."""
     serie = [float(i) for i in range(1000)]
 
-    hoy = compute_godel_p90(serie[:600], global_default=1.19)
-    manana = compute_godel_p90(serie[:601], global_default=1.19)
+    hoy = compute_godel_p66(serie[:600], global_default=1.19)
+    manana = compute_godel_p66(serie[:601], global_default=1.19)
 
     assert manana.value > hoy.value, "la ventana está congelada"
 
 
-def test_godel_p90_ventana_configurable_pero_el_default_es_252():
+def test_godel_p66_ventana_configurable_pero_el_default_es_252():
     assert GODEL_ROLLING_WINDOW_DAYS == 252
 
     historia = [float(i) for i in range(1000)]
-    corta = compute_godel_p90(historia, global_default=1.19, window=50)
+    corta = compute_godel_p66(historia, global_default=1.19, window=50)
 
     assert corta.n_obs == 50
-    assert compute_godel_p90(historia, global_default=1.19).n_obs == 252
+    assert compute_godel_p66(historia, global_default=1.19).n_obs == 252
 
 
-def test_godel_p90_ventana_menor_a_uno_es_error_no_degradacion_silenciosa():
+def test_godel_p66_ventana_menor_a_uno_es_error_no_degradacion_silenciosa():
     """Una ventana vacía devolvería el default global todos los días. Eso
     se ve igual que un criterio conservador y no lo es: es un fallo
     silencioso."""
     with pytest.raises(ValueError, match="window"):
-        compute_godel_p90([1.0] * 500, global_default=1.19, window=0)
+        compute_godel_p66([1.0] * 500, global_default=1.19, window=0)
 
     with pytest.raises(ValueError, match="window"):
-        compute_godel_p90([1.0] * 500, global_default=1.19, window=-252)
+        compute_godel_p66([1.0] * 500, global_default=1.19, window=-252)
 
 
 # ─── El desplazamiento de un día: la otra mitad del contrato ──────────────
 
-def test_godel_p90_la_ventana_termina_en_el_dia_anterior():
+def test_godel_p66_la_ventana_termina_en_el_dia_anterior():
     """El contrato es que `entropy_history` NO incluye el día evaluado, y
     que la ventana TERMINA en el último día de esa historia -- el
     anterior al que se evalúa.
@@ -1192,7 +999,7 @@ def test_godel_p90_la_ventana_termina_en_el_dia_anterior():
 
     scoring.compute_adaptive_percentile = espia
     try:
-        compute_godel_p90(historia, global_default=1.19)
+        compute_godel_p66(historia, global_default=1.19)
     finally:
         scoring.compute_adaptive_percentile = real
 
@@ -1202,17 +1009,25 @@ def test_godel_p90_la_ventana_termina_en_el_dia_anterior():
     assert max(ventana) == historia[-1], "la ventana mira hacia adelante"
 
 
-def test_godel_p90_si_el_dia_entrara_en_su_ventana_el_umbral_cambiaria():
+def test_godel_p66_si_el_dia_entrara_en_su_ventana_el_umbral_cambiaria():
     """Por qué el desplazamiento es contrato y no un detalle. Se usa una
     ventana chica a propósito: es donde el efecto de UN día es visible en
     el número. Con 252 el efecto sigue existiendo, solo que diluido -- la
-    frontera no depende de que se note."""
-    historia = [1.0] * 40
+    frontera no depende de que se note.
+
+    LA FIXTURE CAMBIÓ AL PORTAR ESTE TEST DE P90 A P66, y el motivo vale la
+    pena: con una historia PLANA y un solo outlier, el P90 se movía y el
+    P66 no. Un solo valor por encima del percentil 66 de una ventana de 10
+    no alcanza para correrlo -- haría falta que superara el 34% superior.
+    Con una rampa el efecto sí es visible, porque lo que mueve el umbral no
+    es la magnitud del día sino que la ventana se DESPLACE al incluirlo, y
+    eso es exactamente lo que la frontera impide."""
+    historia = [float(i) for i in range(40)]
     dia_atipico = 99.0
 
-    sin_el_dia = compute_godel_p90(historia, global_default=1.19, window=10)
-    con_el_dia = compute_godel_p90(historia + [dia_atipico],
-                                   global_default=1.19, window=10)
+    sin_el_dia = compute_godel_p66(historia, global_default=1.19, window=20)
+    con_el_dia = compute_godel_p66(historia + [dia_atipico],
+                                   global_default=1.19, window=20)
 
     assert con_el_dia.value > sin_el_dia.value, (
         "el día propio contamina el umbral contra el que se lo compara: "
@@ -1220,13 +1035,13 @@ def test_godel_p90_si_el_dia_entrara_en_su_ventana_el_umbral_cambiaria():
     assert godel_active(dia_atipico, sin_el_dia.value)
 
 
-def test_godel_p90_el_desplazamiento_no_se_pierde_con_ventana_llena():
+def test_godel_p66_el_desplazamiento_no_se_pierde_con_ventana_llena():
     """El caso que importa en producción: con más de 252 días de historia
     la ventana sigue siendo las 252 anteriores, sin sumar el día propio."""
     historia = [float(i) for i in range(1000)]
 
-    sin_el_dia = compute_godel_p90(historia, global_default=1.19)
-    con_el_dia = compute_godel_p90(historia + [1000.0], global_default=1.19)
+    sin_el_dia = compute_godel_p66(historia, global_default=1.19)
+    con_el_dia = compute_godel_p66(historia + [1000.0], global_default=1.19)
 
     assert sin_el_dia.n_obs == con_el_dia.n_obs == GODEL_ROLLING_WINDOW_DAYS
     assert con_el_dia.value > sin_el_dia.value, (
@@ -1235,49 +1050,49 @@ def test_godel_p90_el_desplazamiento_no_se_pierde_con_ventana_llena():
 
 # ─── Warm-up: ventana expandible con lag de un día ────────────────────────
 
-def test_godel_p90_en_warmup_usa_toda_la_historia_disponible():
+def test_godel_p66_en_warmup_usa_toda_la_historia_disponible():
     """Para los primeros 252 días no hay 252 observaciones previas. La
     ventana es todo lo que haya (0...t-1) -- de facto el criterio
     ACUMULADO, documentado como tal. La alternativa sería tomar
     observaciones del futuro."""
     for t in (5, 50, 150, 251):
-        p90 = compute_godel_p90([float(i) for i in range(t)],
+        p90 = compute_godel_p66([float(i) for i in range(t)],
                                 global_default=1.19)
         assert p90.n_obs == t, f"día {t}: la ventana debería ser toda la historia"
 
 
-def test_godel_p90_el_warmup_termina_exactamente_en_252():
+def test_godel_p66_el_warmup_termina_exactamente_en_252():
     historia = [float(i) for i in range(400)]
 
-    assert compute_godel_p90(historia[:251], global_default=1.19).n_obs == 251
-    assert compute_godel_p90(historia[:252], global_default=1.19).n_obs == 252
-    assert compute_godel_p90(historia[:253], global_default=1.19).n_obs == 252
+    assert compute_godel_p66(historia[:251], global_default=1.19).n_obs == 251
+    assert compute_godel_p66(historia[:252], global_default=1.19).n_obs == 252
+    assert compute_godel_p66(historia[:253], global_default=1.19).n_obs == 252
 
 
-def test_godel_p90_el_warmup_se_acopla_al_fallback_existente():
+def test_godel_p66_el_warmup_se_acopla_al_fallback_existente():
     """No se duplica la lógica de arranque en frío: los cortes de 10 y 100
     observaciones siguen siendo los de compute_adaptive_percentile."""
-    assert compute_godel_p90([1.0] * 5, global_default=1.19).source is PercentileSource.GLOBAL
-    assert compute_godel_p90([1.0] * 50, global_default=1.19).source is PercentileSource.HYBRID
-    assert compute_godel_p90([1.0] * 150, global_default=1.19).source is PercentileSource.ROLLING
+    assert compute_godel_p66([1.0] * 5, global_default=1.19).source is PercentileSource.GLOBAL
+    assert compute_godel_p66([1.0] * 50, global_default=1.19).source is PercentileSource.HYBRID
+    assert compute_godel_p66([1.0] * 150, global_default=1.19).source is PercentileSource.ROLLING
 
-    assert compute_godel_p90([1.0] * MIN_OBS_FOR_HYBRID,
+    assert compute_godel_p66([1.0] * MIN_OBS_FOR_HYBRID,
                              global_default=1.19).source is PercentileSource.HYBRID
-    assert compute_godel_p90([1.0] * MIN_OBS_FOR_ROLLING,
+    assert compute_godel_p66([1.0] * MIN_OBS_FOR_ROLLING,
                              global_default=1.19).source is PercentileSource.ROLLING
 
 
-def test_godel_p90_sin_historia_es_el_default_global_no_un_error():
+def test_godel_p66_sin_historia_es_el_default_global_no_un_error():
     """Cold start: cero historia es un caso VÁLIDO, igual que en el resto
     del módulo. No se inventa un umbral y no se lanza."""
-    assert compute_godel_p90(None, global_default=1.19).value == 1.19
-    assert compute_godel_p90([], global_default=1.19).value == 1.19
-    assert compute_godel_p90([], global_default=1.19).source is PercentileSource.GLOBAL
+    assert compute_godel_p66(None, global_default=1.19).value == 1.19
+    assert compute_godel_p66([], global_default=1.19).value == 1.19
+    assert compute_godel_p66([], global_default=1.19).source is PercentileSource.GLOBAL
 
 
 # ─── Reusar, no reimplementar ─────────────────────────────────────────────
 
-def test_godel_p90_llama_a_compute_adaptive_percentile_no_la_reimplementa():
+def test_godel_p66_llama_a_compute_adaptive_percentile_no_la_reimplementa():
     """Port, don't rewrite. Si alguien copiara la lógica del percentil acá,
     habría dos implementaciones que pueden divergir en silencio."""
     import core.scoring as scoring
@@ -1292,21 +1107,21 @@ def test_godel_p90_llama_a_compute_adaptive_percentile_no_la_reimplementa():
     original = scoring.compute_adaptive_percentile
     scoring.compute_adaptive_percentile = espia
     try:
-        compute_godel_p90([float(i) for i in range(500)], global_default=1.19)
+        compute_godel_p66([float(i) for i in range(500)], global_default=1.19)
     finally:
         scoring.compute_adaptive_percentile = original
 
     assert len(vistas) == 1, "no llamó a compute_adaptive_percentile"
     historia_vista, percentil, default = vistas[0]
-    assert percentil == 90.0
+    assert percentil == GODEL_MASK_PERCENTILE
     assert default == 1.19
     assert len(historia_vista) == GODEL_ROLLING_WINDOW_DAYS
 
 
-def test_godel_p90_devuelve_el_mismo_tipo_que_el_percentil_adaptativo():
+def test_godel_p66_devuelve_el_mismo_tipo_que_el_percentil_adaptativo():
     """Mismo contrato de retorno: quien ya consumía value/source/n_obs no
     tiene que cambiar nada."""
-    r = compute_godel_p90([1.0] * 500, global_default=1.19)
+    r = compute_godel_p66([1.0] * 500, global_default=1.19)
     assert isinstance(r, AdaptivePercentileResult)
     assert r.source in tuple(PercentileSource)
 
@@ -1631,9 +1446,9 @@ def test_los_umbrales_del_tercil_siguen_siendo_33_y_66():
 # ─── Reusar, no reimplementar ─────────────────────────────────────────────
 
 def test_las_dos_ramas_recortan_con_el_mismo_mecanismo():
-    """Port, don't rewrite. Si el tercil copiara el `[-window:]` de
-    compute_godel_p90 habría dos recortes paralelos que pueden divergir en
-    silencio. Se verifica sobre el AST y no sobre el texto: un docstring
+    """Port, don't rewrite. Si el tercil copiara el `[-window:]` del
+    umbral de la máscara habría dos recortes paralelos que pueden divergir
+    en silencio. Se verifica sobre el AST y no sobre el texto: un docstring
     que mencione `_ventana_movil` no cuenta como llamarla."""
     import ast
     import inspect
@@ -1650,7 +1465,7 @@ def test_las_dos_ramas_recortan_con_el_mismo_mecanismo():
                    and n.func.id == "_ventana_movil"
                    for n in ast.walk(fn))
 
-    assert llama_a_ventana_movil("compute_godel_p90")
+    assert llama_a_ventana_movil("compute_godel_p66")
     assert llama_a_ventana_movil("compute_vitality_tesla")
 
 
@@ -1661,10 +1476,10 @@ def test_una_sola_constante_de_ventana_para_las_dos_ramas():
     from core.scoring import _ventana_movil
 
     firma_vitality = inspect.signature(compute_vitality_tesla)
-    firma_p90 = inspect.signature(compute_godel_p90)
+    firma_umbral = inspect.signature(compute_godel_p66)
 
     assert (firma_vitality.parameters["n_events_rolling_window"].default
-            == firma_p90.parameters["window"].default
+            == firma_umbral.parameters["window"].default
             == GODEL_ROLLING_WINDOW_DAYS)
     assert _ventana_movil is not None
 
