@@ -1,16 +1,35 @@
 # SPEL — ESTADO DEL PROYECTO
 
-> **Este archivo es la única fuente de verdad sobre en qué fase estamos.**
-> Se lee primero en cada chat nuevo. Se actualiza al final de cada sesión, nunca a mitad.
-> Si algo en un chat contradice lo que dice acá, este archivo gana — a menos que
-> el chat verifique contra GitHub real y lo actualice con evidencia.
+> **⚠️ ESTE ARCHIVO YA NO ES CANÓNICO. Es un ESPEJO.**
+>
+> El documento canónico es **`SPEL_MANUAL_OPERACION.md`**, en Drive.
+> **Si este archivo y el manual divergen, GANA EL MANUAL** — sin excepción y sin
+> necesidad de verificar cuál de los dos se escribió después.
+>
+> Qué sigue siendo cierto de la regla vieja: este archivo se lee primero en cada chat
+> nuevo, se actualiza al final de cada sesión y nunca a mitad, y frente a un chat que
+> lo contradiga sin evidencia, gana el archivo. Lo que cambió es el escalón de arriba:
+> antes decía "la única fuente de verdad" y ya no lo es.
+>
+> Por qué se degrada a espejo en vez de borrarse: sigue siendo lo que un chat nuevo
+> tiene a mano dentro del repo, sin salir a Drive. Un espejo con una regla de
+> desempate explícita es más útil que dos documentos que se creen ambos canónicos —
+> que es exactamente el problema de gobernanza que este archivo viene arrastrando
+> desde el 17 de agosto (ver la sección de gobernanza más abajo).
 
-**Última actualización:** 6 sep 2026 — cierra Fase 1 con el resultado de la validación
-de la máscara. El archivo llevaba desde el 18 de agosto diciendo 402 tests mientras
-`main` llegaba a 661: 19 días de desactualización, exactamente la misma señal de
-gobernanza que este archivo ya se había señalado a sí mismo el 17 y el 18 de agosto y
-que volvió a ocurrir. La regla del punto 6 de "cómo actualizar" existe por esto y no
-alcanzó; queda como incógnita abierta si hace falta un chequeo automático.
+**Última actualización:** 9 sep 2026 — reconciliación con `main` y cierre de Fase 1.
+
+**Commit de referencia:** `e4ac310` (merge del PR #20), con el PR #18 rebaseado encima.
+
+Este archivo no se tocaba desde **`f410081` (24 ago)**. Entre medio se fusionaron los
+PR #6 al #20. Son 16 días y 14 PRs de desfase.
+
+El encabezado anterior decía "cierra 17 días de desactualización real" y describía el
+mismo problema. Que haya vuelto a pasar, en el mismo archivo y con el mismo diagnóstico
+ya escrito arriba, dice que **la regla del punto 6 de "cómo actualizar" no alcanza**:
+está redactada como recordatorio y depende de que alguien se acuerde. Queda como
+incógnita abierta si hace falta un chequeo automático (ver Incógnita #11).
+
 
 **Ver también:** `FASE2_NOTAS_ARQUITECTURA_MODELO.md` (raíz del repo) — glosario y
 opciones de arquitectura de modelo (LSTM vs. árboles/ensambles), separado de este
@@ -21,7 +40,7 @@ archivo a propósito para no mezclar "estado actual" con "notas de investigació
 ## 🚦 SEMÁFORO DE FASES
 
 ```
-FASE 1 — ingestion/ + core/scoring.py     🔵 CERRADA — resultado NEGATIVO medido
+FASE 1 — ingestion/ + core/scoring.py     🔵 CERRADA — checklist cumplido, resultado NEGATIVO
 FASE 2 — Modelo                            ⚪ NO INICIADA — reorientada, ver abajo
 FASE 3 — visualization/ (grafo)            ⚪ NO INICIADA
 FASE 4 — execution/ + Deriv real           🟡 Actuator confirmado, gate F2 firme
@@ -37,29 +56,40 @@ que no funciona es la hipótesis que ese pipeline existía para probar.
 
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-**661 tests** (663 recolectados, 2 con `skipif`: el `live` de TwelveData y uno de
-persistencia). Verificado corriendo la suite, no contado de memoria. Todo lo de abajo
-corre en clon 100% ajeno, venv limpio desde `requirements.txt`, 10 corridas seguidas
-sin intermitencia.
+**678 tests recolectados, 676 pasan y 2 se saltan**, en **20 archivos**. Contado
+corriendo `pytest --collect-only` sobre `e4ac310`, no de memoria. Los 2 `skip` son el
+test `live` de TwelveData (`skipif` sobre la credencial) y uno de persistencia.
 
-> El número que este archivo traía era **402**, del 18 de agosto. La diferencia son 19
-> días de trabajo que el archivo no reflejó.
+Este archivo decía **402**. La cifra viene del 18 de agosto.
+
+> **Precisión sobre cómo se cuenta**, porque los tres números que circulan son
+> distintos y los tres son "correctos" según qué se pregunte:
+> - **556** — funciones `def test_` escritas a mano.
+> - **678** — casos que pytest ejecuta, después de expandir `@pytest.mark.parametrize`.
+> - **20** — archivos `test_*.py` (`tests/` tiene 21 archivos contando `__init__.py`).
+>
+> El número que vale para "¿cuánto cubre la suite?" es **678**, porque es lo que
+> efectivamente corre. Un brief anterior citaba "649 en 21 archivos" y no reproduce
+> con ninguna de las tres formas de contar sobre este commit.
+
+Todo lo de abajo corrió en clon 100% ajeno, venv limpio desde `requirements.txt`, 10
+corridas seguidas sin intermitencia.
 
 | Módulo | Qué hace | Tests | Estado |
 |---|---|---:|---|
-| `core/scoring.py` | `entropy_state` (Capa 1), `godel_active`, vitality_tesla, nash_frozen_7d, gold_score_bma, classify_gdelt_event | 163 | ✅ |
+| `core/scoring.py` | `entropy_state` (Capa 1), `godel_active`, `compute_godel_score`, `gold_score_bma`, vitality_tesla, nash_frozen_7d, classify_gdelt_event | 171 | ✅ |
 | `core/monte_carlo.py` | Validación GBM — NO entrena, simulación pura en cada llamada | 22 | ✅ |
-| `core/price_signals.py` | te_score (proxy TE) + backbone_score (EMA20/63) | 12 | ✅ |
+| `core/price_signals.py` | te_score (proxy TE) + backbone_score (EMA20/63) — **sin poder predictivo demostrado**, ver decision-log 6-sep | 12 | ⚠️ |
 | `ingestion/adapters.py` | DerivAdapter + TwelveDataAdapter + contrato de datos | 65 + 29 | ✅ |
 | `ingestion/sources.py` | **Punto de composición** — `build_price_sources()`; `SourceInventory` distingue capacidad ausente de error | 11 | ✅ |
 | `ingestion/gdelt.py` + `_aggregation` + `_series` | Pipeline GDELT completo, persistencia JSONL | 41 | ✅ |
-| `ingestion/training_dataset.py` | Une OHLCV + serie GDELT, forward-fill, coverage_ratio explícito | 7 | ✅ |
 | `ingestion/source_registry.py` | Registro versionado de cobertura por fuente | 34 | ✅ |
-| `orchestration/cycle.py` | Corre vitality/nash/godel sobre 5 activos; sella `godel_criteria_version` | 19 | ✅ |
+| `tools/measure_godel_samples.py` | Mide el `n` post-máscara | 75 | ✅ |
+| `tools/provider_coverage.py` + `import_gdelt_entropy.py` + `audit_data_lake.py` | Inventario de proveedores, import histórico de entropía, auditoría del lake | 58 + 36 + 32 | ✅ |
+| `ingestion/training_dataset.py` | Une OHLCV + serie GDELT, forward-fill, coverage_ratio explícito | 7 | ✅ |
+| `orchestration/cycle.py` | Corre vitality/nash/godel sobre 5 activos; calcula `gold_score`; sella `godel_criteria_version` | 26 | ✅ |
 | `execution/circuit_breaker.py` + `execution_guard.py` | Guardrails duros — congelados hasta F4 | 31 | ✅ |
 | `governance/persistence.py` + `secrets.py` | 4 streams, SecretKey único | 28 | ✅ |
-| `tools/measure_godel_samples.py` | Mide el `n` post-máscara. **El tool que produjo el cierre de Fase 1** | 75 | ✅ |
-| `tools/provider_coverage.py` + `import_gdelt_entropy.py` + `audit_data_lake.py` | Inventario de proveedores, import histórico de entropía, auditoría del lake | 58 + 36 + 32 | ✅ |
 | `tools/heartbeat.py` + `.github/workflows/heartbeat.yml` | Trigger `schedule:` real — **desactivado a propósito**, ver Fase 6 | — | ✅ código, 🔴 apagado |
 
 **No existe todavía, confirmado por ausencia real (no supuesto):** grep de
@@ -131,7 +161,42 @@ no "no hay dónde armar las piezas", sino "las piezas armadas no se usan todaví
 
 ---
 
-## 🔵 FASE 1 CERRADA — el resultado, y por qué es negativo
+## 🔵 FASE 1 CERRADA — dos lecturas del mismo cierre
+
+El checklist se cumplió **y** la hipótesis de fondo se refutó. Las dos cosas son ciertas
+a la vez y ninguna sustituye a la otra, así que van las dos.
+
+### 1. El criterio de BLUEPRINT.md: el Gold Score se calcula
+
+`BLUEPRINT.md` fija el criterio textual:
+
+> "`ingestion/` trae un OHLCV real de Deriv y un GDELT real, `core/scoring.py` calcula un
+> **Gold Score real** a partir de eso, con un test que corre en CI y pasa."
+
+El PR #19 (`compute_godel_score`) cerró la última pieza. Los tres componentes tienen
+función real: `compute_godel_score` (core/scoring.py), `compute_transfer_entropy_proxy`
+y `compute_backbone_score` (core/price_signals.py). El test de cierre corre en CI y
+verifica **el valor** —0.539239 sobre cierres deterministas— no que no lance excepción.
+
+**La salvedad, y no es letra chica: el criterio exige que el Gold Score SE CALCULE, no
+que PREDIGA.**
+
+- `te_score` y `backbone_score` **fueron medidos y no son significativos**: cero
+  supervivientes a Bonferroni y a Benjamini-Hochberg, holdout p = 0,4133 y p = 0,5921,
+  y un backtest de reversión que perdió el 99,2% del capital en BTC. Acta completa en
+  `decision-log.md`, entrada del 6-sep.
+- `godel_score` vale **0.0** mientras no exista un LSTM que sirva `val_dir`.
+- Los pesos **0.40/0.30/0.30 nunca se calibraron**. La etiqueta "inamovible (Regla 13)"
+  del legacy documenta gobernanza, no un ajuste empírico.
+
+Y un hallazgo estructural del propio PR #19: el término `w_godel * godel_score` **no
+puede aportar a ningún gold_score distinto de cero**, ni con un `val_dir` de 1.0 —
+cuando la máscara dispara, el kill por `godel_active` pone el score en 0.0; cuando no
+dispara, el componente vale 0.0 por definición. El peso de 0.40/0.55 está muerto. La
+causa es una rama de kill que agregó el port y que ninguna de las dos fuentes legacy
+tiene; queda como tarea aparte, con test que la fija.
+
+### 2. El resultado de la validación: la máscara no discrimina dirección
 
 Medido el **4-sep-2026** sobre datos reales, criterio `4.0.0-entropy_state_p66`.
 Detalle completo y método en `decision-log.md`.
@@ -163,6 +228,12 @@ la señal algo que este tipo de índice no hace.
 **Lo que NO invalida.** El pipeline de ingestion, la persistencia, el contrato de datos,
 la integridad temporal y la máscara como tal siguen siendo correctos y medidos. Lo que
 cae es el uso que se les estaba dando.
+
+### Cerrada ≠ exitosa
+
+La fase cierra porque su checklist se cumplió. Lo que el sistema produce hoy es un número
+calculado de punta a punta con funciones reales, y **no una señal operativa**. Todo
+`gold_score` viaja con esa advertencia pegada en `gold_score_warning`.
 
 ---
 
@@ -291,20 +362,55 @@ Regla fija sin excepción: nada bajo `ingestion/`, `core/`, `execution/`,
 
 ## ⚠️ GOBERNANZA DE DOCUMENTOS — hallazgo del 17 ago, TODAVÍA sin resolver
 
-Sigue pendiente, no se resolvió solo con el tiempo: `SPEL_PERSISTENCE_STATE.md` y
-`SPEL_PERSISTENCIA_v2.md` en Drive raíz siguen ahí, sin archivar, compitiendo con
-este archivo. Este patch reemplaza el contenido de `SPEL_PERSISTENCE_STATE.md` con
-un espejo literal de este archivo (marcado como espejo, no editable ahí) — pero
-`SPEL_PERSISTENCIA_v2.md` sigue sin archivar. Acción pendiente para la próxima
-sesión, no lo resolví en esta.
+**RESUELTO EN PARTE, el 9-sep: ya hay un canónico declarado.**
+`SPEL_MANUAL_OPERACION.md` (Drive) es el documento canónico, y este archivo pasa a
+espejo con regla de desempate explícita — **si divergen, gana el manual**. Ver el
+encabezado.
+
+Eso ataca la raíz del hallazgo del 17 de agosto, que no era "hay archivos de más" sino
+"hay varios documentos que se creen la fuente de verdad y ninguno cede". Con un canónico
+declarado, un documento de más es un espejo desactualizado —molesto— en vez de una
+contradicción sin árbitro.
+
+**Lo que sigue pendiente:** `SPEL_PERSISTENCE_STATE.md` y `SPEL_PERSISTENCIA_v2.md` en
+Drive raíz siguen sin archivar. Ahora es una limpieza, no un problema de gobernanza: la
+jerarquía ya está definida y esos dos quedan por debajo del manual igual que este
+archivo. Sigue siendo acción en Drive, fuera del repo.
 
 ---
 
 ## ❓ INCÓGNITAS REALES — sin resolver, no inventadas para llenar espacio
 
-1. **¿GitHub Actions ya verificó una descarga real de GDELT?** Nunca confirmado —
-   cada intento de chequear la pestaña Actions vía API chocó con rate limit sin
-   autenticar. Sigue siendo la verificación más urgente pendiente.
+1. ~~**¿GitHub Actions ya verificó una descarga real de GDELT?**~~ **CERRADA el
+   9-sep, y la respuesta no es la que la pregunta esperaba: NO PUDO haberla
+   verificado, porque ningún workflow invoca GDELT.** Verificado leyendo los tres:
+
+   | workflow | qué corre | disparo |
+   |---|---|---|
+   | `tests.yml` | `python -m pytest tests/ -v` | push, pull_request |
+   | `live-tests.yml` | `python -m pytest tests/ -m live -v` | workflow_dispatch |
+   | `heartbeat.yml` | `python tools/heartbeat.py` | workflow_dispatch (el `schedule:` está comentado) |
+
+   Ninguno toca GDELT. `tools/heartbeat.py` importa `core.monte_carlo` y nada más.
+
+   La única mención de GDELT en todo `.github/workflows/` es un **comentario** en
+   `tests.yml:13`, que dice cambiar el paso final por `python ingestion/run_gdelt.py`.
+   **Ese archivo no existe** — un `grep` de `run_gdelt` en todo el repo devuelve
+   exactamente ese comentario y nada más.
+
+   **No era una verificación pendiente: era un entry point ausente.** La incógnita
+   estuvo abierta desde el 17 de agosto preguntando por el resultado de algo que nunca
+   se podía haber ejecutado, y el intento de contestarla mirando la pestaña Actions no
+   iba a resolverla nunca — la respuesta no estaba en Actions, estaba en que falta el
+   archivo. Se cierra como hallazgo, no como confirmación.
+
+   **Lo que queda pendiente, ahora bien formulado:** escribir `ingestion/run_gdelt.py`
+   (o el entry point que corresponda) y decidir si el `schedule:` de un workflow lo
+   dispara. Es trabajo, no una consulta.
+
+   *(Que la ingestion GDELT funciona ya está demostrado por otra vía: la entropía
+   histórica de BTC y XAU —3.998 días por activo— está importada y es la que alimentó
+   la medición de la máscara. Lo que falta es que corra sola en CI, no que corra.)*
 2. **¿GDELT tiene cobertura completa de 2026?** El auditor legacy
    (`spel_auditoria_total.py`) tenía un chequeo específico para esto
    (`GDELT_GAP_2026`) — no se corrió el equivalente contra el pipeline nuevo.
@@ -336,6 +442,15 @@ sesión, no lo resolví en esta.
     paper (17 ago). Cuando el amigo de Altair complete la verificación con Banco
     Pichincha, hace falta construir el adapter desde cero — no existe ni un stub.
 
+11. **¿Hace falta un chequeo automático de desactualización de este archivo?** El punto
+    6 de "cómo actualizar" dice que si pasan ~5 días con patches nuevos en `main` sin
+    tocar este archivo, eso es señal de circularidad. La regla existe desde el 18 de
+    agosto **y falló igual**: 16 días y 14 PRs de desfase, con el diagnóstico correcto
+    ya escrito en el propio encabezado. Un recordatorio que depende de que alguien se
+    acuerde no es un control. Una opción barata sería un job que compare la fecha del
+    último commit de `ESTADO.md` contra la del último commit de `main` y falle o avise
+    pasado un umbral. No implementado — es una decisión de Altair, no una tarea obvia.
+
 ---
 
 ## 🖥️ SPEL_Control_Panel.ipynb — mejoras concretas para producción
@@ -366,15 +481,18 @@ aparecieron, no una revisión exhaustiva:
 
 ## ▶️ PRÓXIMO PASO CONCRETO
 
-**Decidir la forma de Fase 2 sobre dimensionamiento de posición**, ahora que la vía
-direccional quedó descartada con medición. Antes de escribir código hace falta contestar
-una pregunta que todavía no tiene respuesta: qué métrica valida un modelo de
-dimensionamiento, dado que la accuracy direccional ya no aplica. El `n` de 1.211/823 no
-se hereda — fue medido para una pregunta binomial sobre dirección.
+**Escribir el entry point de GDELT que falta.** La Incógnita #1 se cerró mostrando que
+no había nada que verificar: ningún workflow invoca GDELT y `ingestion/run_gdelt.py` —el
+archivo que un comentario de `tests.yml` da por existente— no existe. El paso concreto es
+escribirlo y decidir si un `schedule:` lo dispara.
 
-*(La Incógnita #1 —si GDELT ya corrió de verdad en GitHub Actions— sigue abierta y sigue
-importando para ingestion, pero ya no bloquea el cierre de Fase 1: la validación se
-corrió sobre datos reales, así que el pipeline demostró producir datos usables.)*
+Es una sola cosa y es la que desbloquea que la ingestion corra sola, que era el fondo real
+de la pregunta que estuvo abierta tres semanas.
+
+*(Una sola, como manda el punto 3 de "cómo actualizar este archivo". La otra decisión
+pendiente —qué métrica valida un modelo de dimensionamiento, dado que la accuracy
+direccional ya no aplica— es de diseño y vive en la sección de Fase 2, no acá. Fase 1 ya
+está cerrada y no depende de ninguna de las dos.)*
 
 ---
 
