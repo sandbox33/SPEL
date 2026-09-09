@@ -831,6 +831,74 @@ este método, no superaron a su baseline**. XAU/bb42 sigue sin medirse fuera de 
 
 ---
 
+## 2026-09-09 — Retiro de cuatro funciones sin consumidor en `core/scoring.py`
+
+**Fuente:** auditoría del 8-sep sobre `5c9a723`, reverificada sobre `92ef999` antes de
+tocar nada. Ninguna de las cuatro tiene una sola llamada fuera de `tests/`: todas las
+referencias en código son menciones en docstrings.
+
+**El código completo vive en la rama `archive/core-scoring-pre-retiro-20260909`**, creada
+a la altura de `main` antes del retiro. Principio #3: archivar, nunca borrar.
+
+| función | líneas | por qué se retira |
+|---|---:|---|
+| `compute_godel_p90` | 92 | Gemela de `compute_godel_p66`, idéntica salvo por el percentil. Quedó muerta al fusionar el PR #17, cuando la máscara pasó a P66. Dos funciones que difieren en una constante invitan a que alguien use la que no corresponde. |
+| `compute_mass_panic_index` | 76 | Sin consumidor, y con **4,1% de coincidencia** con el legacy (auditoría del PR #17). Tres causas sistemáticas acumuladas: ventana auto-referencial vs. histórica, `ddof` distinto, y que el legacy devuelve un índice clipado mientras el port devolvía un bool. |
+| `compute_entropy_fibonacci_lags` | 56 | Sin consumidor, y con **0,0% de coincidencia**: el legacy `add_fibonacci_lags` desplaza `log_return`, el port desplazaba entropía. No es imprecisión, son series distintas. El port siguió un comentario de `gdelt_foundation.py` en vez de la implementación. |
+| `compute_entropy_delta_lags` | 54 | Sin consumidor. Existía como complemento del anterior; sin él no queda nada que complementar. |
+
+**278 líneas de función.** Con los símbolos que solo existían para alimentarlas
+—`MIN_WINDOW_FOR_ZSCORE`, los dos umbrales `Z_*`, `MassPanicComponent`,
+`MassPanicResult`, `_zscore_last`, `FIBONACCI_LAG_DAYS`, `FibonacciLagResult`,
+`DeltaLagResult`— el total real es **350 líneas, el 20,4% del módulo**. Verificado que
+ninguno de esos nueve símbolos tenía otro usuario: dejarlos habría sido cambiar cuatro
+funciones muertas por nueve tipos muertos. El archivo pasa de 1.714 a 1.384 líneas —el
+neto es 330 y no 350 porque se agregaron ~20 de documentación explicando qué se retiró y
+dónde encontrarlo.
+
+### Lo que NO se borró, y por qué
+
+**El bloque de tests de `compute_godel_p90` se PORTÓ a `compute_godel_p66`, no se
+eliminó.** Esos 15 tests no prueban la función retirada: prueban el **contrato de la
+ventana móvil** —que se toma del final, que termina el día anterior, el warm-up, que
+`window < 1` lanza— que las dos gemelas compartían. `compute_godel_p66`, que es la que
+usa producción, tenía solo dos tests propios: el percentil que pide y que llame a
+`_ventana_movil`. Nada fijaba lo demás.
+
+Borrarlos con la función habría dejado el umbral real de la máscara sin guardas sobre su
+propio contrato. Verificado por mutación después de portarlos: recortar desde el
+principio en vez del final pone **19 tests en rojo**, y quitarle el recorte a
+`compute_godel_p66` pone **15**.
+
+Al portarlos hubo que cambiar una fixture, y el motivo es informativo: el test de
+contaminación usaba una historia plana con un outlier, que **movía el P90 y no mueve el
+P66** —un solo valor no alcanza para correr un percentil 66 en una ventana de 10, haría
+falta que superara el 34% superior—. Con una rampa el efecto sí se ve, porque lo que
+mueve el umbral no es la magnitud del día sino que la ventana se desplace al incluirlo.
+
+**Los hallazgos #1 y #3 del docstring del módulo se conservan.** Son auditorías del
+LEGACY —el conflicto de dos fórmulas para `mass_panic_index`, y que los lags son en
+días— y siguen siendo ciertas después de retirar el port. Le sirven a quien retome esos
+features. Lo que sí se corrigió es el #3, que afirmaba lo que el port hacía: se agregó
+que el legacy desplaza `log_return`, no entropía.
+
+### Menciones colgando
+
+Se limpiaron las once referencias en docstrings que quedaban apuntando a funciones
+inexistentes. Un docstring que apunta a algo que no está es peor que no tener docstring:
+manda a leer código que no se puede leer. Las cinco menciones que sobreviven a
+`compute_godel_p90` son deliberadas y están marcadas como históricas ("retirada el
+9-sep"), igual que la cita de `mass_panic_index` y `fibonacci_lags` dentro de
+`compute_godel_score`, que las nombra como precedente de auditoría y no como código vivo.
+
+**Suite: 676 → 654 tests** (676 pasaban antes; ahora 654 pasan y 2 se saltan). El neto
+de −22 se descompone así: desaparecen **37** definiciones de test y reaparecen **15**
+renombradas de `p90` a `p66`. O sea, se borran 22 tests reales —los de las tres funciones
+sin contrato compartido— y los 15 de la ventana móvil siguen ahí, apuntando ahora a la
+función que usa producción.
+
+---
+
 ## Principios que se sostuvieron toda la sesión
 
 - Ningún número entra sin fuente verificada contra el código real (no contra memoria de sesiones anteriores, no contra texto pegado sin auditar).

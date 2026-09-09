@@ -274,15 +274,18 @@ def test_dentro_del_warmup_los_dos_criterios_dan_el_mismo_resultado():
     """La otra cara de la frontera. Con menos de 252 días la ventana móvil
     ES toda la historia, así que móvil y acumulado coinciden por
     construcción -- y por eso ningún test corto puede distinguirlos."""
-    from core.scoring import GODEL_ROLLING_WINDOW_DAYS, compute_adaptive_percentile, compute_godel_p90
+    from core.scoring import GODEL_ROLLING_WINDOW_DAYS, compute_godel_p66
 
     n_historia = 200  # < 252: dentro del warm-up
     assert n_historia < GODEL_ROLLING_WINDOW_DAYS
     historia = _sembrar_deriva("XAU", n_historia)
 
+    from core.scoring import GODEL_MASK_PERCENTILE, compute_adaptive_percentile
+
     acumulado = compute_adaptive_percentile(
-        history=historia, percentile=90.0, global_default=P66_TEST_DEFAULT)
-    movil = compute_godel_p90(historia, global_default=P66_TEST_DEFAULT)
+        history=historia, percentile=GODEL_MASK_PERCENTILE,
+        global_default=P66_TEST_DEFAULT)
+    movil = compute_godel_p66(historia, global_default=P66_TEST_DEFAULT)
 
     assert movil.value == acumulado.value
     assert movil.n_obs == acumulado.n_obs == n_historia
@@ -291,15 +294,17 @@ def test_dentro_del_warmup_los_dos_criterios_dan_el_mismo_resultado():
 def test_la_frontera_de_252_dias_es_donde_los_criterios_se_separan():
     """El día exacto en que dejan de coincidir. Con 252 observaciones la
     ventana todavía abarca toda la historia; con 253 ya recorta."""
-    from core.scoring import GODEL_ROLLING_WINDOW_DAYS, compute_adaptive_percentile, compute_godel_p90
+    from core.scoring import (GODEL_MASK_PERCENTILE, GODEL_ROLLING_WINDOW_DAYS,
+                              compute_adaptive_percentile, compute_godel_p66)
 
     serie = [_ENTROPIA_INICIAL_BTC - _DERIVA_DIARIA * i for i in range(400)]
 
     def umbrales(n):
         h = serie[:n]
-        return (compute_adaptive_percentile(history=h, percentile=90.0,
-                                            global_default=P66_TEST_DEFAULT).value,
-                compute_godel_p90(h, global_default=P66_TEST_DEFAULT).value)
+        return (compute_adaptive_percentile(
+                    history=h, percentile=GODEL_MASK_PERCENTILE,
+                    global_default=P66_TEST_DEFAULT).value,
+                compute_godel_p66(h, global_default=P66_TEST_DEFAULT).value)
 
     acum_252, movil_252 = umbrales(GODEL_ROLLING_WINDOW_DAYS)
     assert movil_252 == acum_252, "en 252 todavía coinciden"
