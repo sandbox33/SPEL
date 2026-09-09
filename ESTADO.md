@@ -5,10 +5,12 @@
 > Si algo en un chat contradice lo que dice acá, este archivo gana — a menos que
 > el chat verifique contra GitHub real y lo actualice con evidencia.
 
-**Última actualización:** 18 ago 2026 — cierra 17 días de desactualización real. Este
-archivo llevaba congelado en el patch 0002 (14 ago) mientras `main` avanzaba hasta el
-0031 sin que nadie lo reflejara acá — el mismo hallazgo de gobernanza que ya se había
-señalado el 17 ago no se había corregido en el propio git hasta este patch.
+**Última actualización:** 6 sep 2026 — cierra Fase 1 con el resultado de la validación
+de la máscara. El archivo llevaba desde el 18 de agosto diciendo 402 tests mientras
+`main` llegaba a 661: 19 días de desactualización, exactamente la misma señal de
+gobernanza que este archivo ya se había señalado a sí mismo el 17 y el 18 de agosto y
+que volvió a ocurrir. La regla del punto 6 de "cómo actualizar" existe por esto y no
+alcanzó; queda como incógnita abierta si hace falta un chequeo automático.
 
 **Ver también:** `FASE2_NOTAS_ARQUITECTURA_MODELO.md` (raíz del repo) — glosario y
 opciones de arquitectura de modelo (LSTM vs. árboles/ensambles), separado de este
@@ -19,34 +21,45 @@ archivo a propósito para no mezclar "estado actual" con "notas de investigació
 ## 🚦 SEMÁFORO DE FASES
 
 ```
-FASE 1 — ingestion/ + core/scoring.py     🟢 INGESTION LISTA · 🟡 ORQUESTACIÓN PARCIAL
-FASE 2 — Diagnóstico + entrenamiento LSTM  ⚪ NO INICIADA — ver Incógnita #1
+FASE 1 — ingestion/ + core/scoring.py     🔵 CERRADA — resultado NEGATIVO medido
+FASE 2 — Modelo                            ⚪ NO INICIADA — reorientada, ver abajo
 FASE 3 — visualization/ (grafo)            ⚪ NO INICIADA
 FASE 4 — execution/ + Deriv real           🟡 Actuator confirmado, gate F2 firme
 FASE 5 — Escala (Supabase, Flet)           ⚪ NO INICIADA
 FASE 6 — Motor streaming multi-timeframe   🟡 Infraestructura lista, señal sin construir
 ```
 
+🔵 **CERRADA no es 🟢 LISTA.** Fase 1 se cierra porque su pregunta quedó contestada, y
+la respuesta fue que no. El pipeline funciona, está medido y tiene `n` suficiente; lo
+que no funciona es la hipótesis que ese pipeline existía para probar.
+
 ---
 
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-242 → 402 tests desde el 17 ago (65 tests nuevos en un día de trabajo). Todo lo de
-abajo corrió en clon 100% ajeno, venv limpio desde `requirements.txt`, 10 corridas
-seguidas sin intermitencia.
+**661 tests** (663 recolectados, 2 con `skipif`: el `live` de TwelveData y uno de
+persistencia). Verificado corriendo la suite, no contado de memoria. Todo lo de abajo
+corre en clon 100% ajeno, venv limpio desde `requirements.txt`, 10 corridas seguidas
+sin intermitencia.
+
+> El número que este archivo traía era **402**, del 18 de agosto. La diferencia son 19
+> días de trabajo que el archivo no reflejó.
 
 | Módulo | Qué hace | Tests | Estado |
-|---|---:|---:|---|
-| `core/scoring.py` | vitality_tesla, nash_frozen_7d, godel_active, gold_score_bma, classify_gdelt_event (+ fix EURUSD) | 116 | ✅ |
+|---|---|---:|---|
+| `core/scoring.py` | `entropy_state` (Capa 1), `godel_active`, vitality_tesla, nash_frozen_7d, gold_score_bma, classify_gdelt_event | 163 | ✅ |
 | `core/monte_carlo.py` | Validación GBM — NO entrena, simulación pura en cada llamada | 22 | ✅ |
 | `core/price_signals.py` | te_score (proxy TE) + backbone_score (EMA20/63) | 12 | ✅ |
-| `ingestion/adapters.py` | DerivAdapter + TwelveDataAdapter + contrato de datos (`drop_unclosed_candles`, `validate_ohlcv_schema`, `AdapterResult` con metadata de calidad) | 93 | ✅ |
-| `ingestion/sources.py` | **Punto de composición** — `build_price_sources()` resuelve credenciales y construye adapters; `SourceInventory` distingue capacidad ausente de error | 10 + 1 guardián | ✅ |
+| `ingestion/adapters.py` | DerivAdapter + TwelveDataAdapter + contrato de datos | 65 + 29 | ✅ |
+| `ingestion/sources.py` | **Punto de composición** — `build_price_sources()`; `SourceInventory` distingue capacidad ausente de error | 11 | ✅ |
 | `ingestion/gdelt.py` + `_aggregation` + `_series` | Pipeline GDELT completo, persistencia JSONL | 41 | ✅ |
 | `ingestion/training_dataset.py` | Une OHLCV + serie GDELT, forward-fill, coverage_ratio explícito | 7 | ✅ |
-| `orchestration/cycle.py` | Corre vitality/nash/godel sobre 5 activos a la vez | 10 | ✅ |
+| `ingestion/source_registry.py` | Registro versionado de cobertura por fuente | 34 | ✅ |
+| `orchestration/cycle.py` | Corre vitality/nash/godel sobre 5 activos; sella `godel_criteria_version` | 19 | ✅ |
 | `execution/circuit_breaker.py` + `execution_guard.py` | Guardrails duros — congelados hasta F4 | 31 | ✅ |
-| `governance/persistence.py` + `secrets.py` | 4 streams, SecretKey único (13 claves) | 28 | ✅ |
+| `governance/persistence.py` + `secrets.py` | 4 streams, SecretKey único | 28 | ✅ |
+| `tools/measure_godel_samples.py` | Mide el `n` post-máscara. **El tool que produjo el cierre de Fase 1** | 75 | ✅ |
+| `tools/provider_coverage.py` + `import_gdelt_entropy.py` + `audit_data_lake.py` | Inventario de proveedores, import histórico de entropía, auditoría del lake | 58 + 36 + 32 | ✅ |
 | `tools/heartbeat.py` + `.github/workflows/heartbeat.yml` | Trigger `schedule:` real — **desactivado a propósito**, ver Fase 6 | — | ✅ código, 🔴 apagado |
 
 **No existe todavía, confirmado por ausencia real (no supuesto):** grep de
@@ -118,6 +131,41 @@ no "no hay dónde armar las piezas", sino "las piezas armadas no se usan todaví
 
 ---
 
+## 🔵 FASE 1 CERRADA — el resultado, y por qué es negativo
+
+Medido el **4-sep-2026** sobre datos reales, criterio `4.0.0-entropy_state_p66`.
+Detalle completo y método en `decision-log.md`.
+
+**El `n` alcanzó.** BTC **1.211** post-máscara (5/5 folds estables), XAU **823** (4/5).
+Los dos superan el umbral de `DEFENDIBLE`. Eso importa para leer el resultado: no es
+"no había muestras suficientes para saber", es un negativo medido con potencia.
+
+**Dirección — la máscara no discrimina.**
+
+| activo | dentro del régimen | fuera | p |
+|---|---|---|---|
+| BTC | 51,81% [49,14–54,47] | 52,53% [50,79–54,26] | 0,68 |
+| XAU | 50,98% [47,78–54,18] | 52,60% [50,58–54,61] | 0,42 |
+
+Los intervalos se solapan casi por completo y, en los dos activos, la tasa **dentro** del
+régimen es más baja que fuera. Autocorrelación de retornos en BTC: −0,028 dentro,
+−0,026 fuera.
+
+**Magnitud — sí discrimina, y solo en BTC.** Mann-Whitney: BTC ratio de volatilidad
+**1,246**, p = 3,4×10⁻⁹. XAU ratio 1,115, p = 0,56.
+
+**Qué significa.** Coincide con la literatura sobre índices de incertidumbre construidos
+desde noticias: predicen magnitud, no signo — el EPU correlaciona 0,73 con el VIX, que
+es un índice de volatilidad. La entropía geopolítica mide **cuánta turbulencia hay**, no
+**hacia dónde va el precio**. La hipótesis original estaba mal formulada: se le pedía a
+la señal algo que este tipo de índice no hace.
+
+**Lo que NO invalida.** El pipeline de ingestion, la persistencia, el contrato de datos,
+la integridad temporal y la máscara como tal siguen siendo correctos y medidos. Lo que
+cae es el uso que se les estaba dando.
+
+---
+
 ## 🔒 CONTRATO DE DATOS OHLCV
 
 Tres reglas que cualquier adapter nuevo tiene que respetar. No son estilo — cada una
@@ -178,9 +226,24 @@ escriben en el log.
 
 ---
 
-## 🔬 FASE 2 — el bloqueo real, ahora entendido con precisión
+## 🔬 FASE 2 — REORIENTADA por el resultado de la validación
 
-No es "escribir 3 funciones". Auditado contra el legacy real esta sesión:
+**El modelo NO debe ser un clasificador direccional filtrado por entropía.** Esa era la
+arquitectura implícita en todo lo anterior, y la medición del 4-sep la descarta: la
+máscara no separa días direccionalmente predecibles de días que no lo son (p = 0,68 y
+0,42).
+
+**La vía con fundamento medido es dimensionamiento de posición.** Un régimen que
+multiplica la volatilidad por 1,25 con p = 3,4×10⁻⁹ es información accionable para
+decidir *cuánto* arriesgar. No lo es para decidir *de qué lado*. Todo lo que sigue en
+esta sección se escribió antes de esa medición y hay que leerlo con eso en mente: sigue
+siendo cierto como auditoría del legacy, y ya no describe el plan.
+
+**Advertencia sobre el `n`:** el `n` de 1.211 y 823 fue medido para una pregunta
+direccional (binomial sobre aciertos). Una pregunta sobre magnitud tiene otra potencia y
+otro umbral; el `n` no se hereda entre preguntas distintas.
+
+Auditado contra el legacy real (18 ago), sin cambios desde entonces:
 
 - `te_score` y `backbone_score`: **listos**, portados con 2 bugs reales corregidos
   (`core/price_signals.py`).
@@ -248,10 +311,12 @@ sesión, no lo resolví en esta.
 3. **¿El motor GDELT (Fases 1-5) sigue siendo el principal, o el motor rápido
    (Fase 6) cambia la prioridad?** Pregunta abierta desde el 17 ago, todavía sin
    que Altair la confirme.
-4. **`p90_entropy_global_default`** (necesario para `godel_active` vía
-   `orchestration/cycle.py`): sin valor por defecto a propósito — el propio
-   `compute_adaptive_percentile` documenta que P90 "no tiene default legacy
-   confirmado". Cada llamada real necesita decidir qué número usar.
+4. **`p66_entropy_global_default`** (necesario para `godel_active` vía
+   `orchestration/cycle.py`): sin valor por defecto a propósito — `compute_adaptive_percentile`
+   documenta que para este umbral no hay default legacy confirmado. Cada llamada real
+   necesita decidir qué número usar. *(Se llamaba `p90_entropy_global_default` hasta la
+   versión 4.0.0 del criterio; el nombre viejo describía un término que nunca cambió un
+   resultado — ver `decision-log.md`, 6-sep.)*
 5. **DEU como único proxy de "Eurozona/BCE"** en `GOBIERNO_COUNTRY_FILTERS`: ¿alcanza
    solo, o hace falta sumar FRA/ITA? Sin backtest, documentado como pendiente desde
    que se escribió `classify_gdelt_event`.
@@ -301,10 +366,15 @@ aparecieron, no una revisión exhaustiva:
 
 ## ▶️ PRÓXIMO PASO CONCRETO
 
-**Confirmar la Incógnita #1** (¿corrió ya GDELT real en GitHub Actions?) desde la
-pestaña Actions directamente — es lo único que decide si Fase 1 se puede dar por
-cerrada del lado de ingestion, antes de seguir construyendo sobre esa base sin
-saberlo con certeza.
+**Decidir la forma de Fase 2 sobre dimensionamiento de posición**, ahora que la vía
+direccional quedó descartada con medición. Antes de escribir código hace falta contestar
+una pregunta que todavía no tiene respuesta: qué métrica valida un modelo de
+dimensionamiento, dado que la accuracy direccional ya no aplica. El `n` de 1.211/823 no
+se hereda — fue medido para una pregunta binomial sobre dirección.
+
+*(La Incógnita #1 —si GDELT ya corrió de verdad en GitHub Actions— sigue abierta y sigue
+importando para ingestion, pero ya no bloquea el cierre de Fase 1: la validación se
+corrió sobre datos reales, así que el pipeline demostró producir datos usables.)*
 
 ---
 
