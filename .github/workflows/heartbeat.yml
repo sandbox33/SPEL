@@ -33,6 +33,15 @@
 #
 # CÓMO REACTIVARLO cuando corresponda: descomentar el bloque `schedule:`
 # de abajo. Nada más cambia -- el resto del archivo ya está listo.
+#
+# ESTE ARCHIVO ES LA PLANTILLA DEL ENTRY POINT DE GDELT, y conviene saberlo
+# antes de tocarlo. Es el ÚNICO andamiaje de `schedule:` probado del repo:
+# los otros dos workflows (tests.yml, live-tests.yml) corren pytest, no un
+# entry point de negocio. El próximo paso concreto que fijó ESTADO.md es
+# escribir `ingestion/run_gdelt.py` -- que un comentario de tests.yml da
+# por existente y no existe -- y decidir si un `schedule:` lo dispara. El
+# molde de ese workflow es este. Se auditó el 9-sep como candidato a
+# archivar y se conservó por eso; ver el docstring de tools/heartbeat.py.
 
 name: SPEL Heartbeat
 
