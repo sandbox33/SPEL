@@ -649,6 +649,119 @@ distribución de estados.
 
 ---
 
+## 2026-09-06 — Acta: `core/price_signals.py` no tiene poder predictivo demostrado
+
+**Fuente:** medición sobre `SPEL_DATA_LAKE_V2`. BTC 5.892 filas, XAU 4.848.
+
+Esta entrada es el **acta del resultado negativo**. Existe porque el número ya se está
+citando en tres lugares del código (`core/scoring.py`, `orchestration/cycle.py` ×2) y no
+tenía dónde apoyarse: quien lea esa advertencia y quiera verificarla, llega acá.
+
+### Método
+
+- **Walk-forward de 5 folds sobre el 80% inicial.** El **holdout del 20% final se reservó
+  ANTES de cualquier cálculo** — no es un corte elegido después de ver resultados.
+- **Baseline de magnitud:** `vol5`, `vol10`, `vol21`, `mag_ayer`.
+  **Baseline de dirección:** `lr_ayer`, `vol10`.
+  Las señales no se evaluaron contra cero: contra un baseline que ya usa la información
+  barata. Lo que se mide es el **incremento** sobre eso.
+- **Señales:** `compute_transfer_entropy_proxy` y `compute_backbone_score`, con lookbacks
+  21, 42, 63 y 126, calculadas de forma **causal**.
+- **Sanitización por calendario**, con los retornos **recalculados después** de filtrar —
+  no antes, que habría dejado retornos que cruzan huecos eliminados.
+- **Prueba:** Diebold-Mariano como t-test pareado sobre errores cuadráticos,
+  `alternative='greater'`.
+- **32 pruebas**, y el número no es arbitrario: 2 activos × 2 targets × 2 señales ×
+  4 lookbacks.
+
+> La configuración por defecto del módulo está DENTRO del barrido: `compute_transfer_entropy_proxy`
+> usa `lookback_days=63` y `compute_backbone_score` usa EMA 20/63. O sea que no se midió una
+> variante marginal y se absolvió a la que corre en producción.
+
+### Training — lo mejor que apareció
+
+| activo | target | señal | delta | p |
+|---|---|---|---:|---:|
+| XAU | magnitud | bb42 | +0.00206 | 0.0406 |
+| BTC | dirección | bb126 | +0.00189 | 0.0625 |
+| BTC | dirección | bb63 | +0.00306 | 0.0731 |
+
+**Bonferroni (α = 0.05/32 = 0.00156): cero supervivientes.
+Benjamini-Hochberg: cero.**
+
+Vale la pena decirlo sin corrección alguna, porque es más contundente: de las 32 pruebas,
+**una sola** (XAU magnitud bb42, p = 0.0406) cruza el 0.05 sin corregir. Las dos de
+dirección ni siquiera llegan a eso.
+
+### Holdout — el 20% reservado de entrada
+
+| activo | señal | Δ R² | p | Durbin-Watson | obs |
+|---|---|---:|---:|---:|---:|
+| BTC | bb63 | +0.0001 | 0.4133 | 2.0018 | 1166 |
+| BTC | bb126 | −0.0001 | 0.5921 | 2.0023 | 1154 |
+| XAU | bb42 | — | — | — | **0** |
+
+El Δ R² de BTC es de **cuatro decimales**: +0.0001 y −0.0001. Uno de los dos es negativo.
+Con p de 0.41 y 0.59, ninguno se distingue de cero.
+
+**XAU nunca se validó.** Cero observaciones por desalineación de fechas entre la señal y
+el holdout. Eso **no es "no significativa": es no medida**, y la distinción importa —
+justamente la señal con el mejor p en training es la que no llegó a probarse fuera de
+muestra. Cualquier lectura futura de este acta tiene que tratar a XAU/bb42 como pendiente,
+no como refutada.
+
+### Backtest de reversión sobre la señal líder
+
+| activo | Sharpe estrategia | Sharpe Buy&Hold | retorno acumulado | B&H |
+|---|---:|---:|---:|---:|
+| BTC | **−0.553** | +0.814 | **0.0081** | — |
+| XAU | −0.019 | — | 0.857 | 3.849 |
+
+BTC terminó con el **0,81% del capital inicial: perdió el 99,2%**. XAU terminó en 0.857×,
+o sea **−14,3% en términos absolutos**, además de quedar 2.99× por debajo de comprar y
+esperar. Los dos Sharpe son negativos.
+
+### Caveats obligatorios — los tres van juntos
+
+**1. El t-test pareado sin error estándar HAC subestima la varianza** cuando los errores
+están autocorrelacionados. O sea: la prueba era **anti-conservadora**, tenía el sesgo a
+favor de encontrar algo, y aun así no encontró nada. Eso **refuerza** el resultado
+negativo en vez de debilitarlo. (Los Durbin-Watson de ~2.002 sugieren autocorrelación
+residual baja en el holdout, pero el caveat se sostiene igual: no se corrigió.)
+
+**2. Bonferroni sobre 32 pruebas correlacionadas es demasiado estricto** — los lookbacks
+21/42/63/126 de la misma señal no son independientes entre sí. Por eso se corrió también
+Benjamini-Hochberg, que controla FDR en vez de FWER y es el procedimiento apropiado acá.
+Tampoco encontró nada.
+
+**3. El Random Forest posterior NO es evidencia en contra, y no es citable.** Puso `bb21`
+segundo en feature importance (0.1447 contra 0.1468 de `vol21`). Tres razones
+independientes por las que eso no contradice lo anterior:
+  - Es **in-sample**: mide qué usa el modelo al ajustar, no poder predictivo fuera de
+    muestra. Son preguntas distintas.
+  - La importancia por impureza **reparte el crédito entre variables correlacionadas**;
+    con `bb21` y `vol21` correlacionadas, el ranking entre ellas no dice cuál aporta.
+  - Esa corrida tuvo **`adjusted_close` con 5.892 nulos** y un **`TypeError` por la columna
+    de fecha entrando como feature**. Está rota, aparte de todo lo anterior.
+
+### Conclusión que queda escrita
+
+**`core/price_signals.py` no tiene poder predictivo demostrado.**
+
+Queda en el sistema porque `compute_gold_score_bma` lo consume, **no porque prediga**. Que
+un módulo esté importado, testeado y corriendo no es evidencia de que sirva para lo que su
+nombre sugiere, y este acta existe para que nadie lo deduzca de su presencia.
+
+Consecuencia ya implementada: la advertencia de `compute_gold_score_bma` y el campo
+`gold_score_warning` de `AssetCycleResult` citan estos números, y viajan pegados a todo
+gold_score calculado.
+
+**Lo que NO dice este acta:** que las señales sean inútiles en cualquier forma o
+configuración. Dice que **estas dos, con estos lookbacks, sobre estos dos activos, con
+este método, no superaron a su baseline**. XAU/bb42 sigue sin medirse fuera de muestra.
+
+---
+
 ## Principios que se sostuvieron toda la sesión
 
 - Ningún número entra sin fuente verificada contra el código real (no contra memoria de sesiones anteriores, no contra texto pegado sin auditar).
