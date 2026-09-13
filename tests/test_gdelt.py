@@ -28,7 +28,12 @@ import httpx
 import pytest
 
 from ingestion.adapters import AdapterConnectionError, AdapterDataError
-from ingestion.gdelt import GDELT_TOTAL_COLS, GDELTDailyAdapter, GdeltDayResult
+from ingestion.gdelt import (
+    GDELT_BASE_URL,
+    GDELT_TOTAL_COLS,
+    GDELTDailyAdapter,
+    GdeltDayResult,
+)
 
 
 def _build_gdelt_row(
@@ -212,9 +217,70 @@ class TestFetchDayErrores:
 
 class TestUrlYHealthCheck:
     def test_url_for_day_tiene_el_formato_exacto_de_gdelt(self):
+        """ESTE ASSERT CAMBIÓ, y conviene que se sepa por qué: pedía
+        `http://` literal, o sea codificaba el esquema viejo. No se relajó
+        a un `.endswith()` -- se movió a `https://`, que es el arreglo, y
+        el formato del resto de la URL se sigue verificando entero."""
         adapter = GDELTDailyAdapter()
         url = adapter._url_for_day(date(2026, 1, 15))
-        assert url == "http://data.gdeltproject.org/events/20260115.export.CSV.zip"
+        assert url == "https://data.gdeltproject.org/events/20260115.export.CSV.zip"
+
+    def test_la_base_url_es_https(self):
+        """Separado del anterior a propósito: el de arriba verifica el
+        formato de la ruta por día, este fija el esquema. Si alguien
+        vuelve a portar la constante del legacy tal cual, este es el que
+        se pone en rojo diciendo exactamente qué pasó."""
+        assert GDELT_BASE_URL.startswith("https://"), (
+            "GDELT migró a HTTPS; con http:// la descarga llega como "
+            "redirect, no como ZIP")
+
+    @pytest.mark.asyncio
+    async def test_un_redirect_se_sigue_y_la_descarga_llega(self):
+        """EL ÚNICO TEST DEL ARCHIVO QUE CORRE `fetch_day` DE VERDAD, y
+        tiene que ser así: `follow_redirects` se pasa al construir el
+        AsyncClient, y `_adapter_with_transport` (arriba) no construye el
+        cliente del módulo -- lo reimplementa. Un test del redirect
+        escrito sobre ese helper habría probado el helper.
+
+        MUTACIÓN VERIFICADA: quitando `follow_redirects=True` de
+        `_build_client()`, httpx devuelve el 301 tal cual, cae en la rama
+        "status inesperado" de fetch_day() y esto falla con
+        AdapterConnectionError. O sea el assert es portante, no
+        decorativo."""
+        zip_bytes = _build_gdelt_zip([_build_gdelt_row()])
+        vistas: list[str] = []
+
+        def handler(request):
+            vistas.append(str(request.url))
+            if len(vistas) == 1:
+                return httpx.Response(
+                    301, headers={"Location": "https://data.gdeltproject.org/"
+                                              "otra-ruta/20260115.export.CSV.zip"})
+            return httpx.Response(200, content=zip_bytes)
+
+        adapter = GDELTDailyAdapter(transport=httpx.MockTransport(handler))
+        result = await adapter.fetch_day(date(2026, 1, 15))
+
+        assert len(vistas) == 2, "el redirect no se siguió"
+        assert result.available is True
+        assert len(result.events) == 1
+
+    @pytest.mark.asyncio
+    async def test_sin_redirect_la_descarga_normal_sigue_funcionando(self):
+        """Contraprueba del anterior: `follow_redirects=True` no debe
+        cambiar nada en el caso de siempre, que es el 200 directo."""
+        zip_bytes = _build_gdelt_zip([_build_gdelt_row()])
+
+        def handler(request):
+            assert str(request.url).startswith("https://"), (
+                "fetch_day salió por http://")
+            return httpx.Response(200, content=zip_bytes)
+
+        adapter = GDELTDailyAdapter(transport=httpx.MockTransport(handler))
+        result = await adapter.fetch_day(date(2026, 1, 15))
+
+        assert result.available is True
+        assert len(result.events) == 1
 
     @pytest.mark.asyncio
     async def test_health_check_nunca_lanza_ante_excepcion_interna(self, monkeypatch):
