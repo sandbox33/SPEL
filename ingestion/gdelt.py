@@ -21,7 +21,10 @@ jerarquía de excepciones paralela.
 
 FUENTE (gdelt_foundation.py::GDELTDownloader, verificada línea por
 línea, no reescrita de memoria):
-  URL: http://data.gdeltproject.org/events/YYYYMMDD.export.CSV.zip
+  URL: data.gdeltproject.org/events/YYYYMMDD.export.CSV.zip
+  El legacy la escribe con `http://`; acá va con `https://` y siguiendo
+  redirects -- ver la nota sobre GDELT_BASE_URL, que es el único punto
+  de este módulo donde la fuente NO se porta literal.
   Formato: ZIP conteniendo un CSV tab-separated, sin header, 57
   columnas, encoding latin-1. Solo 8 columnas importan (ver GDELT_COLS).
   404 = GDELT no tiene datos para ese día (festivo/fin de semana en su
@@ -56,7 +59,30 @@ from ingestion.adapters import AdapterConnectionError, AdapterDataError
 
 logger = logging.getLogger("spel.ingestion.gdelt")
 
-GDELT_BASE_URL = "http://data.gdeltproject.org/events"
+#: HTTPS, no HTTP. El legacy (gdelt_foundation.py:81) usa `http://` y este
+#: módulo lo portó tal cual -- pero GDELT migró a HTTPS y el esquema viejo
+#: hoy responde con un redirect, no con el ZIP. httpx NO sigue redirects
+#: por defecto (a diferencia de requests, que era lo que usaba el legacy y
+#: por eso el legacy nunca notó la migración): un 301 caía en la rama
+#: "status inesperado" de fetch_day() y se convertía en
+#: AdapterConnectionError. O sea: portar la URL literal del legacy
+#: rompía la descarga, y el test suite no lo veía porque ningún test toca
+#: la red real.
+#:
+#: NO VERIFICADO CONTRA LA RED REAL desde esta sesión: el sandbox no tiene
+#: data.gdeltproject.org en su whitelist (probado hoy: CONNECT devuelve 403
+#: para https y 403 para http, o sea el bloqueo es del proxy egress, no
+#: una respuesta de GDELT). La primera corrida manual de gdelt.yml en
+#: GitHub Actions es lo que lo confirma end-to-end.
+GDELT_BASE_URL = "https://data.gdeltproject.org/events"
+
+#: Se sigue el redirect igual, aunque la URL ya sea HTTPS. Las dos cosas
+#: son necesarias y ninguna sustituye a la otra: el esquema correcto evita
+#: el salto en el caso normal, y `follow_redirects` es lo que impide que
+#: un cambio futuro de ruta del lado de GDELT (un 301 de /events a otro
+#: prefijo) vuelva a manifestarse como un error de conexión en vez de como
+#: una descarga que funciona.
+FOLLOW_REDIRECTS = True
 
 #: gdelt_foundation.py::GDELT_COLS -- índices 0-based dentro de las 57
 #: columnas del CSV de GDELT 1.0. Solo estas 8 importan para SPEL.
@@ -118,8 +144,28 @@ class GDELTDailyAdapter:
 
     source_name = "gdelt_1.0_daily"
 
-    def __init__(self, *, timeout_s: float = DOWNLOAD_TIMEOUT_S):
+    def __init__(
+        self,
+        *,
+        timeout_s: float = DOWNLOAD_TIMEOUT_S,
+        transport: Optional[httpx.AsyncBaseTransport] = None,
+    ):
+        """`transport` existe para los tests, y con un motivo concreto que
+        no es "inyectar por inyectar": los tests de este módulo simulaban
+        la descarga REIMPLEMENTANDO el cuerpo de fetch_day() alrededor de
+        un MockTransport, así que nunca ejercitaban la construcción real
+        del AsyncClient -- que es exactamente donde vive `follow_redirects`.
+        Un test del redirect escrito sobre esa copia habría probado la
+        copia, no el código. Con esto el test corre el fetch_day() de
+        verdad."""
         self._timeout_s = timeout_s
+        self._transport = transport
+
+    def _build_client(self) -> httpx.AsyncClient:
+        kwargs = {"timeout": self._timeout_s, "follow_redirects": FOLLOW_REDIRECTS}
+        if self._transport is not None:
+            kwargs["transport"] = self._transport
+        return httpx.AsyncClient(**kwargs)
 
     def _url_for_day(self, day: date) -> str:
         return f"{GDELT_BASE_URL}/{day.strftime('%Y%m%d')}.export.CSV.zip"
@@ -127,7 +173,7 @@ class GDELTDailyAdapter:
     async def fetch_day(self, day: date) -> GdeltDayResult:
         url = self._url_for_day(day)
         try:
-            async with httpx.AsyncClient(timeout=self._timeout_s) as client:
+            async with self._build_client() as client:
                 resp = await client.get(url)
         except httpx.TimeoutException as e:
             raise AdapterConnectionError(f"{self.source_name}: timeout descargando {day}: {e}") from e
@@ -216,7 +262,7 @@ class GDELTDailyAdapter:
         aunque esta clase no herede de BaseAdapter. Verifica el índice
         público en vez de descargar un día completo."""
         try:
-            async with httpx.AsyncClient(timeout=self._timeout_s) as client:
+            async with self._build_client() as client:
                 resp = await client.head(f"{GDELT_BASE_URL}/index.html")
             return resp.status_code == 200
         except Exception:

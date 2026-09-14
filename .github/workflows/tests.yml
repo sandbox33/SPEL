@@ -5,14 +5,19 @@
 # Esto es REAL y funciona hoy: corre la suite completa en cada push a
 # main y en cada PR -- CI genuino, no un placeholder.
 #
-# Es un "stub" en el sentido de que NO hace ingestion ni entrenamiento
-# todavía -- ninguno de los dos existe como script ejecutable en el
-# repo nuevo. Pero los 3 pasos de abajo (checkout, setup Python,
-# instalar deps) son exactamente el andamiaje que un job de ingestion
-# programado (F2) va a reusar -- solo hace falta agregarle un trigger
-# `schedule:` (cron) y cambiar el paso final por `python ingestion/run_gdelt.py`
-# una vez que ese script exista. No se escribe ese trigger todavía
-# porque agregarlo ahora apuntaría a un script que no existe.
+# Es un "stub" en el sentido de que NO hace entrenamiento todavía. Los 3
+# pasos de abajo (checkout, setup Python, instalar deps) son el andamiaje
+# que reusa cualquier job de negocio.
+#
+# LA NOTA QUE ESTABA ACÁ YA NO APLICA, y se corrige en vez de borrarse
+# porque el hueco que describía duró desde el patch 0011: decía que
+# faltaba "cambiar el paso final por `python ingestion/run_gdelt.py` una
+# vez que ese script exista". El script no existía, y este workflow
+# nombrándolo es lo que hacía parecer que sí -- ese malentendido es lo
+# que cerró la Incógnita #1 de ESTADO.md. Hoy el script existe y NO se
+# corre desde acá: tiene su propio workflow (`.github/workflows/gdelt.yml`),
+# porque este corre la suite en cada push y la ingesta no tiene por qué
+# bajar GDELT en cada push.
 #
 # GitHub Actions, no Colab: Colab no tiene API pública para ejecución
 # headless (confirmado en sesión anterior) -- por eso la automatización

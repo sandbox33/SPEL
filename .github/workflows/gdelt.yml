@@ -1,0 +1,105 @@
+# .github/workflows/gdelt.yml
+# ============================
+# Entry point de la ingesta GDELT. Construido sobre heartbeat.yml, que era
+# el ÚNICO andamiaje de `schedule:` probado del repo y quedó anotado como la
+# plantilla de este archivo en el PR #23 -- checkout, setup-python, install,
+# correr un entry point de negocio. Los otros dos workflows (tests.yml,
+# live-tests.yml) corren pytest, que es otra cosa.
+#
+# Cierra de paso el comentario de tests.yml:13, que desde el patch 0011 daba
+# por existente `python ingestion/run_gdelt.py`. El script no existía: ese
+# hueco es lo que cerró la Incógnita #1 de ESTADO.md.
+#
+# ══ ESTE WORKFLOW NUNCA ESCRIBE. NO ES UN OLVIDO ══
+#
+# Corre SIEMPRE en dry-run -- no se le pasa `--write` en ningún lado, y el
+# default del script también es dry-run, así que hacen falta dos errores
+# para que escriba. El escritor único de la serie sigue siendo Drive/Colab.
+#
+# EL MOTIVO: `append_day()` es append puro y `read_series()` deduplica por
+# día. Ese par tolera duplicados pero NO divergencia -- con CI escribiendo
+# en git y Colab escribiendo en Drive quedan dos series con días distintos y
+# nada que las reconcilie. Y CI no puede ser el escritor único: Colab bajó
+# 640 días en 17 minutos, y a `--max-days 10` eso son 64 corridas de Actions.
+#
+# CUANDO CI SÍ NECESITE ESCRIBIR, la vía es una rama `data/gdelt-series` con
+# CI como escritor único y Colab leyendo de ahí. Exige entrada en
+# decision-log.md antes de existir en el código: mueve el stream METRICS,
+# declarado en governance/persistence.py como stream de Drive y "NO
+# versionado en git", a git para un caso particular.
+#
+# ══ QUÉ PRUEBA ENTONCES, QUE NO ES NADA ══
+#
+# La cadena entera hasta un paso antes de escribir: descarga REAL de GDELT,
+# unzip, parseo de las 57 columnas, aggregate_day(), y el conteo de lo que
+# escribiría. Si la descarga falla o el formato de GDELT cambia, el script
+# sale 1 y este job se pone ROJO. Es a propósito que pueda ponerse rojo: un
+# chequeo que nunca falla no es un chequeo.
+#
+# LO QUE NO PRUEBA, dicho acá para que nadie lo lea al revés en el log: el
+# GAP no se puede medir desde Actions. Medirlo exige leer la serie, y
+# drive_root() cae acá al fallback local (.spel_drive_stream), que en un
+# runner recién clonado no existe. Todos los activos van a salir SIN_SERIE
+# y el reporte va a decir "gap NO MEDIDO" -- que no es "gap 0". El monitor
+# de frescura es el mismo script corrido en Colab.
+#
+# ══ EL `schedule:` QUEDA COMENTADO ══
+#
+# Se activa en un segundo paso, después de una corrida manual exitosa. Hoy
+# nadie confirmó todavía que la descarga funcione desde un runner: este
+# sandbox no tiene data.gdeltproject.org en su whitelist (CONNECT devuelve
+# 403), así que el arreglo de HTTPS de ingestion/gdelt.py está probado
+# contra httpx.MockTransport, no contra la red real. La primera corrida
+# manual de este workflow es lo que lo confirma end-to-end.
+#
+# El cron propuesto es diario, no cada 15 min: GDELT publica UN archivo por
+# día. Correrlo más seguido baja el mismo archivo otra vez.
+#
+# CÓMO ACTIVARLO: descomentar el bloque `schedule:`. Nada más cambia.
+
+name: SPEL GDELT
+
+on:
+  # schedule:
+  #   - cron: "30 6 * * *"   # desactivado -- ver nota arriba
+  workflow_dispatch:
+    inputs:
+      max_days:
+        description: "Días por corrida (default 10; GDELT tarda ~3 s por día)"
+        required: false
+        default: "10"
+      since:
+        description: "Fecha ISO desde la cual bajar (opcional, ignora last_day)"
+        required: false
+        default: ""
+
+jobs:
+  gdelt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      # Sin --write, y el default del script también es dry-run. Ver arriba.
+      #
+      # Los inputs entran por `env:`, NO interpolados dentro del `run:`. Un
+      # `${{ inputs.x }}` pegado en la línea de comando se expande ANTES de
+      # que exista un shell, así que un input con `;` o backticks ejecuta lo
+      # que quiera. Pasarlos como variables de entorno los deja como datos.
+      # Acá solo puede dispararlo quien tenga permiso de escritura en el
+      # repo, así que no es un agujero abierto -- es que la forma segura
+      # cuesta lo mismo.
+      - name: Ingesta GDELT (dry-run -- prueba de cadena, no escribe)
+        env:
+          MAX_DAYS: ${{ inputs.max_days || '10' }}
+          SINCE: ${{ inputs.since }}
+        run: |
+          args=(--max-days "$MAX_DAYS")
+          if [ -n "$SINCE" ]; then args+=(--since "$SINCE"); fi
+          python ingestion/run_gdelt.py "${args[@]}"
