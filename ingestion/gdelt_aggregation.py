@@ -30,7 +30,8 @@ _shannon_entropy + _zipf_concentration, verificada línea por línea):
 
 DELIBERADAMENTE NO PORTADO en este patch: nash_frozen_7d y
 vitality_tesla NO se calculan acá. Esa lógica YA vive en
-core/scoring.py (compute_nash_frozen_7d, compute_vitality_tesla) y
+core/scoring.py (compute_vitality_tesla) y en research/gold_score_chain.py
+(compute_nash_frozen_7d, retirada el 16-sep-2026), y
 opera sobre una SERIE de días ya agregados, no sobre un día individual
 -- este módulo produce esa serie, día por día; quien la acumula
 (Parquet, lista en memoria, lo que sea) y se la pasa a esas funciones

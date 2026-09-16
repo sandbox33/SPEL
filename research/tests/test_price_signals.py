@@ -1,7 +1,7 @@
 """
 tests/test_price_signals.py
 =============================
-Cobertura de core/price_signals.py. Un foco deliberado: confirmar que
+Cobertura de research/price_signals.py (movido desde core/ el 16-sep-2026). Un foco deliberado: confirmar que
 el bug real del legacy (np nunca vinculado, NameError garantizado) no
 puede reproducirse acá -- no solo que las funciones "dan un número".
 """
@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from core.price_signals import (
+from research.price_signals import (
     BackboneResult,
     TransferEntropyResult,
     compute_backbone_score,

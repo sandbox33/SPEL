@@ -132,7 +132,8 @@ def run_monte_carlo_validation(
             misma escala temporal que el resto del pipeline la calcule --
             esta función no la deriva, la recibe.
         base_gold_score: gold_score ya calculado (ej. por
-            `core.scoring.compute_gold_score_bma`) que se está validando.
+            `research.gold_score_chain.compute_gold_score_bma`, retirada de core/ el
+            16-sep-2026) que se está validando.
         asset: nombre del activo -- selecciona `sensitivity_map[asset]`.
         iterations: trayectorias a simular. Debe ser > 0.
         horizon_minutes: horizonte de la simulación en minutos. Default 15
