@@ -17,12 +17,14 @@
 > que es exactamente el problema de gobernanza que este archivo viene arrastrando
 > desde el 17 de agosto (ver la sección de gobernanza más abajo).
 
-**Última actualización:** 9 sep 2026 — reconciliación con `main` y cierre de Fase 1.
+**Última actualización:** 16 sep 2026 — retiro de la cadena `gold_score` a `research/`.
 
-**Commit de referencia:** `e4ac310` (merge del PR #20), con el PR #18 rebaseado encima.
+**Commit de referencia:** `dd9ea63` (merge del PR #26).
 
-Este archivo no se tocaba desde **`f410081` (24 ago)**. Entre medio se fusionaron los
-PR #6 al #20. Son 16 días y 14 PRs de desfase.
+Desfase que este PR cierra: **dos PRs (#24 y #26)**, siete días. Es el desfase más
+corto que este archivo registró desde que existe la regla — los anteriores fueron de
+16 y 17 días. La regla del punto 6 sigue dependiendo de que alguien se acuerde
+(Incógnita #11), pero acá se acordó.
 
 El encabezado anterior decía "cierra 17 días de desactualización real" y describía el
 mismo problema. Que haya vuelto a pasar, en el mismo archivo y con el mismo diagnóstico
@@ -52,15 +54,28 @@ FASE 6 — Motor streaming multi-timeframe   🟡 Infraestructura lista, señal 
 la respuesta fue que no. El pipeline funciona, está medido y tiene `n` suficiente; lo
 que no funciona es la hipótesis que ese pipeline existía para probar.
 
+**Y el 16-sep se sacó la consecuencia.** El criterio de cierre de Fase 1 era que el
+Gold Score *se calculara*, no que predijera — y se calculaba. Pero calcularlo todos
+los días y emitirlo con una advertencia de cinco líneas pegada para que nadie lo usara
+no era una salida del sistema: era ruido con escolta. La cadena se retiró a
+`research/` (PR #27). El ciclo diario emite ahora el **régimen medido** y nada más.
+Eso no reabre Fase 1 ni cambia su resultado; ordena el código para que coincida con
+él.
+
 ---
 
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-**678 tests recolectados, 676 pasan y 2 se saltan**, en **20 archivos**. Contado
-corriendo `pytest --collect-only` sobre `e4ac310`, no de memoria. Los 2 `skip` son el
-test `live` de TwelveData (`skipif` sobre la credencial) y uno de persistencia.
+**725 recolectados en `tests/`, 723 pasan y 2 se saltan**, en **22 archivos**. Contado
+corriendo `pytest --collect-only`, no de memoria. Los 2 `skip` son el test `live` de
+TwelveData (`skipif` sobre la credencial) y uno de persistencia.
 
-Este archivo decía **402**. La cifra viene del 18 de agosto.
+**Más 74 en `research/tests/`, que NO corren en el job que bloquea** — son los tests
+del código retirado (ver la sección de `research/` más abajo). El total real del repo
+es 799, pero mezclarlos en una sola cifra escondería justamente la distinción que el
+retiro del 16-sep existe para marcar.
+
+Este archivo decía **678**, de la actualización del 9 de septiembre.
 
 > **Precisión sobre cómo se cuenta**, porque los tres números que circulan son
 > distintos y los tres son "correctos" según qué se pregunte:
@@ -479,15 +494,49 @@ aparecieron, no una revisión exhaustiva:
 
 ---
 
+## 📦 `research/` — EL CÓDIGO RETIRADO (nuevo, 16 sep 2026)
+
+Paquete nuevo en la raíz. Guarda lo que el motor diario **ya no ejecuta** pero que
+sigue siendo válido como hipótesis, con sus tests, importable y corrible.
+
+| módulo | qué | por qué salió |
+|---|---|---|
+| `gold_score_chain.py` | `compute_gold_score_bma`, `compute_godel_score`, `compute_nash_frozen_7d` y sus tipos | depende de un LSTM que no existe; y el término Gödel no puede aportar (hallazgo PR #19) |
+| `price_signals.py` | `compute_transfer_entropy_proxy`, `compute_backbone_score` | tesis direccional refutada el 4-sep |
+| `cycle_gold_score.py` | el cableado que los componía dentro de `run_scoring_cycle` | viajó con lo que componía |
+
+**No es `archive/*`.** Los retiros del PR #22 fueron a ramas de archivo, donde el
+código deja de correr — correcto para algo que no vuelve. Acá la **condición de
+reversión está escrita**: si Fase 2 entrena el LSTM que produce `val_dir`, la cadena
+vuelve. Por eso tiene que seguir compilando contra el motor vivo.
+
+`research/tests/test_aislamiento.py` fija la dirección: **el motor nunca importa de
+`research/`**. Sin ese test el retiro sería una afirmación sobre carpetas, no sobre
+quién llama a quién.
+
+CI: `tests.yml` tiene un job `research` con `continue-on-error: true` — visible si se
+rompe, sin poder frenar un merge. A mano: `pytest research/tests/ -q`.
+
+Ver la entrada del 16-sep en `decision-log.md` para el razonamiento completo y la
+salvedad que hay que resolver **antes** de revertir.
+
+---
+
 ## ▶️ PRÓXIMO PASO CONCRETO
 
-**Escribir el entry point de GDELT que falta.** La Incógnita #1 se cerró mostrando que
-no había nada que verificar: ningún workflow invoca GDELT y `ingestion/run_gdelt.py` —el
-archivo que un comentario de `tests.yml` da por existente— no existe. El paso concreto es
-escribirlo y decidir si un `schedule:` lo dispara.
+**Decidir qué mide el éxito de Fase 2, ahora que el ciclo diario emite solo régimen.**
 
-Es una sola cosa y es la que desbloquea que la ingestion corra sola, que era el fondo real
-de la pregunta que estuvo abierta tres semanas.
+El entry point de GDELT ya existe (`ingestion/run_gdelt.py`, PR #24) y el motor quedó
+limpio de la cadena muerta (PR #27). Lo que queda sin contestar es lo que bloquea
+arrancar Fase 2 de verdad: la accuracy direccional dejó de aplicar cuando Fase 1 cerró
+en negativo, y no hay métrica que la reemplace. Sin eso, entrenar un modelo es entrenar
+contra un criterio que nadie fijó.
+
+Es una sola cosa, y es anterior a cualquier línea de código de modelo.
+
+*(Se mueve acá desde la sección de Fase 2, donde figuraba como "decisión de diseño
+pendiente". Deja de serlo: con Fase 1 cerrada y el motor ordenado, es el único
+bloqueante que queda.)*
 
 *(Una sola, como manda el punto 3 de "cómo actualizar este archivo". La otra decisión
 pendiente —qué métrica valida un modelo de dimensionamiento, dado que la accuracy

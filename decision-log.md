@@ -905,3 +905,136 @@ función que usa producción.
 - Todo commit corre pytest antes de comitear. Todo patch se verifica en clon 100% ajeno vía `git am` antes de entregarse.
 - Discrepancias encontradas (memoria vs. fuente real, texto externo vs. constantes reales) se registran explícitamente, no se resuelven en silencio.
 - Un hallazgo de auditoría no crítico (#6, `drive_root`) se corrigió antes de seguir agregando trabajo encima, no se dejó como nota para "después".
+
+---
+
+## 2026-09-16 — Retiro de la cadena `gold_score` a `research/`
+
+**Fuente:** el mapa de consumidores reales verificado sobre el código, no supuesto.
+Consumidores de `core/scoring.py` fuera de `tests/`: `orchestration/cycle.py`,
+`tools/measure_godel_samples.py`, `ingestion/gdelt_aggregation.py`. Solo el primero
+tocaba la cadena.
+
+### Qué se movió
+
+De `core/scoring.py` a `research/gold_score_chain.py` (521 líneas, sin una sola
+línea de lógica modificada):
+
+- `NashFrozenSource`, `NashFrozenResult`, `compute_nash_frozen_7d`
+- `GodelScoreResult`, `compute_godel_score`, `VAL_DIR_SIN_INFERENCIA`
+- `GoldScoreRegime`, `GoldScoreAction`, `GoldScoreKillReason`, `GoldScoreResult`,
+  `compute_gold_score_bma`
+- Las ocho constantes que solo ellas usaban (`NASH_*`, `BMA_WEIGHTS`,
+  `KL_DIVERGENCE_THRESHOLD`, `NATIVE_ASSETS`, `SHANNON_KILL_THRESHOLD`,
+  `MIN_REFERENCE_MULTIPLIER`, `MIN_WINDOW_FOR_NASH`)
+
+`core/price_signals.py` → `research/price_signals.py` (`git mv`, historia intacta).
+El cableado que los componía dentro de `run_scoring_cycle` →
+`research/cycle_gold_score.py`.
+
+### El motivo, que son dos y el segundo es el que decide
+
+**Uno:** `compute_gold_score_bma` → `compute_godel_score` → `val_dir` → un LSTM
+entrenado que no existe. Eso ya haría de la cadena un camino muerto.
+
+**Dos, y es peor porque está medido** (hallazgo del PR #19): el término
+`w_godel * godel_score` **no puede aportar a ningún `gold_score` distinto de cero**.
+`compute_gold_score_bma` mata el score a 0.0 cuando la máscara Gödel dispara, y
+`compute_godel_score` vale 0.0 cuando la máscara NO dispara. Cuando el componente
+tendría valor, el kill lo anula; cuando el kill no actúa, el componente vale cero.
+No hay entrada posible que haga aportar a ese término.
+
+`price_signals` se fue por un motivo distinto y del mismo tipo: su tesis direccional
+se midió el 4-sep-2026 y se refutó (ver el acta de esa fecha).
+
+Consecuencia sobre el ciclo diario: venía calculando todos los días un número que no
+podía significar nada, y lo emitía con una advertencia de cinco líneas pegada
+(`GOLD_SCORE_SIN_PODER_PREDICTIVO`) para que nadie lo usara. **Un número que hay que
+acompañar de un cartel que dice "no usar" no es una salida del sistema.** Se retiró
+el número y se retiró el cartel.
+
+### Por qué `research/` y no `archive/*`
+
+Los retiros anteriores (PR #22) se fueron a ramas `archive/*`, donde el código deja
+de importarse, de correr y de compilar contra el resto. Eso es correcto para algo
+que no va a volver.
+
+Esto es distinto porque **la condición de reversión está escrita y es concreta**. El
+código tiene que seguir siendo importable y corrible: si no, el día que se retome
+habrá que redescubrir si todavía funciona. `research/tests/test_aislamiento.py` fija
+la dirección de la dependencia — el motor nunca importa de `research/`, y `research/`
+sí importa del motor, para correr contra el código vivo y no contra una copia
+congelada que se desactualiza sin que nadie se entere.
+
+### CONDICIÓN DE REVERSIÓN
+
+**Si Fase 2 entrena el LSTM que produce `val_dir`, la cadena vuelve.** No hace falta
+reescribir nada: mover los símbolos de `research/` a `core/` y restituir las cinco
+líneas de import de `orchestration/cycle.py`.
+
+Con una salvedad que hay que resolver ANTES de revertir, porque revertir sin
+resolverla devuelve el mismo problema: el hallazgo del PR #19 sigue en pie. Tener
+`val_dir` hace que `compute_godel_score` devuelva un número real, pero **no** arregla
+que el kill por máscara lo anule. La reversión exige decidir qué pasa con esa
+contradicción — no alcanza con que exista el modelo.
+
+### Qué NO se movió, y por qué
+
+`compute_vitality_tesla` y `VitalityResult`/`VitalityTier` se quedan en `core/`:
+`tools/measure_godel_samples.py:74` los importa. No están muertos aunque el ciclo
+diga que no son compuerta. Igual `godel_active`, `entropy_state`, `compute_godel_p66`,
+`compute_adaptive_percentile`, `classify_gdelt_event` y los filtros por país — son la
+anotación de régimen, que es lo que el ciclo emite ahora.
+
+### Validación
+
+Conteo exacto, partiendo de los **778** que pasaban en `main` (`dd9ea63`):
+
+| | tests |
+|---|---|
+| `pytest tests/` — el job que bloquea | **723** |
+| `pytest research/tests/` — no bloquea | **74** |
+
+**Ningún test se borró.** Se movieron **68**: 48 de `test_scoring.py`, 8 de
+`test_cycle.py` y 12 de `test_price_signals.py`. 778 − 68 = 710, que es lo que
+quedaría en `tests/` si nada más hubiera cambiado.
+
+Los **19** restantes (710 → 723 en `tests/`, y 68 → 74 en `research/`) son nuevos y
+se declaran uno por uno porque el brief pedía que la suma cerrara:
+
+- **+6** `research/tests/test_aislamiento.py` — fija que el motor nunca importe de
+  `research/`. Sin él, el retiro es una afirmación sobre carpetas y no sobre quién
+  llama a quién, y se revierte con un import que nadie mira.
+- **+13** `tests/test_registro_linguistico.py` — netos, de un defecto que este PR
+  destapó y tuvo que arreglar; ver abajo.
+
+Dos tests de `tests/test_cycle.py` se **actualizaron, no se borraron**
+(`..._calcula_los_3_reales` → `..._calcula_la_anotacion_de_regimen`, y el que
+construía `AssetCycleResult` con los campos viejos): afirmaban sobre `nash_frozen` y
+`gold_score`, que salieron del ciclo. Cambiaron porque cambió el contrato.
+
+### Efecto colateral: el barrido de voseo marcaba todo el futuro de indicativo
+
+El docstring de `research/__init__.py` escribió "habrá que redescubrir" y puso en rojo
+a `test_ningun_string_del_repo_usa_voseo` (PR #26). **No era voseo: era un defecto de
+la regla, y mío.**
+
+La regla `-á` afirmaba que "ninguna otra forma verbal del español termina en á
+tónica". Es falso — el **futuro de indicativo entero** termina en á: *será, habrá,
+tendrá, calculará, permitirá*. La regla los marcaba a todos. No se vio al escribirla
+porque en ese momento ningún docstring del repo usaba un futuro: el barrido daba verde
+por suerte, no por estar bien.
+
+El recorte es exacto y no una lista de excepciones: **todo futuro español termina en
+`-rá`** (los regulares son infinitivo + á, y todo infinitivo termina en r; los
+irregulares —*habrá, tendrá, podrá, sabrá, dirá, hará, querrá, pondrá, vendrá, saldrá,
+valdrá, cabrá*— también). `-rá` sale del patrón automático.
+
+El precio: los imperativos voseantes de verbos con raíz en r (*mirá, borrá, entrá*)
+caen del lado del futuro y pasan a la lista explícita — mismo trato que ya tenían los
+de -er/-ir, y por el mismo motivo: homografía real. Los +13 tests son las dos mitades
+de eso, y están para que la próxima versión no lo rompa de nuevo.
+
+Se arregló acá y no en un PR aparte porque bloqueaba: la alternativa era reescribir la
+prosa para callar al linter, que es exactamente lo que el docstring de ese test dice
+que no hay que hacer.

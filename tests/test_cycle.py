@@ -15,12 +15,7 @@ import governance.persistence as persistence_module
 from governance.persistence import DRIVE_ROOT_ENV_VAR
 from ingestion.gdelt_aggregation import DailyAggregationResult
 from ingestion.gdelt_series import append_day
-from orchestration.cycle import (
-    DEFAULT_CYCLE_ASSETS,
-    GOLD_SCORE_SIN_PRECIO_REASON,
-    GOLD_SCORE_SIN_PODER_PREDICTIVO,
-    run_scoring_cycle,
-)
+from orchestration.cycle import DEFAULT_CYCLE_ASSETS, run_scoring_cycle
 
 P66_TEST_DEFAULT = 0.7  # placeholder consciente para tests -- ver docstring
                         # de run_scoring_cycle sobre por qué no hay default.
@@ -56,13 +51,20 @@ def test_activo_sin_historia_es_cold_start_no_data():
     assert r.data_status == "cold_start_no_data"
     assert r.n_days_history == 0
     assert r.vitality_tesla is None
-    assert r.nash_frozen is None
+    assert r.entropy_state is None
     assert r.godel_is_active is None
+    assert r.p66_entropy is None
 
 
-# ─── Camino feliz -- historia real, las 3 funciones corren de verdad ──────
+# ─── Camino feliz -- historia real, las funciones corren de verdad ────────
 
-def test_activo_con_historia_calcula_los_3_reales():
+def test_activo_con_historia_calcula_la_anotacion_de_regimen():
+    """ACTUALIZADO, NO BORRADO, el 16-sep-2026. Se llamaba
+    `..._calcula_los_3_reales` y afirmaba sobre `nash_frozen`, que salió del
+    ciclo con la cadena muerta (research/gold_score_chain.py). Lo que el
+    ciclo emite ahora es la anotación de régimen, y eso es lo que se
+    verifica -- el test cambió porque cambió el contrato, no para que
+    pasara."""
     _sembrar_historia("BTC", 15, entropy=0.4, n_events=20)
     resultado = run_scoring_cycle(["BTC"], p66_entropy_global_default=P66_TEST_DEFAULT)
     r = resultado["BTC"]
@@ -71,40 +73,14 @@ def test_activo_con_historia_calcula_los_3_reales():
     assert r.n_days_history == 15
     assert r.vitality_tesla is not None
     assert r.vitality_tesla.value in (3, 6, 9)
-    assert r.nash_frozen is not None
     assert isinstance(r.godel_is_active, bool)
-
-
-# ─── gold_score: None SOLO cuando falta el dato, y por el motivo real ─────
-
-def test_sin_cierres_el_gold_score_es_none_y_el_motivo_dice_que_faltan_datos():
-    """Este test REEMPLAZA a `test_gold_score_siempre_none_con_o_sin_historia`,
-    que codificaba una afirmación factualmente falsa:
-
-        assert "godel_score" in r.gold_score_blocked_reason
-        assert "backbone_score" in r.gold_score_blocked_reason
-
-    El motivo viejo decía que NINGUNO de los tres componentes tenía función
-    que lo calculara. `te_score` y `backbone_score` la tenían desde el 18 de
-    agosto, y `godel_score` la tiene desde este patch. El test pasaba porque
-    verificaba que las palabras estuvieran en el string, no que la
-    afirmación fuera cierta.
-
-    Lo que sí falta es de otra clase: datos de precio."""
-    _sembrar_historia("XAU", 5)
-
-    resultado = run_scoring_cycle(["XAU", "NIFTY50"],
-                                  p66_entropy_global_default=P66_TEST_DEFAULT)
-
-    for r in resultado.values():
-        assert r.gold_score is None
-        assert r.gold_score_warning is None, (
-            "sin gold_score no corresponde advertencia sobre un gold_score")
-    # El activo CON historia reporta el motivo real: faltan cierres.
-    assert resultado["XAU"].gold_score_blocked_reason == GOLD_SCORE_SIN_PRECIO_REASON
-    assert "cierres" in resultado["XAU"].gold_score_blocked_reason
-    # Y el que no tiene historia reporta el suyo, que es otro.
-    assert resultado["NIFTY50"].gold_score_blocked_reason != GOLD_SCORE_SIN_PRECIO_REASON
+    assert isinstance(r.p66_entropy, float)
+    # entropy_state EN WARM-UP, y esto no es un agujero del test: necesita
+    # 252 observaciones y acá hay 15. El ciclo reporta None en vez de
+    # fabricar un tercil sobre historia insuficiente -- que es el punto de
+    # que ENTROPY_STATE_WARMUP sea None y no un valor. Fuera del warm-up se
+    # verifica en test_con_deriva_a_la_baja_...().
+    assert r.entropy_state is None
 
 
 # ─── EURUSD -- el fix del patch anterior, ejercitado end-to-end acá ───────
@@ -268,6 +244,11 @@ def test_con_deriva_a_la_baja_el_movil_ve_un_dia_que_el_acumulado_pierde():
         f"Si el ciclo estuviera usando el acumulado, este es exactamente "
         f"el día que perdería."
     )
+    # Con 600 observaciones entropy_state YA no está en warm-up: es la
+    # contracara del assert de warm-up en
+    # test_activo_con_historia_calcula_la_anotacion_de_regimen(). Sin las
+    # dos mitades, "siempre None" pasaría las dos.
+    assert r.entropy_state in (0, 1, 2)
 
 
 def test_dentro_del_warmup_los_dos_criterios_dan_el_mismo_resultado():
@@ -341,8 +322,8 @@ def test_el_sello_no_cambia_la_firma_de_run_scoring_cycle():
 
     r = AssetCycleResult(
         asset="BTC", data_status="cold_start_no_data", n_days_history=0,
-        vitality_tesla=None, nash_frozen=None, godel_is_active=None,
-        gold_score=None, gold_score_blocked_reason="x",
+        vitality_tesla=None, entropy_state=None, godel_is_active=None,
+        p66_entropy=None,
     )
     assert r.godel_criteria_version
 
@@ -485,193 +466,19 @@ def test_el_sello_de_version_sube_a_la_4():
 #  comprueba que no explota pasa igual con la fórmula equivocada.
 # ══════════════════════════════════════════════════════════════════════════
 
-#: Serie de cierres DETERMINISTA: rampa geométrica exacta, sin RNG y sin
-#: ruido. Cualquier `default_rng` acá haría que el valor esperado dependa
-#: de la versión de numpy.
-def _closes_deterministas(n: int = 120, base: float = 100.0,
-                          paso: float = 1.01) -> list[float]:
-    return [base * (paso ** i) for i in range(n)]
 
 
-#: Valor exacto que produce la cadena completa con esos cierres, con
-#: `val_dir=None` (sin LSTM). Medido, no estimado, y recalculable a mano:
-#:     te_score       = 0.7974646425969463
-#:     backbone_score = 1.0            (tendencia saturada)
-#:     godel_score    = 0.0            (sin inferencia)
-#:     0.40*0.0 + 0.30*0.7974646425969463 + 0.30*1.0 = 0.539239 (redondeado a 6)
-GOLD_SCORE_ESPERADO = 0.539239
 
 
-def test_gold_score_end_to_end_da_el_valor_exacto_esperado():
-    """EL TEST DE CIERRE DE FASE 1. Corre en CI, calcula un Gold Score con
-    las tres funciones de componente reales y verifica el NÚMERO."""
-    from core.scoring import GoldScoreAction, GoldScoreKillReason
-
-    # Entropía plana y baja: la máscara no dispara y no hay legacy-kill
-    # (0.30 < SHANNON_KILL_THRESHOLD=0.42). Aísla el cálculo del score.
-    _sembrar_historia("BTC", 30, entropy=0.30, n_events=10)
-
-    r = run_scoring_cycle(
-        ["BTC"], p66_entropy_global_default=P66_TEST_DEFAULT,
-        closes_por_activo={"BTC": _closes_deterministas()},
-    )["BTC"]
-
-    assert r.gold_score is not None, "el gold_score sigue bloqueado"
-    assert r.gold_score.gold_score == pytest.approx(GOLD_SCORE_ESPERADO), (
-        f"el valor cambió: {r.gold_score.gold_score} vs {GOLD_SCORE_ESPERADO}. "
-        f"Si fue a propósito, recalcular la constante a mano y actualizar el "
-        f"comentario que la deriva -- no ajustar el número para que pase."
-    )
-    assert r.gold_score.kill_signal is False
-    assert r.gold_score.kill_reason is GoldScoreKillReason.NONE
-    assert r.gold_score.asset_type == "native"
-    assert r.gold_score.action is GoldScoreAction.WATCH
-    assert r.gold_score_blocked_reason is None
 
 
-def test_el_valor_esperado_se_deriva_de_los_tres_componentes():
-    """Contraprueba del anterior: que el número no sea una constante
-    copiada de una corrida, sino la combinación que dice ser. Si el
-    ponderado cambia, este test lo separa del anterior."""
-    from core.price_signals import (compute_backbone_score,
-                                    compute_transfer_entropy_proxy)
-    from core.scoring import BMA_WEIGHTS, compute_godel_score
-
-    closes = _closes_deterministas()
-    te = compute_transfer_entropy_proxy(closes)
-    bb = compute_backbone_score(closes)
-    g = compute_godel_score(godel_is_active=False, val_dir=None)
-    w = BMA_WEIGHTS["native"]
-
-    a_mano = round(w["godel"] * g.value + w["te_entropy"] * te.value
-                   + w["backbone"] * bb.value, 6)
-
-    assert a_mano == pytest.approx(GOLD_SCORE_ESPERADO)
-    assert te.insufficient_data is False and bb.insufficient_data is False, (
-        "el valor esperado se está apoyando en placeholders, no en datos")
 
 
-def test_el_gold_score_calculado_viaja_con_su_advertencia():
-    """Un gold_score suelto en un log o en un artefacto se lee como una
-    recomendación. Dos de sus tres inputs fueron medidos y no son
-    significativos, así que la advertencia va pegada al número."""
-    _sembrar_historia("BTC", 30, entropy=0.30, n_events=10)
-
-    r = run_scoring_cycle(
-        ["BTC"], p66_entropy_global_default=P66_TEST_DEFAULT,
-        closes_por_activo={"BTC": _closes_deterministas()},
-    )["BTC"]
-
-    assert r.gold_score_warning == GOLD_SCORE_SIN_PODER_PREDICTIVO
-    assert "NO PREDICE" in r.gold_score_warning
-    for dato in ("Bonferroni", "Benjamini-Hochberg", "0.4133", "99.2%"):
-        assert dato in r.gold_score_warning
 
 
-def test_sin_lstm_el_componente_godel_no_aporta_aunque_la_mascara_dispare():
-    """El caso que separa este PR de uno que hubiera fabricado un 0.5: con
-    la máscara ACTIVA y sin modelo, el gold_score tiene que dar lo mismo
-    que con la máscara inactiva. Si difiere, val_dir se está inventando."""
-    from core.scoring import compute_godel_score
-
-    activo = compute_godel_score(godel_is_active=True, val_dir=None)
-    inactivo = compute_godel_score(godel_is_active=False, val_dir=None)
-
-    assert activo.value == inactivo.value == 0.0
-    # Y se distinguen igual, por el motivo -- no se pierde la información.
-    assert activo.reason != inactivo.reason
 
 
-def test_un_activo_sin_cierres_no_rompe_a_los_que_si_tienen():
-    """Resultado parcial, no todo-o-nada: el mapa de cierres puede cubrir
-    algunos activos y no otros, y eso no es un error."""
-    _sembrar_historia("BTC", 30, entropy=0.30, n_events=10)
-    _sembrar_historia("XAU", 30, entropy=0.30, n_events=10)
-
-    res = run_scoring_cycle(
-        ["BTC", "XAU"], p66_entropy_global_default=P66_TEST_DEFAULT,
-        closes_por_activo={"BTC": _closes_deterministas()},
-    )
-
-    assert res["BTC"].gold_score is not None
-    assert res["XAU"].gold_score is None
-    assert res["XAU"].gold_score_blocked_reason == GOLD_SCORE_SIN_PRECIO_REASON
 
 
-def test_HALLAZGO_el_componente_godel_nunca_aporta_al_gold_score_final():
-    """HALLAZGO ESTRUCTURAL, fijado acá para que no se pierda.
-
-    El término `w_godel * godel_score` NO PUEDE aportar a ningún
-    gold_score distinto de cero, ni siquiera con un LSTM perfecto:
-
-      · Si la máscara dispara, `compute_gold_score_bma` activa el
-        kill_signal por `godel_active` y pone gold_score en 0.0 -- sin
-        importar cuánto valga el componente.
-      · Si la máscara NO dispara, `compute_godel_score` devuelve 0.0 por
-        definición (la rama `else 0.0` del legacy).
-
-    Los dos casos son exhaustivos, así que el 0.40 (nativos) o 0.55
-    (sintéticos) de peso está estructuralmente muerto.
-
-    LA CAUSA no está en ninguna de las dos fuentes legacy, y eso importa:
-      · `spel_score_engine.py` usa godel_active para PONDERAR el score, y
-        no mata por él.
-      · `spel_bayesian_core.py` mata solo por Shannon > 0.42 y KL > 0.20;
-        nunca llama a godel_active.
-    La rama de kill por `godel_active` es un agregado del port -- ya
-    identificado como tal en la auditoría del PR #17, que lo dejó
-    explícitamente como tarea aparte. Este PR NO la toca: cambiar la
-    lógica de compute_gold_score_bma es una decisión de criterio con su
-    propia medición.
-
-    Este test documenta el estado real. Si algún día cambia, que sea a
-    conciencia y no por accidente."""
-    from core.scoring import compute_godel_score, compute_gold_score_bma
-
-    for val_dir in (None, 0.80, 1.0):
-        con_mascara = compute_gold_score_bma(
-            godel_score=compute_godel_score(True, val_dir).value,
-            te_score=1.0, backbone_score=1.0, asset="BTC",
-            entropy_shannon=0.30, p66_entropy=0.20,   # dispara la máscara
-        )
-        assert con_mascara.gold_score == 0.0, (
-            f"val_dir={val_dir}: con la máscara activa el kill manda")
-        assert con_mascara.kill_signal is True
-
-        sin_mascara = compute_gold_score_bma(
-            godel_score=compute_godel_score(False, val_dir).value,
-            te_score=1.0, backbone_score=1.0, asset="BTC",
-            entropy_shannon=0.30, p66_entropy=0.40,   # no dispara
-        )
-        # 0.30*1.0 + 0.30*1.0 = 0.60 -- el término Gödel aporta cero.
-        assert sin_mascara.gold_score == pytest.approx(0.60), (
-            f"val_dir={val_dir}: el componente Gödel aportó algo, y no debería "
-            f"poder -- revisar si cambió compute_gold_score o el kill")
 
 
-def test_val_dir_llega_al_componente_aunque_el_kill_lo_neutralice():
-    """El parámetro `val_dir_por_activo` no es decorativo: cuando Fase 2
-    entregue un modelo, enchufarlo no debe requerir tocar la firma. Se
-    verifica sobre el COMPONENTE, que es donde val_dir sí tiene efecto --
-    el gold_score final lo neutraliza por el kill (ver el test anterior)."""
-    from core.scoring import compute_godel_score
-
-    assert compute_godel_score(True, 0.80).value == pytest.approx(0.80)
-    assert compute_godel_score(True, None).value == 0.0
-
-    # Y el ciclo lo pasa de verdad: con la máscara activa el gold_score da
-    # 0.0 por el kill, pero la llamada acepta el mapa y no lo ignora.
-    for i in range(30):
-        append_day(_dia("BTC", date(2026, 1, 1) + timedelta(days=i),
-                        entropy=0.10 + 0.02 * i, n_events=10))
-
-    r = run_scoring_cycle(
-        ["BTC"], p66_entropy_global_default=0.05,
-        closes_por_activo={"BTC": _closes_deterministas()},
-        val_dir_por_activo={"BTC": 0.80},
-    )["BTC"]
-
-    assert r.godel_is_active is True, "la fixture no activa la máscara"
-    assert r.gold_score is not None
-    assert r.gold_score.kill_signal is True
-    assert r.gold_score.gold_score == 0.0

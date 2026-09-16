@@ -20,10 +20,27 @@ suyo, no del producto.
 El acento final no alcanza como criterio, y eso se midió sobre este repo
 antes de escribir la regla -- no se supuso:
 
-  · `-á` final (imperativo de los verbos en -ar: "pasá", "usá", "exportá").
-    NINGUNA otra forma verbal del español termina en `á` tónica, así que la
-    regla es automática y solo necesita descartar tres palabras que no son
-    verbos. Es la clase más grande y la que más entra.
+  · `-á` final PERO NO `-rá` (imperativo de los verbos en -ar: "pasá",
+    "usá", "exportá"). Automática, con un recorte que se agregó el
+    16-sep-2026 y que la primera versión no tenía:
+
+    LA PRIMERA VERSIÓN DECÍA "ninguna otra forma verbal del español termina
+    en á tónica" Y ERA FALSO. El FUTURO DE INDICATIVO entero termina en á:
+    "será", "habrá", "tendrá", "calculará", "permitirá". La regla los
+    marcaba a todos. No se vio al escribirla porque en ese momento ningún
+    docstring del repo usaba un futuro -- suerte, no corrección; el primer
+    "habrá que redescubrir" que se escribió puso la suite en rojo.
+
+    El recorte es exacto y no una lista: TODO futuro español termina en
+    `-rá` sin excepción. Los regulares son infinitivo + á, y todo
+    infinitivo termina en r; los irregulares (habrá, tendrá, podrá, sabrá,
+    dirá, hará, querrá, pondrá, vendrá, saldrá, valdrá, cabrá) también.
+    Así que `-rá` sale del patrón automático.
+
+    El precio: los imperativos voseantes de verbos con raíz en r ("mirá",
+    "borrá", "entrá") caen del lado del futuro y pasan a la lista
+    explícita de abajo. Es el mismo trato que ya tenían los de -er/-ir, y
+    por el mismo motivo -- homografía real, no pereza.
 
   · `-ás/-és/-ís` final (presente indicativo: "querés", "podés", "usás").
     También automática. El repo entero tiene NUEVE palabras distintas con
@@ -130,13 +147,19 @@ NO_VERBOS_EN_AS_ES_IS = frozenset({
 #: docstring). Lista explícita, necesariamente incompleta, y eso está
 #: documentado como limitación aceptada.
 IMPERATIVOS_EXPLICITOS = frozenset({
+    # imperativos de -ar con raíz en r: caen del patrón automático porque
+    # terminan en -rá, que es la terminación del futuro.
+    "mirá", "borrá", "entrá", "esperá", "comprá", "cerrá", "mostrá",
+    "encontrá", "ignorá", "mejorá", "generá", "operá", "considerá",
+    # imperativos de -er/-ir
     "corré", "poné", "hacé", "tené", "leé", "vení", "ponete", "hacete",
     "fijate", "acordate", "quedate", "movete", "andate",
     "definí", "seguí", "escribí", "elegí", "medí", "subí", "corregí",
     "abrí", "salí", "decí", "sentí", "pedí",
 })
 
-_FIN_EN_A = re.compile(r"\b[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ]{2,}á\b")
+#: `(?<![rR])` deja fuera `-rá`: es el futuro entero del español.
+_FIN_EN_A = re.compile(r"\b[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ]{2,}(?<![rR])á\b")
 _FIN_EN_AS_ES_IS = re.compile(r"\b[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ]{2,}[áéí]s\b")
 _PALABRA = re.compile(r"\b[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ]+\b")
 
@@ -236,8 +259,8 @@ def test_los_docstrings_tambien_se_miran_no_solo_los_mensajes():
 
 class TestReglas:
     @pytest.mark.parametrize("forma", [
-        "pasá", "usá", "exportá", "rotá", "cambiá", "mirá", "dejá", "agregá",
-        "revisá", "tomá", "probá", "borrá", "verificá", "mandá", "andá"])
+        "pasá", "usá", "exportá", "rotá", "cambiá", "dejá", "agregá",
+        "revisá", "tomá", "probá", "verificá", "mandá", "andá"])
     def test_imperativos_en_a_se_detectan_por_patron(self, forma):
         """Sin lista: ninguna otra forma verbal del español termina en `á`
         tónica. `exportá` y `rotá` no estaban en ninguna lista mía y el
@@ -264,6 +287,31 @@ class TestSinFalsosPositivos:
         """Las 18 que aparecen de verdad en el repo. `acá` sale 104 veces:
         un falso positivo acá haría el test inútil desde el primer día."""
         assert formas_voseantes(f"Y {palabra} termina la frase.") == []
+
+    @pytest.mark.parametrize("forma", [
+        "habrá", "será", "estará", "tendrá", "podrá", "hará", "dirá",
+        "vendrá", "calculará", "devolverá", "permitirá"])
+    def test_el_futuro_de_indicativo_no_es_voseo(self, forma):
+        """DEFECTO REAL DE LA PRIMERA VERSIÓN DE ESTE TEST, encontrado el
+        16-sep-2026 cuando un docstring nuevo escribió "habrá que
+        redescubrir" y puso la suite en rojo.
+
+        La regla `-á` marcaba el FUTURO ENTERO del español. No se vio al
+        escribirla porque ningún docstring del repo usaba un futuro todavía
+        -- o sea que el barrido daba verde por suerte, no por estar bien.
+
+        El recorte es exacto: todo futuro termina en `-rá`. Estos once
+        cubren los irregulares (raíz propia) y los regulares (infinitivo +
+        á) para que la próxima versión no lo rompa de nuevo."""
+        assert formas_voseantes(f"Eso {forma} que verificarlo.") == []
+
+    @pytest.mark.parametrize("forma", ["mirá", "borrá", "entrá", "esperá"])
+    def test_los_imperativos_en_ra_siguen_cayendo_por_la_lista(self, forma):
+        """El precio del recorte anterior: estos son voseo de verdad y
+        terminan en -rá igual que el futuro. Salen del patrón automático y
+        entran por la lista explícita. Sin este test, el recorte los
+        habría dejado pasar en silencio."""
+        assert formas_voseantes(f"Entonces {forma} el valor.") == [forma]
 
     @pytest.mark.parametrize("forma", ["busqué", "encontré", "afirmé", "preferí"])
     def test_el_preterito_en_primera_persona_no_es_voseo(self, forma):

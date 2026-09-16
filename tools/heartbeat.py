@@ -74,7 +74,8 @@ No se "arregla" subiendo `base_gold_score` a 0.85-0.90 para que aparezca
 algún True. Ese número no saldría de ninguna medición -- sería elegirlo
 para que la salida se vea interesante, que es exactamente lo que este
 proyecto no hace. Cuando exista `ingestion/deriv.py`, el
-`base_gold_score` va a venir de `compute_gold_score_bma()` y el veredicto
+`base_gold_score` va a venir de `compute_gold_score_bma()` -- hoy en
+`research/gold_score_chain.py`, retirada del camino caliente -- y el veredicto
 va a significar algo. Hay un test que fija esta degeneración para que sea
 visible en la suite y no una sorpresa.
 
