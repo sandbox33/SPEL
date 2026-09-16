@@ -36,6 +36,16 @@ append -- el mismo razonamiento que documenta `gdelt_series.append_day()` --
 y, peor, pondría a la ruta de escritura en posición de decidir qué entra.
 La ruta de escritura no decide: escribe.
 
+Y LO QUE LA LECTURA DESCARTA, LO DICE. `read_ledger()` devuelve un
+`LedgerReadResult`, no una lista: los dos descartes que hace -- líneas
+ilegibles y duplicados por `trade_id` -- viajan en el valor de retorno con
+sus números de línea, no solo en un `logger.warning` que en una corrida de
+backtest nadie está mirando. Precedente:
+`ingestion/training_dataset.py::BuildDatasetResult.n_dropped_no_entropy`.
+En un archivo cuya regla es "no se filtra nunca", un ledger que dice tener
+198 filas sobre 200 líneas tiene que poder decir por qué faltan dos --
+si no, "el archivo tiene 200 líneas" deja de ser verificable.
+
 ══ NUNCA ESCRIBE AL FALLBACK EN SILENCIO ══
 
 `drive_root()` cae a `.spel_drive_stream` cuando no hay `SPEL_DRIVE_ROOT` ni
@@ -169,6 +179,43 @@ def build_entry(
     )
 
 
+@dataclass(frozen=True)
+class LedgerReadResult:
+    """
+    Nunca solo las filas. Mismo patrón que
+    `ingestion/training_dataset.py::BuildDatasetResult`, que expone
+    `n_dropped_no_entropy` junto a `rows` por la misma razón: un descarte
+    que solo vive en el log es un descarte que nadie ve.
+
+    EN UN LEDGER ESO PESA MÁS QUE EN UN DATASET. La regla del archivo es
+    que no se filtra nunca, y `read_ledger()` descarta en dos lugares --
+    líneas ilegibles y duplicados por `trade_id`. Los dos descartes son
+    correctos, y los dos son invisibles si se reportan por `logger.warning`
+    a un logger que en una corrida de backtest nadie está mirando. Un
+    ledger que dice tener 198 filas sobre un archivo de 200 líneas tiene
+    que poder decir por qué faltan dos, en el valor de retorno y no en el
+    log: si no, "el archivo tiene 200 líneas" deja de ser verificable.
+
+    `lineas_corruptas` trae los NÚMEROS DE LÍNEA, no solo cuántas. Con el
+    conteo solo hay que ir a buscarlas a mano en un archivo de miles de
+    líneas; con el lineno se abre el archivo en esa línea.
+    """
+    entries: list[TradeLedgerEntry]
+    #: Números de línea (1-based) que no se pudieron parsear.
+    lineas_corruptas: tuple[int, ...]
+    #: Filas válidas descartadas porque otra línea posterior traía el mismo
+    #: `trade_id`. Es el reintento tras un corte, y es esperado -- pero un
+    #: número alto acá significa que algo está reescribiendo trades.
+    n_deduplicadas: int
+
+    @property
+    def n_lineas_corruptas(self) -> int:
+        """Derivado, no un campo aparte: dos campos que cuentan lo mismo
+        pueden discrepar, y el que discrepa es siempre el que alguien
+        actualizó a medias."""
+        return len(self.lineas_corruptas)
+
+
 def _ledger_file_path() -> Path:
     return Path(stream_path(PersistenceStream.TRADE_LEDGER)) / LEDGER_FILENAME
 
@@ -190,8 +237,8 @@ def append_trade(entry: TradeLedgerEntry, *, permitir_fallback: bool = False) ->
             f"drive_root() resolvió a {LOCAL_FALLBACK_DRIVE_ROOT}, que es el "
             f"fallback de desarrollo: nadie lo lee y nada lo respalda. "
             f"Escribir el ledger ahí perdería la corrida entera sin un solo "
-            f"error. Definí SPEL_DRIVE_ROOT, o pasá permitir_fallback=True "
-            f"si de verdad querés un ledger descartable.")
+            f"error. Define SPEL_DRIVE_ROOT, o pasa permitir_fallback=True "
+            f"si de verdad quieres un ledger descartable.")
 
     path = _ledger_file_path()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -205,13 +252,19 @@ def read_ledger(
     *,
     since: Optional[datetime] = None,
     until: Optional[datetime] = None,
-) -> list[TradeLedgerEntry]:
+) -> LedgerReadResult:
     """
     Lee el ledger completo, en el orden en que se escribió.
 
+    DEVUELVE UN `LedgerReadResult`, NO UNA LISTA. Los dos descartes que
+    hace esta función -- líneas ilegibles y duplicados por `trade_id` --
+    viajan en el valor de retorno, no solo en el log. Ver el docstring de
+    `LedgerReadResult`: en un archivo cuya regla es "no se filtra nunca",
+    un descarte silencioso es peor que en cualquier otro lado.
+
     DEDUPLICACIÓN POR `trade_id`, última ocurrencia gana -- mismo contrato
     que `gdelt_series.read_series()` y por el mismo motivo: un reprocesamiento
-    corrige, no empeora.
+    corrige, no empeora. Cuántas se descartaron sale en `n_deduplicadas`.
 
     NO FILTRA POR OUTCOME, y nunca va a hacerlo. `since`/`until` filtran por
     `ts_entrada` porque una ventana temporal es una pregunta sobre CUÁNDO se
@@ -228,9 +281,12 @@ def read_ledger(
     """
     path = _ledger_file_path()
     if not path.exists():
-        return []
+        return LedgerReadResult(entries=[], lineas_corruptas=(),
+                                n_deduplicadas=0)
 
     por_id: dict[str, TradeLedgerEntry] = {}
+    corruptas: list[int] = []
+    validas = 0
     with path.open("r", encoding="utf-8") as f:
         for lineno, line in enumerate(f, start=1):
             line = line.strip()
@@ -239,20 +295,31 @@ def read_ledger(
             try:
                 entry = TradeLedgerEntry(**json.loads(line))
             except (json.JSONDecodeError, TypeError, ValueError) as e:
+                corruptas.append(lineno)
                 logger.warning(
                     "trade_ledger: línea %d corrupta en %s, se saltea: %s",
                     lineno, path, e)
                 continue
+            validas += 1
             por_id[entry.trade_id] = entry   # última ocurrencia gana
 
     entries = list(por_id.values())
+    # Se cuenta ANTES de filtrar por fecha: `since`/`until` recortan una
+    # ventana a pedido de quien llama, y eso no es un descarte del ledger.
+    # Mezclarlos haría que la misma lectura reportara distinta cantidad de
+    # duplicados según la ventana pedida.
+    n_deduplicadas = validas - len(entries)
     if since is not None:
         entries = [e for e in entries
                    if datetime.fromisoformat(e.ts_entrada) >= since]
     if until is not None:
         entries = [e for e in entries
                    if datetime.fromisoformat(e.ts_entrada) <= until]
-    return entries
+    return LedgerReadResult(
+        entries=entries,
+        lineas_corruptas=tuple(corruptas),
+        n_deduplicadas=n_deduplicadas,
+    )
 
 
 def contar_por_outcome(entries: list[TradeLedgerEntry]) -> dict[str, int]:

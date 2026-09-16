@@ -20,8 +20,9 @@ LOS DOS QUE DEFINEN EL ARCHIVO:
 
 from __future__ import annotations
 
+import dataclasses
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pytest
 
@@ -35,6 +36,7 @@ from core.execution_costs import (
 from core.trade_ledger import (
     LEDGER_FILENAME,
     LedgerEnFallbackError,
+    LedgerReadResult,
     TradeLedgerEntry,
     _ledger_file_path,
     append_trade,
@@ -91,8 +93,10 @@ def test_doscientos_trades_con_140_perdedoras_dan_200_lineas():
 
     leidas = read_ledger()
 
-    assert len(leidas) == 200, "el ledger filtró filas"
-    conteo = contar_por_outcome(leidas)
+    assert len(leidas.entries) == 200, "el ledger filtró filas"
+    assert leidas.n_deduplicadas == 0
+    assert leidas.lineas_corruptas == ()
+    conteo = contar_por_outcome(leidas.entries)
     assert conteo["perdedora"] == 140
     assert conteo["ganadora"] == 60
 
@@ -109,9 +113,9 @@ def test_fills_fallidos_y_senales_no_ejecutadas_entran_igual():
     append_trade(_entrada("fallido", fraccion=0.0))
     append_trade(_entrada("descartada", ejecutada=False))
 
-    conteo = contar_por_outcome(read_ledger())
+    conteo = contar_por_outcome(read_ledger().entries)
 
-    assert len(read_ledger()) == 3
+    assert len(read_ledger().entries) == 3
     assert conteo["fill_fallido"] == 1
     assert conteo["no_ejecutada"] == 1
     assert conteo["ganadora"] == 1
@@ -119,14 +123,14 @@ def test_fills_fallidos_y_senales_no_ejecutadas_entran_igual():
 
 def test_breakeven_no_se_pierde_entre_ganadora_y_perdedora():
     append_trade(_entrada("tablas", precio_salida=100.0))
-    assert contar_por_outcome(read_ledger())["breakeven"] == 1
+    assert contar_por_outcome(read_ledger().entries)["breakeven"] == 1
 
 
 def test_el_conteo_trae_todos_los_outcomes_aunque_valgan_cero():
     """Un dict al que le falta la clave `perdedora` se lee como "no hubo
     perdedoras" o como "no se midió", y son cosas distintas."""
     append_trade(_entrada("una", precio_salida=101.0))
-    conteo = contar_por_outcome(read_ledger())
+    conteo = contar_por_outcome(read_ledger().entries)
 
     assert set(conteo) == {o.value for o in Outcome}
     assert conteo["perdedora"] == 0
@@ -181,7 +185,7 @@ def test_el_ts_de_cargo_llega_intacto_al_ledger():
     serialización: si el ledger guardara otro instante, el test de allá
     pasaría y el archivo mentiría igual."""
     append_trade(_entrada("x"))
-    entry = read_ledger()[0]
+    entry = read_ledger().entries[0]
     assert entry.ts_cargo_entrada == entry.ts_entrada
 
 
@@ -193,7 +197,7 @@ def test_append_dos_veces_el_mismo_trade_se_lee_una_sola():
     append_trade(_entrada("t1", precio_salida=101.0))
     append_trade(_entrada("t1", precio_salida=101.0))
 
-    assert len(read_ledger()) == 1
+    assert len(read_ledger().entries) == 1
     # físicamente sí hay dos: append_day no deduplica, y este módulo tampoco
     assert len(_ledger_file_path().read_text().strip().splitlines()) == 2
 
@@ -205,8 +209,8 @@ def test_la_ultima_ocurrencia_gana():
     append_trade(_entrada("t1", precio_salida=101.0))
 
     leidas = read_ledger()
-    assert len(leidas) == 1
-    assert leidas[0].outcome == Outcome.GANADORA.value
+    assert len(leidas.entries) == 1
+    assert leidas.entries[0].outcome == Outcome.GANADORA.value
 
 
 def test_trades_distintos_no_se_deduplican_entre_si():
@@ -214,7 +218,7 @@ def test_trades_distintos_no_se_deduplican_entre_si():
     igual y no probaría nada."""
     append_trade(_entrada("a", precio_salida=99.0))
     append_trade(_entrada("b", precio_salida=99.0))
-    assert len(read_ledger()) == 2
+    assert len(read_ledger().entries) == 2
 
 
 def test_un_trade_id_vacio_se_rechaza_al_construir():
@@ -256,6 +260,23 @@ def test_el_error_del_fallback_nombra_la_salida(monkeypatch):
     assert str(LOCAL_FALLBACK_DRIVE_ROOT) in str(exc.value)
 
 
+def test_el_mensaje_del_fallback_no_usa_voseo(monkeypatch):
+    """El mensaje va en español neutro: "Define", "pasa", no "Definí",
+    "pasá". Se fija con un test porque un arreglo de registro sin test
+    vuelve solo en el próximo patch, y vuelve sin que nadie lo note --
+    ningún otro assert del archivo mira cómo está escrito el mensaje."""
+    monkeypatch.delenv(DRIVE_ROOT_ENV_VAR, raising=False)
+    monkeypatch.setattr(persistence_module, "_is_colab", lambda: False)
+
+    with pytest.raises(LedgerEnFallbackError) as exc:
+        append_trade(_entrada("x"))
+
+    mensaje = str(exc.value)
+    for forma in ("Definí", "definí", "pasá", "querés", "podés", "tenés"):
+        assert forma not in mensaje, f"volvió el voseo: {forma!r}"
+    assert "Define" in mensaje and "pasa" in mensaje
+
+
 def test_el_fallback_no_deja_ni_el_directorio_creado(monkeypatch, tmp_path):
     """Lanzar después de crear el árbol dejaría basura que la próxima
     corrida podría confundir con un ledger real."""
@@ -278,14 +299,14 @@ def test_se_puede_pedir_el_fallback_explicitamente(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
 
     append_trade(_entrada("x"), permitir_fallback=True)
-    assert len(read_ledger()) == 1
+    assert len(read_ledger().entries) == 1
 
 
 def test_con_spel_drive_root_no_se_queja(tmp_path):
     """El caso normal: con la env var definida, drive_root() no es el
     fallback y no hay nada que bloquear."""
     append_trade(_entrada("x"))
-    assert len(read_ledger()) == 1
+    assert len(read_ledger().entries) == 1
     assert str(tmp_path) in str(_ledger_file_path())
 
 
@@ -302,7 +323,115 @@ def test_la_ruta_cuelga_del_stream_declarado(tmp_path):
 
 def test_ledger_vacio_devuelve_lista_no_lanza():
     """Un ledger sin trades todavía es un estado válido, no un error."""
-    assert read_ledger() == []
+    assert read_ledger().entries == []
+
+
+# ═══ Lo que la lectura descarta, lo dice ══════════════════════════════════
+
+class TestDescartesReportados:
+    """Precedente: `BuildDatasetResult.n_dropped_no_entropy`
+    (ingestion/training_dataset.py) expone sus descartes junto a las filas,
+    porque un descarte que solo vive en el log es un descarte que nadie ve.
+
+    En un ledger pesa más que en un dataset: la regla del archivo es que no
+    se filtra nunca, así que "198 filas sobre 200 líneas" tiene que poder
+    explicarse desde el valor de retorno. Si solo está en el log, la regla
+    deja de ser verificable."""
+
+    def test_devuelve_un_result_no_una_lista(self):
+        append_trade(_entrada("x"))
+        r = read_ledger()
+        assert isinstance(r, LedgerReadResult)
+        assert not isinstance(r, list)
+
+    def test_reporta_los_lineno_de_las_lineas_corruptas(self):
+        """Con el conteo solo hay que ir a buscarlas a mano en un archivo de
+        miles de líneas; con el lineno se abre el archivo en esa línea."""
+        append_trade(_entrada("a"))                    # línea 1
+        with _ledger_file_path().open("a", encoding="utf-8") as f:
+            f.write("{no es json}\n")                  # línea 2
+        append_trade(_entrada("b"))                    # línea 3
+        with _ledger_file_path().open("a", encoding="utf-8") as f:
+            f.write('{"trade_id": "sin_el_resto"}\n')  # línea 4
+
+        r = read_ledger()
+
+        assert r.lineas_corruptas == (2, 4)
+        assert r.n_lineas_corruptas == 2
+        assert len(r.entries) == 2
+
+    def test_sin_corruptas_la_tupla_esta_vacia_no_ausente(self):
+        append_trade(_entrada("a"))
+        r = read_ledger()
+        assert r.lineas_corruptas == ()
+        assert r.n_lineas_corruptas == 0
+
+    def test_el_conteo_de_corruptas_es_derivado_no_un_campo_aparte(self):
+        """Dos campos que cuentan lo mismo pueden discrepar, y el que
+        discrepa es siempre el que alguien actualizó a medias."""
+        campos = {f.name for f in dataclasses.fields(LedgerReadResult)}
+        assert "n_lineas_corruptas" not in campos
+        assert "lineas_corruptas" in campos
+
+    def test_reporta_cuantas_descarto_la_dedup_por_trade_id(self):
+        append_trade(_entrada("t1", precio_salida=99.0))
+        append_trade(_entrada("t1", precio_salida=100.0))
+        append_trade(_entrada("t1", precio_salida=101.0))
+        append_trade(_entrada("otro"))
+
+        r = read_ledger()
+
+        assert len(r.entries) == 2
+        assert r.n_deduplicadas == 2, (
+            "dos reescrituras de t1 se descartaron y nadie lo reportó")
+
+    def test_sin_duplicados_la_dedup_reporta_cero(self):
+        append_trade(_entrada("a"))
+        append_trade(_entrada("b"))
+        assert read_ledger().n_deduplicadas == 0
+
+    def test_los_tres_numeros_reconstruyen_el_archivo(self):
+        """entries + deduplicadas + corruptas == líneas del archivo. Si no
+        cierra, hay un descarte sin contabilizar -- que es exactamente el
+        filtrado silencioso contra el que existe el ledger."""
+        append_trade(_entrada("a"))
+        append_trade(_entrada("a"))      # duplicado
+        append_trade(_entrada("b"))
+        with _ledger_file_path().open("a", encoding="utf-8") as f:
+            f.write("basura\n")
+
+        r = read_ledger()
+        fisicas = len(
+            _ledger_file_path().read_text(encoding="utf-8").strip().splitlines())
+
+        assert fisicas == 4
+        assert len(r.entries) + r.n_deduplicadas + r.n_lineas_corruptas == fisicas
+
+    def test_la_ventana_de_fechas_no_se_cuenta_como_dedup(self):
+        """`since`/`until` recortan a pedido de quien llama: no es un
+        descarte del ledger. Mezclarlos haría que la misma lectura reportara
+        distinta cantidad de duplicados según la ventana pedida."""
+        append_trade(_entrada("t1", d=1))
+        append_trade(_entrada("t1", d=1))    # duplicado real
+        append_trade(_entrada("lejos", d=9))
+
+        completa = read_ledger()
+        recortada = read_ledger(until=_utc(23, 1))
+
+        assert len(recortada.entries) == 1 < len(completa.entries)
+        assert recortada.n_deduplicadas == completa.n_deduplicadas == 1
+
+    def test_el_result_es_inmutable(self):
+        append_trade(_entrada("x"))
+        r = read_ledger()
+        with pytest.raises(Exception):
+            r.n_deduplicadas = 99   # type: ignore[misc]
+
+    def test_ledger_vacio_reporta_ceros_no_none(self):
+        r = read_ledger()
+        assert r.entries == []
+        assert r.lineas_corruptas == ()
+        assert r.n_deduplicadas == 0
 
 
 def test_una_linea_corrupta_no_aborta_la_lectura_de_las_demas():
@@ -315,7 +444,7 @@ def test_una_linea_corrupta_no_aborta_la_lectura_de_las_demas():
     append_trade(_entrada("b"))
 
     leidas = read_ledger()
-    assert {e.trade_id for e in leidas} == {"a", "b"}
+    assert {e.trade_id for e in leidas.entries} == {"a", "b"}
 
 
 def test_filtro_por_rango_de_fechas():
@@ -323,14 +452,14 @@ def test_filtro_por_rango_de_fechas():
     append_trade(_entrada("dia5", d=5))
     append_trade(_entrada("dia9", d=9))
 
-    assert len(read_ledger()) == 3
-    assert {e.trade_id for e in read_ledger(since=_utc(0, 5))} == {"dia5", "dia9"}
-    assert {e.trade_id for e in read_ledger(until=_utc(23, 5))} == {"dia1", "dia5"}
+    assert len(read_ledger().entries) == 3
+    assert {e.trade_id for e in read_ledger(since=_utc(0, 5)).entries} == {"dia5", "dia9"}
+    assert {e.trade_id for e in read_ledger(until=_utc(23, 5)).entries} == {"dia1", "dia5"}
 
 
 def test_las_entradas_del_ledger_son_inmutables():
     append_trade(_entrada("x"))
-    entry = read_ledger()[0]
+    entry = read_ledger().entries[0]
     with pytest.raises(Exception):
         entry.neto = 999.0   # type: ignore[misc]
 
