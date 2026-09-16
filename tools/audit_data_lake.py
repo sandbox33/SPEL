@@ -148,7 +148,7 @@ def data_lake_root(explicit: Optional[str] = None) -> Path:
     if from_env:
         return Path(from_env)
     raise ValueError(
-        "No se indicó la raíz del data lake. Usá --root <ruta> o exportá "
+        "No se indicó la raíz del data lake. Usa --root <ruta> o exporta "
         f"{DATA_LAKE_ROOT_ENV_VAR}. No se asume ninguna ruta por defecto a "
         "propósito -- auditar la carpeta equivocada en silencio es peor que fallar."
     )

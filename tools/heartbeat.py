@@ -135,7 +135,7 @@ REAL_MODE_BLOCKED_REASON = (
     "--real no está disponible: no existe ingestion/deriv.py, que es la "
     "fuente de precio y volatilidad para los índices sintéticos de Deriv "
     "(BLUEPRINT.md, Fase 6). Sin ese adapter no hay dato real que pasarle "
-    "a run_monte_carlo_validation, y este script no inventa uno. Corré sin "
+    "a run_monte_carlo_validation, y este script no inventa uno. Corre sin "
     "--real para el modo sintético."
 )
 

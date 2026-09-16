@@ -527,7 +527,7 @@ def main(argv: Optional[Sequence[str]] = None, *, hoy: Optional[date] = None) ->
     # silencio sería adivinar cuál quiso decir quien lo escribió.
     if args.write and "--dry-run" in (argv if argv is not None else sys.argv[1:]):
         print("ERROR: --dry-run y --write se contradicen. --dry-run ya es el "
-              "default; pasá solo --write si querés escribir.", file=sys.stderr)
+              "default; pasa solo --write si quieres escribir.", file=sys.stderr)
         return 2
 
     if args.max_days < 1:
