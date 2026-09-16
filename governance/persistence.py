@@ -21,6 +21,14 @@ LOS 4 STREAMS:
                    de decisiones de arquitectura -- versionado a
                    propósito, para que el historial de decisiones sea
                    tan revisable como el código mismo.
+  TRADE_LEDGER  -> Drive. Un trade por línea, append-only, con el
+                   desglose de costos completo (core/trade_ledger.py).
+                   NO va a git aunque sea texto plano y aunque se lea
+                   como un registro de auditoría: crece sin techo -- un
+                   backtest de un año produce miles de líneas por corrida
+                   -- y versionar eso revienta el repo con datos que
+                   cambian en cada ejecución. Mismo tratamiento que
+                   METRICS, por la misma razón y no por analogía.
 
 Por qué Drive vs GitHub y no todo en un solo lugar: git no está
 pensado para binarios grandes ni datos que cambian a cada corrida
@@ -51,6 +59,7 @@ class PersistenceStream(str, Enum):
     CONFIG = "config"
     MODELS = "models"
     DECISION_LOG = "decision_log"
+    TRADE_LEDGER = "trade_ledger"
 
 
 #: Nombre de la env var de override explícito -- mismo rol que las claves
@@ -74,12 +83,14 @@ PERSISTENCE_RELATIVE_PATHS: dict[PersistenceStream, str] = {
     PersistenceStream.CONFIG: "config/",
     PersistenceStream.MODELS: "models",
     PersistenceStream.DECISION_LOG: "decision-log.md",
+    PersistenceStream.TRADE_LEDGER: "trade_ledger",
 }
 
 #: Streams que viven en Drive (no versionados en git).
 DRIVE_STREAMS: frozenset[PersistenceStream] = frozenset({
     PersistenceStream.METRICS,
     PersistenceStream.MODELS,
+    PersistenceStream.TRADE_LEDGER,
 })
 
 #: Streams que viven en el repo (versionados en git).

@@ -3,3 +3,11 @@ __pycache__/
 *.pyo
 .pytest_cache/
 *.egg-info/
+
+# Fallback local de drive_root() (governance/persistence.py). NO es
+# persistencia real: es donde caen los streams de Drive cuando no hay
+# SPEL_DRIVE_ROOT ni Colab. Se ignora desde que existe TRADE_LEDGER, que
+# es un stream de Drive declarado explícitamente como "no versionado":
+# sin esta línea, un `git add -A` distraído commitea un ledger de miles de
+# líneas al repo y contradice la decisión en el mismo commit que la toma.
+.spel_drive_stream/
