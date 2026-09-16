@@ -25,13 +25,30 @@ from governance.persistence import (
 )
 
 
-def test_existen_exactamente_los_4_streams():
+def test_existen_exactamente_los_5_streams():
+    """Eran 4 hasta que TRADE_LEDGER se sumó con core/trade_ledger.py.
+
+    ESTE TEST SE ACTUALIZÓ, no se relajó: sigue exigiendo el conjunto
+    EXACTO en vez de pasar a un `>=` que dejaría entrar cualquier stream
+    nuevo sin que nadie lo mire. Que rompa al agregar uno es lo que hace --
+    obliga a pasar por acá y decidir si va a Drive o a git."""
     assert set(PersistenceStream) == {
         PersistenceStream.METRICS,
         PersistenceStream.CONFIG,
         PersistenceStream.MODELS,
         PersistenceStream.DECISION_LOG,
+        PersistenceStream.TRADE_LEDGER,
     }
+
+
+def test_trade_ledger_es_drive_y_no_git():
+    """El ledger es texto plano y se lee como un registro de auditoría, así
+    que la tentación de versionarlo es real. No va: crece sin techo -- un
+    backtest de un año son miles de líneas POR CORRIDA -- y eso en git
+    revienta el repo con datos que cambian en cada ejecución."""
+    assert stream_is_local_to_drive(PersistenceStream.TRADE_LEDGER) is True
+    assert stream_is_versioned(PersistenceStream.TRADE_LEDGER) is False
+    assert PersistenceStream.TRADE_LEDGER not in GITHUB_STREAMS
 
 
 def test_cada_stream_tiene_ruta_relativa_declarada():
