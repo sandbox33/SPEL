@@ -119,7 +119,7 @@ async def test_sin_clave_no_sondea_y_lo_dice(sin_secretos):
 
 
 async def test_clave_rechazada_no_es_lo_mismo_que_no_cubierto():
-    """401 significa 'rotá la credencial', no 'cambiá de proveedor'."""
+    """401 significa 'rota la credencial', no 'cambia de proveedor'."""
     async with cliente_con({"code": 401, "message": "Invalid API key",
                             "status": "error"}) as c:
         res = await probe_twelvedata(c, "BTCUSD", CLAVE_FALSA)
