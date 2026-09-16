@@ -53,3 +53,32 @@ jobs:
 
       - name: Correr suite completa
         run: python -m pytest tests/ -v
+
+  # ── research/: NO BLOQUEA, y es a propósito ──────────────────────────────
+  #
+  # `research/` es código retirado del camino caliente el 16-sep-2026 (la
+  # cadena gold_score y price_signals). Sigue siendo importable y corrible
+  # porque su condición de reversión está escrita -- ver research/__init__.py.
+  #
+  # `continue-on-error: true` es la decisión: estos tests tienen que SER
+  # VISIBLES si se rompen, sin poder frenar un merge del motor. Sacarlos del
+  # CI por completo los volvería invisibles hasta el día que alguien los
+  # corra a mano, que es como un retiro se convierte en un abandono.
+  #
+  # El job `test` de arriba corre `pytest tests/`, así que no los colecta:
+  # esto no los corre dos veces.
+  research:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Correr los tests de research/ (informativo, no bloquea)
+        run: python -m pytest research/tests/ -v
