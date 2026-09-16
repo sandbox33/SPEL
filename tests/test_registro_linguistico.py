@@ -88,17 +88,42 @@ VOSEO_CONGELADO = ("execution/circuit_breaker.py", "querés")
 #: única forma de que un test que busca palabras no se encuentre solo.
 EXCLUIDO_POR_SER_LA_DEFINICION = ("tests/test_registro_linguistico.py",)
 
-#: Palabras terminadas en `-á` que NO son verbos. Cerrada y corta: en
-#: español no hay muchas.
-NO_VERBOS_EN_A = frozenset({"acá", "allá", "está"})
+#: Palabras terminadas en `-á` que NO son verbos.
+#:
+#: LA PRIMERA VERSIÓN TENÍA TRES PALABRAS -- exactamente las que el barrido
+#: encontraba en el repo ese día -- mientras que la lista de abajo ya se
+#: había extendido a términos que todavía no aparecían pero son plausibles
+#: en español técnico. Esa asimetría era un descuido, no un criterio: las
+#: dos listas existen para lo mismo, así que las dos se pueblan igual, por
+#: categoría y no por inventario.
+#:
+#: La categoría que hacía falta es la que este proyecto garantiza: SPEL
+#: penaliza error de modelo con entropía geopolítica de GDELT, y sus filtros
+#: se escriben por país. Los nombres de país con `-á` tónica van a aparecer
+#: en prosa antes o después, y el día que aparezcan pondrían la suite en
+#: rojo por una palabra que nadie escribió mal.
+NO_VERBOS_EN_A = frozenset({
+    # adverbios y deícticos
+    "acá", "allá", "está", "quizá", "ojalá",
+    # topónimos con -á tónica. GDELT clasifica por país: esto no es
+    # hipotético, es el vocabulario del dominio.
+    "canadá", "panamá", "bogotá", "paraná",
+})
 
-#: Palabras terminadas en `-ás/-és/-ís` que no son voseo. Derivada del
-#: repo real, no de memoria: son las ocho que aparecen hoy más las que
-#: obviamente pertenecen al grupo.
+#: Palabras terminadas en `-ás/-és/-ís` que no son voseo. Ocho salieron del
+#: barrido del repo; el resto son las mismas categorías que arriba --
+#: términos de español técnico y gentilicios, que en un proyecto que
+#: clasifica eventos por país son tan previsibles como los topónimos.
 NO_VERBOS_EN_AS_ES_IS = frozenset({
+    # las ocho que el barrido encontró en el repo
     "después", "además", "atrás", "país", "demás", "revés", "detrás",
-    "jamás", "quizás", "través", "interés", "inglés", "francés", "mes",
-    "compás", "estrés", "anís", "análisis", "crisis", "tesis", "praxis",
+    "jamás",
+    # adverbios y español técnico
+    "quizás", "través", "interés", "mes", "compás", "estrés", "anís",
+    "análisis", "crisis", "tesis", "praxis",
+    # gentilicios y topónimos: misma categoría que canadá/panamá arriba
+    "inglés", "francés", "japonés", "portugués", "libanés", "holandés",
+    "danés", "irlandés", "escocés", "taiwanés", "bangladés",
 })
 
 #: Imperativos de -er/-ir, que no se pueden detectar por patrón (ver el
@@ -246,6 +271,43 @@ class TestSinFalsosPositivos:
         están hoy en docstrings del repo. Marcarlas entrenaría a editar
         prosa correcta para callar al linter."""
         assert formas_voseantes(f"Lo {forma} y no estaba.") == []
+
+    @pytest.mark.parametrize("palabra", [
+        "Canadá", "Panamá", "Bogotá", "Paraná", "quizá", "ojalá"])
+    def test_toponimos_y_adverbios_en_a_no_son_voseo(self, palabra):
+        """LA ASIMETRÍA QUE SE CORRIGIÓ. `NO_VERBOS_EN_A` tenía tres
+        palabras -- exactamente las que el barrido encontraba ese día --
+        mientras que la lista de `-ás/-és/-ís` ya cubría términos que
+        todavía no aparecían. Las dos listas existen para lo mismo, así que
+        se pueblan igual: por categoría, no por inventario.
+
+        Y la categoría que faltaba es la que este proyecto garantiza: SPEL
+        clasifica eventos GDELT por país. "Canadá" en una prosa sobre
+        filtros de país habría puesto la suite en rojo por una palabra que
+        nadie escribió mal."""
+        assert formas_voseantes(f"El caso de {palabra} es distinto.") == []
+
+    @pytest.mark.parametrize("palabra", [
+        "japonés", "portugués", "libanés", "bangladés", "taiwanés"])
+    def test_los_gentilicios_tampoco(self, palabra):
+        """Misma categoría que los topónimos, del otro lado de la regla."""
+        assert formas_voseantes(f"El mercado {palabra} cerró.") == []
+
+    def test_las_dos_listas_se_poblaron_por_categoria_no_por_inventario(self):
+        """Fija la simetría en sí, no una palabra concreta: las dos listas
+        tienen que ir más allá de lo que el repo contiene hoy. Si una vuelve
+        a quedarse en el inventario del día, esto sale en rojo.
+
+        El número es deliberadamente bajo -- no mide calidad, detecta el
+        modo de falla concreto: una lista con las 3 palabras que el grep
+        devolvió."""
+        assert len(NO_VERBOS_EN_A) >= 8, (
+            "NO_VERBOS_EN_A volvió a ser el inventario del barrido")
+        assert len(NO_VERBOS_EN_AS_ES_IS) >= 8
+
+        # y las dos cubren la categoría del dominio: nombres de lugar
+        assert {"canadá", "panamá", "bogotá"} <= NO_VERBOS_EN_A
+        assert {"inglés", "francés"} <= NO_VERBOS_EN_AS_ES_IS
 
     def test_no_marca_dentro_de_otra_palabra(self):
         """`venía`/`decía` contienen `vení`/`decí`. Sin límites de palabra

@@ -260,21 +260,16 @@ def test_el_error_del_fallback_nombra_la_salida(monkeypatch):
     assert str(LOCAL_FALLBACK_DRIVE_ROOT) in str(exc.value)
 
 
-def test_el_mensaje_del_fallback_no_usa_voseo(monkeypatch):
-    """El mensaje va en español neutro: "Define", "pasa", no "Definí",
-    "pasá". Se fija con un test porque un arreglo de registro sin test
-    vuelve solo en el próximo patch, y vuelve sin que nadie lo note --
-    ningún otro assert del archivo mira cómo está escrito el mensaje."""
-    monkeypatch.delenv(DRIVE_ROOT_ENV_VAR, raising=False)
-    monkeypatch.setattr(persistence_module, "_is_colab", lambda: False)
-
-    with pytest.raises(LedgerEnFallbackError) as exc:
-        append_trade(_entrada("x"))
-
-    mensaje = str(exc.value)
-    for forma in ("Definí", "definí", "pasá", "querés", "podés", "tenés"):
-        assert forma not in mensaje, f"volvió el voseo: {forma!r}"
-    assert "Define" in mensaje and "pasa" in mensaje
+# EL TEST DE REGISTRO DE ESTE MENSAJE SE BORRÓ, y conviene saber por qué
+# antes de escribirlo de nuevo: `tests/test_registro_linguistico.py` (PR #26)
+# barre los literales de todos los .py del repo, así que ya lee el mensaje de
+# LedgerEnFallbackError desde el fuente de core/trade_ledger.py. El test local
+# no agregaba cobertura -- y para escribir su assert tenía que traer las formas
+# voseantes como dato, lo que ponía en rojo al barrido que lo subsume.
+#
+# La salida NO era agregar este archivo a EXCLUIDO_POR_SER_LA_DEFINICION: eso
+# habría sacado de cobertura a los 30+ literales restantes del archivo para
+# salvar un test redundante.
 
 
 def test_el_fallback_no_deja_ni_el_directorio_creado(monkeypatch, tmp_path):
