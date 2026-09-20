@@ -1038,3 +1038,89 @@ de eso, y están para que la próxima versión no lo rompa de nuevo.
 Se arregló acá y no en un PR aparte porque bloqueaba: la alternativa era reescribir la
 prosa para callar al linter, que es exactamente lo que el docstring de ese test dice
 que no hay que hacer.
+
+---
+
+## 2026-09-20 — El registro de constantes, y tres hechos sobre el umbral que no existe
+
+**Fuente:** barrido por AST de `core/`, `ingestion/`, `orchestration/`,
+`governance/` y `execution/`; más tres mediciones que corrió Altair sobre la serie
+completa (ver la salvedad de reproducibilidad al final).
+
+### Lo que se construyó
+
+`config/constantes.json` — las **55** constantes de módulo del repo, con valor,
+procedencia y nivel de evidencia. Primer contenido del stream `CONFIG`, que
+`governance/persistence.py` declaraba desde el patch 0010 sobre un directorio que
+no existía.
+
+No es documentación: `tests/test_registro_constantes.py` corre en cada PR y falla
+en las dos direcciones — si un valor registrado deja de coincidir, y si aparece una
+constante en el código que nadie anotó. El descubrimiento es por AST y sin importar
+nada, para que un módulo con un `ImportError` no desaparezca del barrido en
+silencio.
+
+**El estado que el registro deja a la vista:** 37 de 55 son
+`provisional_sin_evidencia`, 16 `legacy_citado`, y 2 `medido` — y las dos `medido`
+son sobre el comportamiento de una fuente (GDELT migró a HTTPS), no sobre un
+número. **Ningún valor numérico del sistema tiene evidencia medida.** El registro no
+introduce ese hecho; lo hace imposible de no ver.
+
+Una distinción que quedó escrita porque cambia entradas concretas: **citar una
+fuente no es tener evidencia.** `SUCCESS_SCORE_THRESHOLD` cita textualmente
+`spel_bayesian_core.py` (`">= 850/1000 trayectorias con gold_score > 0.85"`) y aun
+así es `provisional_sin_evidencia`, porque `core/monte_carlo.py:34` dice que el
+número está "pendiente de calibración post Gate R30" y sin backtest. El legacy tenía
+el valor; nadie lo midió nunca.
+
+### Hecho 1 — El empalme legacy/pipeline está verificado
+
+Sobre 8 días (BTC y XAU, 2026-08-30 a 09-03), `n_events` y `entropy_shannon` salen
+**idénticos hasta el último decimal** comparando la serie importada del parquet
+contra `aggregate_day()`.
+
+Importa para la ventana móvil de 252 días: como cruza el borde entre lo importado y
+lo calculado en vivo, si las dos mitades no fueran la misma metodología el percentil
+estaría mezclando dos poblaciones y nadie lo vería. No las mezcla.
+
+### Hecho 2 — No existe un `p66_entropy_global_default` histórico
+
+Se cierra como hallazgo, no como pendiente. `orchestration/cycle.py` lo exige sin
+default desde que existe, figura como Incógnita #4 en `ESTADO.md`, y **nunca se
+guardó ningún valor en ninguna parte**.
+
+El único número que circulaba —**1,19**— es un fixture de `tests/test_scoring.py`.
+Hay que dejar de tratarlo como candidato: no salió de una medición, salió de
+alguien que necesitaba un número para que un test corriera.
+
+### Hecho 3 — No hay un umbral global defendible, y se sabe por qué
+
+p66 medido el 19-sep-2026 sobre la serie completa:
+
+| activo | p66 | n |
+|---|---|---|
+| BTC | 1,131801 | 4.880 |
+| XAU | 1,298946 | 4.879 |
+
+La diferencia de **0,167** no es una propiedad de los activos. Se explica por
+`CORE_COUNTRY_FILTERS["XAU"] = ()` — sin filtro de país, XAU agrega ~117k
+eventos/día contra ~45k de BTC, y la entropía de Shannon crece con la riqueza del
+soporte: más eventos distintos, más bins de tono poblados, más `H`.
+
+**El umbral es por activo por construcción del filtro, no por naturaleza del
+activo.** La consecuencia práctica es que buscar "el" default global es buscar algo
+que no puede existir mientras los filtros sean distintos entre sí — y el de XAU es
+vacío a propósito, portado literal del legacy (`gdelt_foundation.py::ASSET_COUNTRY_FILTERS`),
+no por descuido.
+
+### Salvedad de reproducibilidad, explícita
+
+**Las tres mediciones no se reprodujeron en esta sesión.** El sandbox no tiene el
+data lake ni la serie GDELT montados: `drive_root()` resuelve a
+`.spel_drive_stream`, que no existe, y `read_series("BTC")` y `read_series("XAU")`
+devuelven **0 días**. Los números de arriba son los que midió Altair y se registran
+como tales, no como algo verificado acá.
+
+Lo que sí se verificó en esta sesión es todo lo demás: las 55 constantes, sus
+valores, y que el test falla cuando debe (entrada borrada, valor alterado, constante
+nueva sin registrar, entrada huérfana — los cuatro comprobados uno por uno).
