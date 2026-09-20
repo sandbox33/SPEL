@@ -1,0 +1,801 @@
+{
+  "schema_version": "1.0.0",
+  "actualizado": "2026-09-20",
+  "constantes": [
+    {
+      "nombre": "EPSILON_BREAKEVEN",
+      "modulo": "core.execution_costs",
+      "categoria": "parametro",
+      "valor": 1e-09,
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Elección de ingeniería: umbral de ruido de punto flotante para no contar como GANADORA un neto de 1e-13.",
+      "usado_en": [
+        "core.execution_costs._clasificar"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "HORAS_FUNDING_UTC",
+      "modulo": "core.execution_costs",
+      "categoria": "parametro",
+      "valor": [
+        0,
+        8,
+        16
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Esquema de 8 horas, el más común en perpetuos. Sin fuente legacy: core/execution_costs.py no porta tarifas ni calendarios de ningún exchange a propósito.",
+      "usado_en": [
+        "core.execution_costs.instantes_de_funding"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "DEFAULT_SENSITIVITY_MAP",
+      "modulo": "core.monte_carlo",
+      "categoria": "parametro",
+      "valor": {
+        "BTC": 0.07,
+        "XAU": 0.04,
+        "NVDA": 0.05,
+        "NIFTY50": 0.04,
+        "EURUSD": 0.02
+      },
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "spel_bayesian_core.py::SENSITIVITY_MAP. La fuente misma lo marca 'pendiente de calibración post Gate R30'.",
+      "usado_en": [
+        "core.monte_carlo.run_monte_carlo_validation"
+      ],
+      "notas": "Citado pero NO calibrado: por eso provisional y no legacy_citado."
+    },
+    {
+      "nombre": "DEFAULT_TRADING_DAYS_PER_YEAR",
+      "modulo": "core.monte_carlo",
+      "categoria": "parametro",
+      "valor": 252.0,
+      "evidencia": "legacy_citado",
+      "fuente": "Convención de mercado de acciones: 252 días hábiles/año. Parametrizable por llamada.",
+      "usado_en": [
+        "core.monte_carlo.run_monte_carlo_validation"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "FALLBACK_SENSITIVITY",
+      "modulo": "core.monte_carlo",
+      "categoria": "parametro",
+      "valor": 0.05,
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "spel_bayesian_core.py: default para activos fuera del mapa. Mismo estado de calibración que el mapa.",
+      "usado_en": [
+        "core.monte_carlo.run_monte_carlo_validation"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "MINUTES_PER_DAY",
+      "modulo": "core.monte_carlo",
+      "categoria": "derivada",
+      "expresion": "24 * 60",
+      "evidencia": "legacy_citado",
+      "fuente": "24 * 60. Definición del calendario, no una elección.",
+      "usado_en": [
+        "core.monte_carlo.run_monte_carlo_validation"
+      ],
+      "notas": "La anotación dice `float` pero `24*60` es `int`. No se corrige acá: este brief documenta, no modifica."
+    },
+    {
+      "nombre": "SUCCESS_RATE_THRESHOLD",
+      "modulo": "core.monte_carlo",
+      "categoria": "parametro",
+      "valor": 0.85,
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Misma línea de spel_bayesian_core.py que SUCCESS_SCORE_THRESHOLD (el 850/1000). Sin comentario propio en el código.",
+      "usado_en": [
+        "core.monte_carlo.run_monte_carlo_validation"
+      ],
+      "notas": "Que compartan valor 0.85 con SUCCESS_SCORE_THRESHOLD es coincidencia de la fuente, no una derivación."
+    },
+    {
+      "nombre": "SUCCESS_SCORE_THRESHOLD",
+      "modulo": "core.monte_carlo",
+      "categoria": "parametro",
+      "valor": 0.85,
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "spel_bayesian_core.py: '>= 850/1000 trayectorias con gold_score > 0.85'. El docstring del módulo (línea 34) lo declara heurístico y sin backtest.",
+      "usado_en": [
+        "core.monte_carlo.run_monte_carlo_validation"
+      ],
+      "notas": "Citado pero sin backtest. Ver core/monte_carlo.py:34."
+    },
+    {
+      "nombre": "CORE_COUNTRY_FILTERS",
+      "modulo": "core.scoring",
+      "categoria": "etiqueta",
+      "valor": {
+        "NVDA": [
+          "USA",
+          "TWN",
+          "KOR",
+          "CHN",
+          "JPN"
+        ],
+        "XAU": [],
+        "BTC": [
+          "USA",
+          "CHN",
+          "RUS",
+          "PRK",
+          "DEU",
+          "GBR"
+        ],
+        "NIFTY50": [
+          "IND",
+          "PAK",
+          "CHN",
+          "USA"
+        ]
+      },
+      "evidencia": "legacy_citado",
+      "fuente": "gdelt_foundation.py::ASSET_COUNTRY_FILTERS -- port directo. XAU vacío = sin filtro, no un error de captura.",
+      "usado_en": [
+        "core.scoring.classify_gdelt_event",
+        "orchestration.cycle.run_scoring_cycle"
+      ],
+      "notas": "El XAU vacío es la causa medida de que su p66 sea ~0,167 más alto que el de BTC (ver decision-log 19-sep)."
+    },
+    {
+      "nombre": "DEFAULT_GLOBAL_P33",
+      "modulo": "core.scoring",
+      "categoria": "parametro",
+      "valor": 0.3,
+      "evidencia": "legacy_citado",
+      "fuente": "spel_bayesian_core.py (godel_thresholds_v2.json, cuando el archivo no existe).",
+      "usado_en": [
+        "core.scoring.compute_vitality_tesla"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "DEFAULT_GLOBAL_P66",
+      "modulo": "core.scoring",
+      "categoria": "parametro",
+      "valor": 0.7,
+      "evidencia": "legacy_citado",
+      "fuente": "spel_bayesian_core.py (godel_thresholds_v2.json, cuando el archivo no existe). Sin comentario propio.",
+      "usado_en": [
+        "core.scoring.compute_vitality_tesla"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "ENTROPY_STATE_HIGH",
+      "modulo": "core.scoring",
+      "categoria": "etiqueta",
+      "valor": 2,
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Ídem ENTROPY_STATE_LOW.",
+      "usado_en": [
+        "core.scoring.entropy_state"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "ENTROPY_STATE_LOW",
+      "modulo": "core.scoring",
+      "categoria": "etiqueta",
+      "valor": 0,
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Numerados 0/1/2 y no 3/6/9 a propósito: el 3/6/9 es la escala de vitality_tesla.",
+      "usado_en": [
+        "core.scoring.entropy_state"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "ENTROPY_STATE_MID",
+      "modulo": "core.scoring",
+      "categoria": "etiqueta",
+      "valor": 1,
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Ídem ENTROPY_STATE_LOW.",
+      "usado_en": [
+        "core.scoring.entropy_state"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "ENTROPY_STATE_PERCENTILES",
+      "modulo": "core.scoring",
+      "categoria": "parametro",
+      "valor": [
+        33.0,
+        66.0
+      ],
+      "evidencia": "legacy_citado",
+      "fuente": "gdelt_foundation.py::TESLA_PERCENTILE_THRESHOLDS = (33.0, 66.0). Port literal, incluido el `<=`.",
+      "usado_en": [
+        "core.scoring",
+        "core.scoring.entropy_state"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "ENTROPY_STATE_WARMUP",
+      "modulo": "core.scoring",
+      "categoria": "etiqueta",
+      "valor": null,
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "`None` y no un estado: un día de warm-up no tiene estado, porque no hay contra qué compararlo.",
+      "usado_en": [
+        "core.scoring.entropy_state"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "FX_GOBIERNO_ONLY_ASSETS",
+      "modulo": "core.scoring",
+      "categoria": "etiqueta",
+      "valor": [
+        "EURUSD"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Registro explícito de los pares FX sin país nativo. Nació de un bug: classify_gdelt_event(asset='EURUSD') lanzaba ValueError siempre.",
+      "usado_en": [
+        "core.scoring.classify_gdelt_event",
+        "orchestration.cycle.run_scoring_cycle"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "GOBIERNO_COUNTRY_FILTERS",
+      "modulo": "core.scoring",
+      "categoria": "etiqueta",
+      "valor": [
+        "USA",
+        "DEU"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "SIN PRECEDENTE LEGACY. Diseñado en este repo: USA (Fed) + DEU (proxy de la Eurozona, que GDELT no tiene como entidad).",
+      "usado_en": [
+        "core.scoring.classify_gdelt_event"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "GODEL_CRITERIA_VERSION",
+      "modulo": "core.scoring",
+      "categoria": "etiqueta",
+      "valor": "4.0.0-entropy_state_p66",
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Sello de versión del criterio de la máscara. Sube a mayor cuando cambia el valor de días ya calculados.",
+      "usado_en": [
+        "orchestration.cycle.AssetCycleResult",
+        "orchestration.cycle.run_scoring_cycle"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "GODEL_MASK_PERCENTILE",
+      "modulo": "core.scoring",
+      "categoria": "derivada",
+      "expresion": "ENTROPY_STATE_PERCENTILES[1]",
+      "evidencia": "legacy_citado",
+      "fuente": "ENTROPY_STATE_PERCENTILES[1]: el borde del tercil superior. Una sola fuente de verdad para producción y para el tool que la mide.",
+      "usado_en": [
+        "core.scoring.compute_godel_p66"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "GODEL_ROLLING_WINDOW_DAYS",
+      "modulo": "core.scoring",
+      "categoria": "parametro",
+      "valor": 252,
+      "evidencia": "legacy_citado",
+      "fuente": "252 = días hábiles de un año. Convención, portada del legacy.",
+      "usado_en": [
+        "core.scoring.compute_godel_p66",
+        "core.scoring.compute_vitality_tesla",
+        "core.scoring.entropy_state"
+      ],
+      "notas": "orchestration/cycle.py menciona 'la medición que fijó el 252', pero esa medición NO está registrada en decision-log.md ni en ESTADO.md: no es citable, así que acá va como convención y no como medida."
+    },
+    {
+      "nombre": "HYBRID_WEIGHT_GLOBAL",
+      "modulo": "core.scoring",
+      "categoria": "parametro",
+      "valor": 0.7,
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Peso del global en la zona híbrida (10-99 obs). El propio comentario dice 'sin calibrar'.",
+      "usado_en": [
+        "core.scoring.compute_adaptive_percentile"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "MIN_OBS_FOR_HYBRID",
+      "modulo": "core.scoring",
+      "categoria": "parametro",
+      "valor": 10,
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Por debajo de esto la rolling no tiene sentido. Sin calibrar.",
+      "usado_en": [
+        "core.scoring.compute_adaptive_percentile"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "MIN_OBS_FOR_ROLLING",
+      "modulo": "core.scoring",
+      "categoria": "parametro",
+      "valor": 100,
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Por encima de esto la rolling es confiable. Sin calibrar.",
+      "usado_en": [
+        "core.scoring.compute_adaptive_percentile"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "MIN_WINDOW_FOR_PERCENTILE",
+      "modulo": "core.scoring",
+      "categoria": "parametro",
+      "valor": 3,
+      "evidencia": "legacy_citado",
+      "fuente": "Igual que el legacy: hacen falta al menos 3 puntos para que un tercil tenga sentido.",
+      "usado_en": [
+        "core.scoring.compute_vitality_tesla"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "LEDGER_FILENAME",
+      "modulo": "core.trade_ledger",
+      "categoria": "etiqueta",
+      "valor": "trades.jsonl",
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Un solo archivo para todos los activos: el ledger se lee entero (equity, drawdown son de la cuenta, no de un activo).",
+      "usado_en": [
+        "core.trade_ledger._ledger_file_path"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "COLAB_DRIVE_ROOT",
+      "modulo": "governance.persistence",
+      "categoria": "etiqueta",
+      "valor": "/content/drive/MyDrive/SPEL_trabajo",
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Ruta de trabajo real en Colab. Solo se usa si _is_colab() lo confirma.",
+      "usado_en": [
+        "governance.persistence.drive_root"
+      ],
+      "notas": "Es absoluta, pero es un literal fijo y no depende del entorno de ejecución: por eso `etiqueta` y no `derivada`."
+    },
+    {
+      "nombre": "DRIVE_ROOT_ENV_VAR",
+      "modulo": "governance.persistence",
+      "categoria": "etiqueta",
+      "valor": "SPEL_DRIVE_ROOT",
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Nombre de la env var de override, mismo rol que las claves de governance/secrets.py.",
+      "usado_en": [
+        "governance.persistence.drive_root"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "DRIVE_STREAMS",
+      "modulo": "governance.persistence",
+      "categoria": "etiqueta",
+      "valor": [
+        "metrics",
+        "models",
+        "trade_ledger"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Clasificación: qué streams viven en Drive y no se versionan en git.",
+      "usado_en": [
+        "governance.persistence.stream_is_local_to_drive",
+        "governance.persistence.stream_path"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "GITHUB_STREAMS",
+      "modulo": "governance.persistence",
+      "categoria": "etiqueta",
+      "valor": [
+        "config",
+        "decision_log"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Clasificación: qué streams viven en el repo y sí se versionan.",
+      "usado_en": [
+        "governance.persistence.stream_is_versioned"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "LOCAL_FALLBACK_DRIVE_ROOT",
+      "modulo": "governance.persistence",
+      "categoria": "etiqueta",
+      "valor": ".spel_drive_stream",
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Fallback de desarrollo. NO es Drive real: el nombre con punto lo marca.",
+      "usado_en": [
+        "core.trade_ledger._esta_en_fallback",
+        "core.trade_ledger.append_trade",
+        "governance.persistence.drive_root"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "PERSISTENCE_RELATIVE_PATHS",
+      "modulo": "governance.persistence",
+      "categoria": "etiqueta",
+      "valor": {
+        "metrics": "metrics",
+        "config": "config/",
+        "models": "models",
+        "decision_log": "decision-log.md",
+        "trade_ledger": "trade_ledger"
+      },
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Rutas relativas por stream. No dependen del entorno, a diferencia de la raíz de Drive.",
+      "usado_en": [
+        "governance.persistence.stream_path"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "DERIV_WS_ENDPOINT",
+      "modulo": "ingestion.adapters",
+      "categoria": "etiqueta",
+      "valor": "wss://ws.derivws.com/websockets/v3?app_id={app_id}",
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Endpoint WebSocket de Deriv, con {app_id} a sustituir. Sin comentario propio.",
+      "usado_en": [
+        "ingestion.adapters.DerivAdapter"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "REQUIRED_COLUMNS",
+      "modulo": "ingestion.adapters",
+      "categoria": "etiqueta",
+      "valor": [
+        "timestamp",
+        "open",
+        "high",
+        "low",
+        "close",
+        "volume"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Contrato de esquema OHLCV que validate_ohlcv_schema() exige. Sin comentario propio en el código.",
+      "usado_en": [
+        "ingestion.adapters.validate_ohlcv_schema"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "TWELVEDATA_ENDPOINT",
+      "modulo": "ingestion.adapters",
+      "categoria": "etiqueta",
+      "valor": "https://api.twelvedata.com/time_series",
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Endpoint REST de TwelveData. Sin comentario propio.",
+      "usado_en": [
+        "ingestion.adapters.TwelveDataAdapter"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "_DERIV_GRANULARITY_SECONDS",
+      "modulo": "ingestion.adapters",
+      "categoria": "etiqueta",
+      "valor": {
+        "1m": 60,
+        "5m": 300,
+        "15m": 900,
+        "30m": 1800,
+        "1h": 3600,
+        "2h": 7200,
+        "4h": 14400,
+        "1d": 86400
+      },
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Timeframes del proyecto a segundos. Sin comentario propio.",
+      "usado_en": [
+        "ingestion.adapters.DerivAdapter"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "_DERIV_SYMBOL_MAP",
+      "modulo": "ingestion.adapters",
+      "categoria": "etiqueta",
+      "valor": {
+        "EURUSD": "frxEURUSD",
+        "GBPUSD": "frxGBPUSD",
+        "USDJPY": "frxUSDJPY",
+        "USDCHF": "frxUSDCHF",
+        "AUDUSD": "frxAUDUSD",
+        "VOL10": "R_10",
+        "VOL25": "R_25",
+        "VOL50": "R_50",
+        "VOL75": "R_75",
+        "VOL100": "R_100"
+      },
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Solo símbolos CONFIRMADOS contra la documentación oficial de Deriv. Nada 'por analogía'.",
+      "usado_en": [
+        "ingestion.adapters.DerivAdapter"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "_INTERVALOS_SIN_TIMEZONE",
+      "modulo": "ingestion.adapters",
+      "categoria": "etiqueta",
+      "valor": [
+        "1d"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "La barra diaria de TwelveData viene con fecha sin hora: mandar zona invita a que corra la fecha un día.",
+      "usado_en": [
+        "ingestion.adapters.TwelveDataAdapter"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "_TWELVEDATA_GRANULARITY_SECONDS",
+      "modulo": "ingestion.adapters",
+      "categoria": "etiqueta",
+      "valor": {
+        "1m": 60,
+        "5m": 300,
+        "15m": 900,
+        "30m": 1800,
+        "1h": 3600,
+        "2h": 7200,
+        "4h": 14400,
+        "1d": 86400
+      },
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Espejo exacto de _DERIV_GRANULARITY_SECONDS. La duplicación es deliberada: dos proveedores independientes que hoy coinciden.",
+      "usado_en": [
+        "ingestion.adapters.TwelveDataAdapter"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "_TWELVEDATA_INTERVALS",
+      "modulo": "ingestion.adapters",
+      "categoria": "etiqueta",
+      "valor": {
+        "1m": "1min",
+        "5m": "5min",
+        "15m": "15min",
+        "30m": "30min",
+        "1h": "1h",
+        "2h": "2h",
+        "4h": "4h",
+        "1d": "1day"
+      },
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Traducción al vocabulario de TwelveData. Mismas 8 claves que Deriv a propósito.",
+      "usado_en": [
+        "ingestion.adapters.TwelveDataAdapter"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "_TWELVEDATA_SYMBOL_MAP",
+      "modulo": "ingestion.adapters",
+      "categoria": "etiqueta",
+      "valor": {
+        "EURUSD": "EUR/USD",
+        "BTCUSD": "BTC/USD",
+        "AAPL": "AAPL"
+      },
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Solo símbolos confirmados en el plan gratuito. La barra ('EUR/USD') es vocabulario del proveedor.",
+      "usado_en": [
+        "ingestion.adapters.TwelveDataAdapter"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "DOWNLOAD_TIMEOUT_S",
+      "modulo": "ingestion.gdelt",
+      "categoria": "parametro",
+      "valor": 30.0,
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "El legacy usaba el valor inline sin nombrarlo; se nombra acá para poder ajustarlo sin buscarlo.",
+      "usado_en": [
+        "ingestion.gdelt.GDELTDailyAdapter"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "FOLLOW_REDIRECTS",
+      "modulo": "ingestion.gdelt",
+      "categoria": "parametro",
+      "valor": true,
+      "evidencia": "medido",
+      "fuente": "Mismo hallazgo del 16-sep-2026 que GDELT_BASE_URL: httpx no sigue redirects por defecto, a diferencia de requests (que usaba el legacy). Verificado con mutante en el PR #24.",
+      "usado_en": [
+        "ingestion.gdelt.GDELTDailyAdapter"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "GDELT_BASE_URL",
+      "modulo": "ingestion.gdelt",
+      "categoria": "etiqueta",
+      "valor": "https://data.gdeltproject.org/events",
+      "evidencia": "medido",
+      "fuente": "Verificado el 16-sep-2026: el legacy usa http:// y GDELT migró a HTTPS; con el esquema viejo la descarga llega como redirect. Corregido con test (PR #24).",
+      "usado_en": [
+        "ingestion.gdelt.GDELTDailyAdapter"
+      ],
+      "notas": "Único caso `medido` del registro, y lo medido es el comportamiento de la fuente, no un valor numérico."
+    },
+    {
+      "nombre": "GDELT_COL_INDICES",
+      "modulo": "ingestion.gdelt",
+      "categoria": "etiqueta",
+      "valor": {
+        "date_int": 1,
+        "country1": 7,
+        "country2": 17,
+        "goldstein": 29,
+        "num_mentions": 30,
+        "num_sources": 31,
+        "num_articles": 32,
+        "avg_tone": 33
+      },
+      "evidencia": "legacy_citado",
+      "fuente": "gdelt_foundation.py::GDELT_COLS -- índices 0-based dentro de las 57 columnas de GDELT 1.0.",
+      "usado_en": [
+        "ingestion.gdelt.GDELTDailyAdapter"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "GDELT_TOTAL_COLS",
+      "modulo": "ingestion.gdelt",
+      "categoria": "etiqueta",
+      "valor": 57,
+      "evidencia": "legacy_citado",
+      "fuente": "Formato GDELT 1.0: 57 columnas tab-separated. Sin comentario propio.",
+      "usado_en": [
+        "ingestion.gdelt.GDELTDailyAdapter"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "MIN_EVENTS_FOR_VALID_DAY",
+      "modulo": "ingestion.gdelt_aggregation",
+      "categoria": "parametro",
+      "valor": 5,
+      "evidencia": "legacy_citado",
+      "fuente": "gdelt_foundation.py::compute_daily_signals -- 'if ... < 5: return None'.",
+      "usado_en": [
+        "ingestion.gdelt_aggregation.aggregate_day",
+        "ingestion.run_gdelt.render_text"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "N_TONE_BINS",
+      "modulo": "ingestion.gdelt_aggregation",
+      "categoria": "parametro",
+      "valor": 20,
+      "evidencia": "legacy_citado",
+      "fuente": "gdelt_foundation.py::EntropyCalculator.N_TONE_BINS.",
+      "usado_en": [
+        "ingestion.gdelt_aggregation._shannon_entropy"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "TONE_RANGE",
+      "modulo": "ingestion.gdelt_aggregation",
+      "categoria": "parametro",
+      "valor": [
+        -100.0,
+        100.0
+      ],
+      "evidencia": "legacy_citado",
+      "fuente": "Rango real de AvgTone en GDELT 1.0 (-100 a +100), confirmado en el docstring de gdelt_foundation.py.",
+      "usado_en": [
+        "ingestion.gdelt_aggregation._shannon_entropy"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "DEFAULT_MAX_DAYS",
+      "modulo": "ingestion.run_gdelt",
+      "categoria": "parametro",
+      "valor": 10,
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Default bajo a propósito: Actions tiene techo de tiempo y GDELT tarda ~3 s por día.",
+      "usado_en": [
+        "ingestion.run_gdelt.build_parser",
+        "ingestion.run_gdelt.run_ingesta"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "DIAS_DE_RETRASO_DE_PUBLICACION",
+      "modulo": "ingestion.run_gdelt",
+      "categoria": "parametro",
+      "valor": 1,
+      "evidencia": "legacy_citado",
+      "fuente": "GDELT 1.0 publica el archivo de un día después de que el día terminó: el último descargable es ayer.",
+      "usado_en": [
+        "ingestion.run_gdelt.ultimo_dia_disponible"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "PAUSA_ENTRE_DIAS_S",
+      "modulo": "ingestion.run_gdelt",
+      "categoria": "parametro",
+      "valor": 0.3,
+      "evidencia": "legacy_citado",
+      "fuente": "spel_ingest_incremental.py: `time.sleep(0.3)  # Rate limiting GDELT`. El valor es el del legacy.",
+      "usado_en": [
+        "ingestion.run_gdelt.run_ingesta"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "REGISTRY_PATH",
+      "modulo": "ingestion.source_registry",
+      "categoria": "derivada",
+      "expresion": "Path(__file__).with_name('source_registry.json')",
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Path(__file__).with_name('source_registry.json'): el archivo de datos vive al lado del módulo y versionado en git.",
+      "usado_en": [
+        "ingestion.source_registry.load_registry"
+      ],
+      "notas": "Su valor absoluto depende de dónde esté clonado el repo. Fijarlo sería mentira."
+    },
+    {
+      "nombre": "SCHEMA_VERSION",
+      "modulo": "ingestion.source_registry",
+      "categoria": "etiqueta",
+      "valor": 1,
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Versión del esquema del archivo, para que el lector rechace un formato que no entiende.",
+      "usado_en": [
+        "ingestion.source_registry.load_registry"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "DEFAULT_CYCLE_ASSETS",
+      "modulo": "orchestration.cycle",
+      "categoria": "etiqueta",
+      "valor": [
+        "NVDA",
+        "XAU",
+        "BTC",
+        "NIFTY50",
+        "EURUSD"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "fuente": "Los 5 activos con classify_gdelt_event() funcional. Los Índices de Volatilidad quedan fuera por diseño (GDELT no aplica).",
+      "usado_en": [
+        "ingestion.run_gdelt.build_parser",
+        "orchestration.cycle.run_scoring_cycle"
+      ],
+      "notas": ""
+    }
+  ]
+}
