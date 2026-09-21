@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "actualizado": "2026-09-20",
   "constantes": [
     {
@@ -8,6 +8,7 @@
       "categoria": "parametro",
       "valor": 1e-09,
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Elección de ingeniería: umbral de ruido de punto flotante para no contar como GANADORA un neto de 1e-13.",
       "usado_en": [
         "core.execution_costs._clasificar"
@@ -24,6 +25,7 @@
         16
       ],
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Esquema de 8 horas, el más común en perpetuos. Sin fuente legacy: core/execution_costs.py no porta tarifas ni calendarios de ningún exchange a propósito.",
       "usado_en": [
         "core.execution_costs.instantes_de_funding"
@@ -42,6 +44,7 @@
         "EURUSD": 0.02
       },
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "spel_bayesian_core.py::SENSITIVITY_MAP. La fuente misma lo marca 'pendiente de calibración post Gate R30'.",
       "usado_en": [
         "core.monte_carlo.run_monte_carlo_validation"
@@ -54,6 +57,7 @@
       "categoria": "parametro",
       "valor": 252.0,
       "evidencia": "legacy_citado",
+      "afecta_resultado": true,
       "fuente": "Convención de mercado de acciones: 252 días hábiles/año. Parametrizable por llamada.",
       "usado_en": [
         "core.monte_carlo.run_monte_carlo_validation"
@@ -66,6 +70,7 @@
       "categoria": "parametro",
       "valor": 0.05,
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "spel_bayesian_core.py: default para activos fuera del mapa. Mismo estado de calibración que el mapa.",
       "usado_en": [
         "core.monte_carlo.run_monte_carlo_validation"
@@ -78,6 +83,7 @@
       "categoria": "derivada",
       "expresion": "24 * 60",
       "evidencia": "legacy_citado",
+      "afecta_resultado": true,
       "fuente": "24 * 60. Definición del calendario, no una elección.",
       "usado_en": [
         "core.monte_carlo.run_monte_carlo_validation"
@@ -90,6 +96,7 @@
       "categoria": "parametro",
       "valor": 0.85,
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Misma línea de spel_bayesian_core.py que SUCCESS_SCORE_THRESHOLD (el 850/1000). Sin comentario propio en el código.",
       "usado_en": [
         "core.monte_carlo.run_monte_carlo_validation"
@@ -102,6 +109,7 @@
       "categoria": "parametro",
       "valor": 0.85,
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "spel_bayesian_core.py: '>= 850/1000 trayectorias con gold_score > 0.85'. El docstring del módulo (línea 34) lo declara heurístico y sin backtest.",
       "usado_en": [
         "core.monte_carlo.run_monte_carlo_validation"
@@ -137,6 +145,7 @@
         ]
       },
       "evidencia": "legacy_citado",
+      "afecta_resultado": true,
       "fuente": "gdelt_foundation.py::ASSET_COUNTRY_FILTERS -- port directo. XAU vacío = sin filtro, no un error de captura.",
       "usado_en": [
         "core.scoring.classify_gdelt_event",
@@ -150,6 +159,7 @@
       "categoria": "parametro",
       "valor": 0.3,
       "evidencia": "legacy_citado",
+      "afecta_resultado": true,
       "fuente": "spel_bayesian_core.py (godel_thresholds_v2.json, cuando el archivo no existe).",
       "usado_en": [
         "core.scoring.compute_vitality_tesla"
@@ -162,6 +172,7 @@
       "categoria": "parametro",
       "valor": 0.7,
       "evidencia": "legacy_citado",
+      "afecta_resultado": true,
       "fuente": "spel_bayesian_core.py (godel_thresholds_v2.json, cuando el archivo no existe). Sin comentario propio.",
       "usado_en": [
         "core.scoring.compute_vitality_tesla"
@@ -174,6 +185,7 @@
       "categoria": "etiqueta",
       "valor": 2,
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Ídem ENTROPY_STATE_LOW.",
       "usado_en": [
         "core.scoring.entropy_state"
@@ -186,6 +198,7 @@
       "categoria": "etiqueta",
       "valor": 0,
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Numerados 0/1/2 y no 3/6/9 a propósito: el 3/6/9 es la escala de vitality_tesla.",
       "usado_en": [
         "core.scoring.entropy_state"
@@ -198,6 +211,7 @@
       "categoria": "etiqueta",
       "valor": 1,
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Ídem ENTROPY_STATE_LOW.",
       "usado_en": [
         "core.scoring.entropy_state"
@@ -213,6 +227,7 @@
         66.0
       ],
       "evidencia": "legacy_citado",
+      "afecta_resultado": true,
       "fuente": "gdelt_foundation.py::TESLA_PERCENTILE_THRESHOLDS = (33.0, 66.0). Port literal, incluido el `<=`.",
       "usado_en": [
         "core.scoring",
@@ -226,6 +241,7 @@
       "categoria": "etiqueta",
       "valor": null,
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "`None` y no un estado: un día de warm-up no tiene estado, porque no hay contra qué compararlo.",
       "usado_en": [
         "core.scoring.entropy_state"
@@ -240,10 +256,12 @@
         "EURUSD"
       ],
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Registro explícito de los pares FX sin país nativo. Nació de un bug: classify_gdelt_event(asset='EURUSD') lanzaba ValueError siempre.",
       "usado_en": [
         "core.scoring.classify_gdelt_event",
-        "orchestration.cycle.run_scoring_cycle"
+        "orchestration.cycle.run_scoring_cycle",
+        "tools.calibrar_umbral_entropia._peticiones_admin"
       ],
       "notas": ""
     },
@@ -256,9 +274,11 @@
         "DEU"
       ],
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "SIN PRECEDENTE LEGACY. Diseñado en este repo: USA (Fed) + DEU (proxy de la Eurozona, que GDELT no tiene como entidad).",
       "usado_en": [
-        "core.scoring.classify_gdelt_event"
+        "core.scoring.classify_gdelt_event",
+        "tools.calibrar_umbral_entropia._peticiones_admin"
       ],
       "notas": ""
     },
@@ -268,12 +288,13 @@
       "categoria": "etiqueta",
       "valor": "4.0.0-entropy_state_p66",
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": false,
       "fuente": "Sello de versión del criterio de la máscara. Sube a mayor cuando cambia el valor de días ya calculados.",
       "usado_en": [
         "orchestration.cycle.AssetCycleResult",
         "orchestration.cycle.run_scoring_cycle"
       ],
-      "notas": ""
+      "notas": "afecta_resultado=false HOY: el sello se registra en AssetCycleResult y NADA ramifica sobre él -- el propio campo documenta que 'la comprobación no existe todavía'. Pasa a true el día que alguien compare la versión de un artefacto contra la del módulo y recalcule si difieren."
     },
     {
       "nombre": "GODEL_MASK_PERCENTILE",
@@ -281,9 +302,13 @@
       "categoria": "derivada",
       "expresion": "ENTROPY_STATE_PERCENTILES[1]",
       "evidencia": "legacy_citado",
+      "afecta_resultado": true,
       "fuente": "ENTROPY_STATE_PERCENTILES[1]: el borde del tercil superior. Una sola fuente de verdad para producción y para el tool que la mide.",
       "usado_en": [
-        "core.scoring.compute_godel_p66"
+        "core.scoring.compute_godel_p66",
+        "tools.calibrar_umbral_entropia.calibrar",
+        "tools.calibrar_umbral_entropia.calibrar_activo",
+        "tools.measure_godel_samples.resolver_umbrales"
       ],
       "notas": ""
     },
@@ -293,11 +318,16 @@
       "categoria": "parametro",
       "valor": 252,
       "evidencia": "legacy_citado",
+      "afecta_resultado": true,
       "fuente": "252 = días hábiles de un año. Convención, portada del legacy.",
       "usado_en": [
         "core.scoring.compute_godel_p66",
         "core.scoring.compute_vitality_tesla",
-        "core.scoring.entropy_state"
+        "core.scoring.entropy_state",
+        "tools.calibrar_umbral_entropia",
+        "tools.calibrar_umbral_entropia.calibrar_activo",
+        "tools.calibrar_umbral_entropia.render_text",
+        "tools.measure_godel_samples"
       ],
       "notas": "orchestration/cycle.py menciona 'la medición que fijó el 252', pero esa medición NO está registrada en decision-log.md ni en ESTADO.md: no es citable, así que acá va como convención y no como medida."
     },
@@ -307,6 +337,7 @@
       "categoria": "parametro",
       "valor": 0.7,
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Peso del global en la zona híbrida (10-99 obs). El propio comentario dice 'sin calibrar'.",
       "usado_en": [
         "core.scoring.compute_adaptive_percentile"
@@ -319,6 +350,7 @@
       "categoria": "parametro",
       "valor": 10,
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Por debajo de esto la rolling no tiene sentido. Sin calibrar.",
       "usado_en": [
         "core.scoring.compute_adaptive_percentile"
@@ -331,9 +363,11 @@
       "categoria": "parametro",
       "valor": 100,
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Por encima de esto la rolling es confiable. Sin calibrar.",
       "usado_en": [
-        "core.scoring.compute_adaptive_percentile"
+        "core.scoring.compute_adaptive_percentile",
+        "tools.calibrar_umbral_entropia"
       ],
       "notas": ""
     },
@@ -343,6 +377,7 @@
       "categoria": "parametro",
       "valor": 3,
       "evidencia": "legacy_citado",
+      "afecta_resultado": true,
       "fuente": "Igual que el legacy: hacen falta al menos 3 puntos para que un tercil tenga sentido.",
       "usado_en": [
         "core.scoring.compute_vitality_tesla"
@@ -355,6 +390,7 @@
       "categoria": "etiqueta",
       "valor": "trades.jsonl",
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Un solo archivo para todos los activos: el ledger se lee entero (equity, drawdown son de la cuenta, no de un activo).",
       "usado_en": [
         "core.trade_ledger._ledger_file_path"
@@ -367,6 +403,7 @@
       "categoria": "etiqueta",
       "valor": "/content/drive/MyDrive/SPEL_trabajo",
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Ruta de trabajo real en Colab. Solo se usa si _is_colab() lo confirma.",
       "usado_en": [
         "governance.persistence.drive_root"
@@ -379,6 +416,7 @@
       "categoria": "etiqueta",
       "valor": "SPEL_DRIVE_ROOT",
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Nombre de la env var de override, mismo rol que las claves de governance/secrets.py.",
       "usado_en": [
         "governance.persistence.drive_root"
@@ -395,6 +433,7 @@
         "trade_ledger"
       ],
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Clasificación: qué streams viven en Drive y no se versionan en git.",
       "usado_en": [
         "governance.persistence.stream_is_local_to_drive",
@@ -411,6 +450,7 @@
         "decision_log"
       ],
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Clasificación: qué streams viven en el repo y sí se versionan.",
       "usado_en": [
         "governance.persistence.stream_is_versioned"
@@ -423,6 +463,7 @@
       "categoria": "etiqueta",
       "valor": ".spel_drive_stream",
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Fallback de desarrollo. NO es Drive real: el nombre con punto lo marca.",
       "usado_en": [
         "core.trade_ledger._esta_en_fallback",
@@ -443,6 +484,7 @@
         "trade_ledger": "trade_ledger"
       },
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Rutas relativas por stream. No dependen del entorno, a diferencia de la raíz de Drive.",
       "usado_en": [
         "governance.persistence.stream_path"
@@ -455,9 +497,11 @@
       "categoria": "etiqueta",
       "valor": "wss://ws.derivws.com/websockets/v3?app_id={app_id}",
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Endpoint WebSocket de Deriv, con {app_id} a sustituir. Sin comentario propio.",
       "usado_en": [
-        "ingestion.adapters.DerivAdapter"
+        "ingestion.adapters.DerivAdapter",
+        "tools.provider_coverage.probe_deriv"
       ],
       "notas": ""
     },
@@ -474,9 +518,14 @@
         "volume"
       ],
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Contrato de esquema OHLCV que validate_ohlcv_schema() exige. Sin comentario propio en el código.",
       "usado_en": [
-        "ingestion.adapters.validate_ohlcv_schema"
+        "ingestion.adapters.validate_ohlcv_schema",
+        "tools.provider_coverage.describir_payload",
+        "tools.provider_coverage.main",
+        "tools.provider_coverage.probe_deriv",
+        "tools.provider_coverage.render_text"
       ],
       "notas": ""
     },
@@ -486,9 +535,11 @@
       "categoria": "etiqueta",
       "valor": "https://api.twelvedata.com/time_series",
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Endpoint REST de TwelveData. Sin comentario propio.",
       "usado_en": [
-        "ingestion.adapters.TwelveDataAdapter"
+        "ingestion.adapters.TwelveDataAdapter",
+        "tools.provider_coverage.probe_twelvedata"
       ],
       "notas": ""
     },
@@ -507,9 +558,11 @@
         "1d": 86400
       },
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Timeframes del proyecto a segundos. Sin comentario propio.",
       "usado_en": [
-        "ingestion.adapters.DerivAdapter"
+        "ingestion.adapters.DerivAdapter",
+        "tools.provider_coverage.probe_deriv"
       ],
       "notas": ""
     },
@@ -530,9 +583,12 @@
         "VOL100": "R_100"
       },
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Solo símbolos CONFIRMADOS contra la documentación oficial de Deriv. Nada 'por analogía'.",
       "usado_en": [
-        "ingestion.adapters.DerivAdapter"
+        "ingestion.adapters.DerivAdapter",
+        "tools.calibrar_umbral_entropia._peticiones_admin",
+        "tools.provider_coverage.probe_deriv"
       ],
       "notas": ""
     },
@@ -544,6 +600,7 @@
         "1d"
       ],
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "La barra diaria de TwelveData viene con fecha sin hora: mandar zona invita a que corra la fecha un día.",
       "usado_en": [
         "ingestion.adapters.TwelveDataAdapter"
@@ -565,6 +622,7 @@
         "1d": 86400
       },
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Espejo exacto de _DERIV_GRANULARITY_SECONDS. La duplicación es deliberada: dos proveedores independientes que hoy coinciden.",
       "usado_en": [
         "ingestion.adapters.TwelveDataAdapter"
@@ -586,9 +644,11 @@
         "1d": "1day"
       },
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Traducción al vocabulario de TwelveData. Mismas 8 claves que Deriv a propósito.",
       "usado_en": [
-        "ingestion.adapters.TwelveDataAdapter"
+        "ingestion.adapters.TwelveDataAdapter",
+        "tools.provider_coverage.probe_twelvedata"
       ],
       "notas": ""
     },
@@ -602,9 +662,11 @@
         "AAPL": "AAPL"
       },
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Solo símbolos confirmados en el plan gratuito. La barra ('EUR/USD') es vocabulario del proveedor.",
       "usado_en": [
-        "ingestion.adapters.TwelveDataAdapter"
+        "ingestion.adapters.TwelveDataAdapter",
+        "tools.provider_coverage"
       ],
       "notas": ""
     },
@@ -614,6 +676,7 @@
       "categoria": "parametro",
       "valor": 30.0,
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "El legacy usaba el valor inline sin nombrarlo; se nombra acá para poder ajustarlo sin buscarlo.",
       "usado_en": [
         "ingestion.gdelt.GDELTDailyAdapter"
@@ -626,6 +689,7 @@
       "categoria": "parametro",
       "valor": true,
       "evidencia": "medido",
+      "afecta_resultado": true,
       "fuente": "Mismo hallazgo del 16-sep-2026 que GDELT_BASE_URL: httpx no sigue redirects por defecto, a diferencia de requests (que usaba el legacy). Verificado con mutante en el PR #24.",
       "usado_en": [
         "ingestion.gdelt.GDELTDailyAdapter"
@@ -638,6 +702,7 @@
       "categoria": "etiqueta",
       "valor": "https://data.gdeltproject.org/events",
       "evidencia": "medido",
+      "afecta_resultado": true,
       "fuente": "Verificado el 16-sep-2026: el legacy usa http:// y GDELT migró a HTTPS; con el esquema viejo la descarga llega como redirect. Corregido con test (PR #24).",
       "usado_en": [
         "ingestion.gdelt.GDELTDailyAdapter"
@@ -659,6 +724,7 @@
         "avg_tone": 33
       },
       "evidencia": "legacy_citado",
+      "afecta_resultado": true,
       "fuente": "gdelt_foundation.py::GDELT_COLS -- índices 0-based dentro de las 57 columnas de GDELT 1.0.",
       "usado_en": [
         "ingestion.gdelt.GDELTDailyAdapter"
@@ -671,6 +737,7 @@
       "categoria": "etiqueta",
       "valor": 57,
       "evidencia": "legacy_citado",
+      "afecta_resultado": true,
       "fuente": "Formato GDELT 1.0: 57 columnas tab-separated. Sin comentario propio.",
       "usado_en": [
         "ingestion.gdelt.GDELTDailyAdapter"
@@ -683,10 +750,14 @@
       "categoria": "parametro",
       "valor": 5,
       "evidencia": "legacy_citado",
+      "afecta_resultado": true,
       "fuente": "gdelt_foundation.py::compute_daily_signals -- 'if ... < 5: return None'.",
       "usado_en": [
         "ingestion.gdelt_aggregation.aggregate_day",
-        "ingestion.run_gdelt.render_text"
+        "ingestion.run_gdelt.render_text",
+        "tools.import_gdelt_entropy._a_resultado",
+        "tools.import_gdelt_entropy.main",
+        "tools.import_gdelt_entropy.render_text"
       ],
       "notas": ""
     },
@@ -696,6 +767,7 @@
       "categoria": "parametro",
       "valor": 20,
       "evidencia": "legacy_citado",
+      "afecta_resultado": true,
       "fuente": "gdelt_foundation.py::EntropyCalculator.N_TONE_BINS.",
       "usado_en": [
         "ingestion.gdelt_aggregation._shannon_entropy"
@@ -711,6 +783,7 @@
         100.0
       ],
       "evidencia": "legacy_citado",
+      "afecta_resultado": true,
       "fuente": "Rango real de AvgTone en GDELT 1.0 (-100 a +100), confirmado en el docstring de gdelt_foundation.py.",
       "usado_en": [
         "ingestion.gdelt_aggregation._shannon_entropy"
@@ -723,6 +796,7 @@
       "categoria": "parametro",
       "valor": 10,
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Default bajo a propósito: Actions tiene techo de tiempo y GDELT tarda ~3 s por día.",
       "usado_en": [
         "ingestion.run_gdelt.build_parser",
@@ -736,6 +810,7 @@
       "categoria": "parametro",
       "valor": 1,
       "evidencia": "legacy_citado",
+      "afecta_resultado": true,
       "fuente": "GDELT 1.0 publica el archivo de un día después de que el día terminó: el último descargable es ayer.",
       "usado_en": [
         "ingestion.run_gdelt.ultimo_dia_disponible"
@@ -748,6 +823,7 @@
       "categoria": "parametro",
       "valor": 0.3,
       "evidencia": "legacy_citado",
+      "afecta_resultado": true,
       "fuente": "spel_ingest_incremental.py: `time.sleep(0.3)  # Rate limiting GDELT`. El valor es el del legacy.",
       "usado_en": [
         "ingestion.run_gdelt.run_ingesta"
@@ -760,6 +836,7 @@
       "categoria": "derivada",
       "expresion": "Path(__file__).with_name('source_registry.json')",
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Path(__file__).with_name('source_registry.json'): el archivo de datos vive al lado del módulo y versionado en git.",
       "usado_en": [
         "ingestion.source_registry.load_registry"
@@ -772,11 +849,14 @@
       "categoria": "etiqueta",
       "valor": 1,
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Versión del esquema del archivo, para que el lector rechace un formato que no entiende.",
       "usado_en": [
-        "ingestion.source_registry.load_registry"
+        "ingestion.source_registry.load_registry",
+        "tools.calibrar_umbral_entropia",
+        "tools.calibrar_umbral_entropia.a_documento"
       ],
-      "notas": ""
+      "notas": "Bloquea la lectura: source_registry.py:349 rechaza el archivo si no coincide. No es una etiqueta decorativa."
     },
     {
       "nombre": "DEFAULT_CYCLE_ASSETS",
@@ -790,10 +870,751 @@
         "EURUSD"
       ],
       "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
       "fuente": "Los 5 activos con classify_gdelt_event() funcional. Los Índices de Volatilidad quedan fuera por diseño (GDELT no aplica).",
       "usado_en": [
         "ingestion.run_gdelt.build_parser",
-        "orchestration.cycle.run_scoring_cycle"
+        "orchestration.cycle.run_scoring_cycle",
+        "tools.calibrar_umbral_entropia.build_parser"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "DATA_LAKE_ROOT_ENV_VAR",
+      "modulo": "tools.audit_data_lake",
+      "categoria": "etiqueta",
+      "valor": "SPEL_DATA_LAKE_ROOT",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Nombre de la env var que apunta al data lake legacy. Sin fallback a una ruta fija a propósito.",
+      "usado_en": [
+        "tools.audit_data_lake.data_lake_root"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "DATE_COLUMN_CANDIDATES",
+      "modulo": "tools.audit_data_lake",
+      "categoria": "etiqueta",
+      "valor": [
+        "date",
+        "timestamp",
+        "datetime",
+        "time"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Nombres de columna de fecha que el auditor busca, en orden. Ninguno es canónico: el data lake legacy no normalizó el nombre.",
+      "usado_en": [
+        "tools.audit_data_lake.audit_file"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "ADVERTENCIA",
+      "modulo": "tools.calibrar_umbral_entropia",
+      "categoria": "etiqueta",
+      "valor": "ESTE UMBRAL NO ES EL DE PRODUCCIÓN. Para un activo con historia suficiente manda la ventana móvil de 252 días que compute_godel_p66() recalcula en cada corrida, y este valor NUNCA se lee. Se publica como respaldo de arranque en frío y como evidencia de la distribución.",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": false,
+      "fuente": "El texto que dice que el umbral publicado NO es el de producción. Va en el reporte y en el JSON, además del docstring.",
+      "usado_en": [
+        "tools.calibrar_umbral_entropia.a_documento",
+        "tools.calibrar_umbral_entropia.render_text"
+      ],
+      "notas": "Las tres copias existen porque las tres se leen por separado: quien copie el JSON a otro repo no va a leer el docstring."
+    },
+    {
+      "nombre": "N_MINIMO_MEDIDO",
+      "modulo": "tools.calibrar_umbral_entropia",
+      "categoria": "derivada",
+      "expresion": "core.scoring.GODEL_ROLLING_WINDOW_DAYS",
+      "evidencia": "legacy_citado",
+      "afecta_resultado": true,
+      "fuente": "La ventana de producción. Por debajo, el umbral se midió sobre menos historia de la que el motor usa en régimen y se marca `parcial`.",
+      "usado_en": [
+        "tools.calibrar_umbral_entropia._zonas_grises",
+        "tools.calibrar_umbral_entropia.calibrar_activo"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "N_MINIMO_PARCIAL",
+      "modulo": "tools.calibrar_umbral_entropia",
+      "categoria": "derivada",
+      "expresion": "core.scoring.MIN_OBS_FOR_ROLLING",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "El piso con que el propio motor deja de confiar en un percentil rolling. Se importa en vez de repetir el literal.",
+      "usado_en": [
+        "tools.calibrar_umbral_entropia._zonas_grises",
+        "tools.calibrar_umbral_entropia.calibrar_activo"
+      ],
+      "notas": "Hereda el estado de evidencia de MIN_OBS_FOR_ROLLING, que es provisional: el piso no está calibrado, solo reusado."
+    },
+    {
+      "nombre": "SALIDA_DEFAULT",
+      "modulo": "tools.calibrar_umbral_entropia",
+      "categoria": "derivada",
+      "expresion": "Path(__file__).parent.parent / 'config' / 'calibracion_activos.json'",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Dónde escribe --write. Stream CONFIG: versionado en git, revisable en un PR, igual que config/constantes.json.",
+      "usado_en": [
+        "tools.calibrar_umbral_entropia.main"
+      ],
+      "notas": "Absoluta y dependiente de dónde esté clonado el repo, como REGISTRY_PATH."
+    },
+    {
+      "nombre": "SCHEMA_VERSION",
+      "modulo": "tools.calibrar_umbral_entropia",
+      "categoria": "etiqueta",
+      "valor": "1.0.0",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Versión del esquema de config/calibracion_activos.json.",
+      "usado_en": [
+        "ingestion.source_registry",
+        "ingestion.source_registry.load_registry",
+        "tools.calibrar_umbral_entropia.a_documento"
+      ],
+      "notas": "Colisiona de nombre con ingestion.source_registry.SCHEMA_VERSION y significa otra cosa: es el caso que la clave modulo+nombre del registro anticipaba, y ya no es hipotético."
+    },
+    {
+      "nombre": "VERSION_SCRIPT",
+      "modulo": "tools.calibrar_umbral_entropia",
+      "categoria": "etiqueta",
+      "valor": "1.0.0",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Versión del script, que viaja en el JSON de salida. Sube cuando cambia CÓMO se mide.",
+      "usado_en": [
+        "tools.calibrar_umbral_entropia.calibrar"
+      ],
+      "notas": "Una medición vieja y una nueva tienen que poder distinguirse sin mirar el commit."
+    },
+    {
+      "nombre": "DEFAULT_SEED",
+      "modulo": "tools.heartbeat",
+      "categoria": "parametro",
+      "valor": 20260909,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Semilla del Monte Carlo. Fijarla es lo que separa 'el heartbeat cambió porque el código cambió' de 'cambió porque es aleatorio'.",
+      "usado_en": [
+        "tools.heartbeat.build_parser"
+      ],
+      "notas": "Cambia los números que el heartbeat imprime, aunque su veredicto sea degenerado por construcción. Un número que cambia es un resultado que cambia, así que true."
+    },
+    {
+      "nombre": "REAL_MODE_BLOCKED_REASON",
+      "modulo": "tools.heartbeat",
+      "categoria": "etiqueta",
+      "valor": "--real no está disponible: no existe ingestion/deriv.py, que es la fuente de precio y volatilidad para los índices sintéticos de Deriv (BLUEPRINT.md, Fase 6). Sin ese adapter no hay dato real que pasarle a run_monte_carlo_validation, y este script no inventa uno. Corre sin --real para el modo sintético.",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": false,
+      "fuente": "Texto del error de --real. Nombra ingestion/deriv.py en vez de un 'no implementado' genérico.",
+      "usado_en": [
+        "tools.heartbeat.run_heartbeat"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "SYNTHETIC_INPUTS",
+      "modulo": "tools.heartbeat",
+      "categoria": "parametro",
+      "valor": {
+        "BTC": {
+          "current_price": 60000.0,
+          "volatility": 0.35,
+          "base_gold_score": 0.7
+        },
+        "XAU": {
+          "current_price": 2400.0,
+          "volatility": 0.12,
+          "base_gold_score": 0.7
+        },
+        "NVDA": {
+          "current_price": 900.0,
+          "volatility": 0.28,
+          "base_gold_score": 0.7
+        },
+        "NIFTY50": {
+          "current_price": 24000.0,
+          "volatility": 0.15,
+          "base_gold_score": 0.7
+        },
+        "EURUSD": {
+          "current_price": 1.08,
+          "volatility": 0.07,
+          "base_gold_score": 0.7
+        }
+      },
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Precios y volatilidades SINTÉTICOS, no reales. Existen para que run_monte_carlo_validation tenga algo que procesar mientras no exista ingestion/deriv.py.",
+      "usado_en": [
+        "tools.heartbeat.run_heartbeat"
+      ],
+      "notas": "Con estos valores el veredicto del Monte Carlo es constante (mc_approved=False siempre). Está fijado en un test como hallazgo, no como comportamiento deseado."
+    },
+    {
+      "nombre": "SYNTHETIC_MARK",
+      "modulo": "tools.heartbeat",
+      "categoria": "etiqueta",
+      "valor": "[SINTÉTICO]",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": false,
+      "fuente": "La marca que acompaña a cada línea de resultado sintético. Solo texto.",
+      "usado_en": [
+        "tools.heartbeat.run_heartbeat"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "PATRON_DEFAULT",
+      "modulo": "tools.import_gdelt_entropy",
+      "categoria": "etiqueta",
+      "valor": "{asset}_gdelt_entropy.parquet",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Patrón del nombre de archivo parquet de origen.",
+      "usado_en": [
+        "tools.import_gdelt_entropy.build_parser"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "_COLUMNAS_DIRECTAS",
+      "modulo": "tools.import_gdelt_entropy",
+      "categoria": "etiqueta",
+      "valor": [
+        "asset",
+        "entropy_shannon",
+        "zipf_concentration",
+        "goldstein_mean",
+        "tone_variance",
+        "n_events"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Las 7 columnas del parquet que mapean directo al destino; `day` se deriva de `date` e `insufficient_events` de `n_events`.",
+      "usado_en": [
+        "tools.import_gdelt_entropy.importar_asset"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "_COLUMNAS_SOBRANTES",
+      "modulo": "tools.import_gdelt_entropy",
+      "categoria": "etiqueta",
+      "valor": [
+        "nash_frozen_7d",
+        "vitality_tesla"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Columnas del origen sin destino en DailyAggregationResult: el consumidor las recalcula.",
+      "usado_en": [
+        "tools.import_gdelt_entropy.importar_asset"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "_EXCLUIDOS_SUFIJO",
+      "modulo": "tools.import_gdelt_entropy",
+      "categoria": "etiqueta",
+      "valor": [
+        "_2026_entropy.parquet"
+      ],
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Archivos verificados como corruptos en la auditoría del data lake (tools/audit_data_lake.py, 2026-08-28). No son entrada de nada.",
+      "usado_en": [
+        "tools.import_gdelt_entropy.es_archivo_excluido"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "DATE_COLUMNS",
+      "modulo": "tools.measure_godel_samples",
+      "categoria": "etiqueta",
+      "valor": [
+        "timestamp",
+        "date"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Nombres de columna de fecha aceptados al leer OHLCV.",
+      "usado_en": [
+        "tools.measure_godel_samples._normalizar_fecha"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "DEFAULT_OHLCV_PATTERNS",
+      "modulo": "tools.measure_godel_samples",
+      "categoria": "etiqueta",
+      "valor": [
+        "{asset}.csv",
+        "{asset}.parquet"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Patrones de nombre de archivo OHLCV, en orden de intento.",
+      "usado_en": [
+        "tools.measure_godel_samples.build_parser",
+        "tools.measure_godel_samples.load_ohlcv",
+        "tools.measure_godel_samples.measure_asset"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "FOLD_MIN_CLASE",
+      "modulo": "tools.measure_godel_samples",
+      "categoria": "parametro",
+      "valor": 20,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Mínimo de casos por clase dentro de un fold para que el fold cuente.",
+      "usado_en": [
+        "tools.measure_godel_samples.dictaminar",
+        "tools.measure_godel_samples.measure_folds"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "FOLD_MIN_N",
+      "modulo": "tools.measure_godel_samples",
+      "categoria": "parametro",
+      "valor": 100,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Primer n cuyo IC 95% no cruza 0.50. Piso por fold.",
+      "usado_en": [
+        "tools.measure_godel_samples.dictaminar",
+        "tools.measure_godel_samples.measure_folds"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "LOOKBACK_DEFAULT",
+      "modulo": "tools.measure_godel_samples",
+      "categoria": "parametro",
+      "valor": 63,
+      "evidencia": "legacy_citado",
+      "afecta_resultado": true,
+      "fuente": "`_LOOKBACK_DEFAULT` en 04_GOLD_MODULES/capa_c_inference.py:42.",
+      "usado_en": [
+        "tools.measure_godel_samples.build_parser"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "OHLCV_SUBDIR",
+      "modulo": "tools.measure_godel_samples",
+      "categoria": "etiqueta",
+      "valor": [
+        "metrics",
+        "ohlcv"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Subdirectorio del OHLCV dentro de drive_root().",
+      "usado_en": [
+        "tools.measure_godel_samples.default_ohlcv_root"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "OOF_MIN_DEFENDIBLE",
+      "modulo": "tools.measure_godel_samples",
+      "categoria": "parametro",
+      "valor": 620,
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "620 = n mínimo para detectar un edge de +5pp sobre 0.50 con potencia 80%, una cola. Binomial EXACTO (2026-09-04), no aproximación normal, que daría 616.",
+      "usado_en": [
+        "tools.measure_godel_samples.dictaminar",
+        "tools.measure_godel_samples.evaluar_arrastre"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "OOF_MIN_DEFENDIBLE_DOS_COLAS",
+      "modulo": "tools.measure_godel_samples",
+      "categoria": "parametro",
+      "valor": 786,
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "786 = el mismo cálculo a dos colas, binomial exacto (2026-09-04). La aproximación normal da 783; mezclar 620 con 783 combina dos métodos.",
+      "usado_en": [],
+      "notas": ""
+    },
+    {
+      "nombre": "OOF_MIN_PARA_CORRER",
+      "modulo": "tools.measure_godel_samples",
+      "categoria": "parametro",
+      "valor": 150,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Piso para que la medición valga la pena correrla. Elección de ingeniería.",
+      "usado_en": [
+        "tools.measure_godel_samples.dictaminar",
+        "tools.measure_godel_samples.evaluar_arrastre"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "ROLLING_WINDOW_DEFAULT",
+      "modulo": "tools.measure_godel_samples",
+      "categoria": "derivada",
+      "expresion": "core.scoring.GODEL_ROLLING_WINDOW_DAYS",
+      "evidencia": "legacy_citado",
+      "afecta_resultado": true,
+      "fuente": "core.scoring.GODEL_ROLLING_WINDOW_DAYS. Se IMPORTA en vez de duplicar el 252: si producción cambia la ventana y el tool no, el tool mide otra cosa y nadie lo nota.",
+      "usado_en": [
+        "tools.measure_godel_samples.build_parser",
+        "tools.measure_godel_samples.measure_asset",
+        "tools.measure_godel_samples.measure_folds"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "ZSCORE_UMBRAL_GLOBAL_DEFAULT",
+      "modulo": "tools.measure_godel_samples",
+      "categoria": "derivada",
+      "expresion": "Φ⁻¹(GODEL_MASK_PERCENTILE/100)",
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Φ⁻¹(GODEL_MASK_PERCENTILE/100). Verificado por bisección sobre la CDF (2026-09-06, con el cambio a la versión 4.0.0): Φ(0.4124631294) = 0.66000000. Constante matemática, no un número elegido.",
+      "usado_en": [
+        "tools.measure_godel_samples.resolver_umbrales"
+      ],
+      "notas": "Cambió en la versión 4.0.0 junto con el percentil de la máscara: era Φ⁻¹(0.90) = 1.2815515655 cuando el tool medía un P90."
+    },
+    {
+      "nombre": "ALPHAVANTAGE_ENDPOINT",
+      "modulo": "tools.provider_coverage",
+      "categoria": "etiqueta",
+      "valor": "https://www.alphavantage.co/query",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Endpoint REST de Alpha Vantage.",
+      "usado_en": [
+        "tools.provider_coverage.probe_alphavantage"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "ASSETS_DEFAULT",
+      "modulo": "tools.provider_coverage",
+      "categoria": "etiqueta",
+      "valor": [
+        "BTCUSD",
+        "XAUUSD",
+        "NVDA",
+        "EURUSD",
+        "GBPUSD",
+        "USDJPY"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Activos que el sondeo cubre por defecto.",
+      "usado_en": [
+        "tools.provider_coverage.build_parser"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "DERIV_MAX_COUNT",
+      "modulo": "tools.provider_coverage",
+      "categoria": "parametro",
+      "valor": 5000,
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Tope por request observado en el sondeo real de Deriv (2026-09-03).",
+      "usado_en": [
+        "tools.provider_coverage.build_parser",
+        "tools.provider_coverage.probe_deriv"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "DERIV_MAX_PAGES_DEFAULT",
+      "modulo": "tools.provider_coverage",
+      "categoria": "parametro",
+      "valor": 12,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Techo de paginación del sondeo. Elección de ingeniería para acotar el tiempo.",
+      "usado_en": [
+        "tools.provider_coverage.build_parser",
+        "tools.provider_coverage.probe_deriv",
+        "tools.provider_coverage.probe_provider",
+        "tools.provider_coverage.run_inventory"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "DERIV_PROBE_ENDPOINT",
+      "modulo": "tools.provider_coverage",
+      "categoria": "etiqueta",
+      "valor": "wss://ws.derivws.com (ticks_history, sin authorize)",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": false,
+      "fuente": "Texto DESCRIPTIVO del endpoint para el reporte -- no es una URL usable, lleva prosa adentro.",
+      "usado_en": [
+        "tools.provider_coverage.probe_deriv"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "PROVIDERS",
+      "modulo": "tools.provider_coverage",
+      "categoria": "etiqueta",
+      "valor": {
+        "twelvedata": {
+          "name": "twelvedata",
+          "secret_key": "TWELVEDATA_API_KEY",
+          "rate_limit_doc": "plan gratuito: 8 peticiones/minuto, 800/día",
+          "min_interval_s": 8.0,
+          "requests_per_asset": "1 (outputsize=5000 en una sola petición)"
+        },
+        "alphavantage": {
+          "name": "alphavantage",
+          "secret_key": "ALPHAVANTAGE_API_KEY",
+          "rate_limit_doc": "plan gratuito: cuota diaria estrecha (25 req/día en la doc vigente al escribir esto)",
+          "min_interval_s": 15.0,
+          "requests_per_asset": "1 (outputsize=full). BARRIDO COMPLETO = 6 de las 25 peticiones diarias del plan gratuito"
+        },
+        "tiingo": {
+          "name": "tiingo",
+          "secret_key": "TIINGO_API_TOKEN",
+          "rate_limit_doc": "plan gratuito: 50 símbolos/hora, 1000 peticiones/día",
+          "min_interval_s": 2.0,
+          "requests_per_asset": "1 (startDate=1900-01-01, sin tope de conteo)"
+        },
+        "deriv": {
+          "name": "deriv",
+          "secret_key": "DERIV_APP_ID",
+          "rate_limit_doc": "WebSocket; 5.000 velas por petición. Sin límite REST documentado, pero se espacia igual por prudencia",
+          "min_interval_s": 2.0,
+          "requests_per_asset": "hasta --deriv-max-pages peticiones (default 12 = 60.000 velas) — es el único que pagina"
+        }
+      },
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Los proveedores sondeados, con su clave de secreto y su sondeador.",
+      "usado_en": [
+        "tools.provider_coverage.build_parser",
+        "tools.provider_coverage.main",
+        "tools.provider_coverage.probe_provider",
+        "tools.provider_coverage.render_text"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "TIINGO_BASE",
+      "modulo": "tools.provider_coverage",
+      "categoria": "etiqueta",
+      "valor": "https://api.tiingo.com/tiingo",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Base REST de Tiingo.",
+      "usado_en": [
+        "tools.provider_coverage"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "TIINGO_START_DATE",
+      "modulo": "tools.provider_coverage",
+      "categoria": "etiqueta",
+      "valor": "1900-01-01",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Fecha de arranque deliberadamente anterior a cualquier dato, para que el proveedor devuelva todo lo que tenga.",
+      "usado_en": [
+        "tools.provider_coverage.probe_tiingo"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "TWELVEDATA_MAX_OUTPUTSIZE",
+      "modulo": "tools.provider_coverage",
+      "categoria": "parametro",
+      "valor": 5000,
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Tope observado del plan gratuito en el sondeo real de profundidad histórica (2026-09-03).",
+      "usado_en": [
+        "tools.provider_coverage.probe_twelvedata"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "_ALIAS_AJUSTADO",
+      "modulo": "tools.provider_coverage",
+      "categoria": "etiqueta",
+      "valor": [
+        "adjclose",
+        "adj_close",
+        "adjusted close",
+        "5. adjusted close",
+        "adjopen",
+        "adjhigh",
+        "adjlow"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Nombres con que los proveedores llaman al cierre ajustado.",
+      "usado_en": [
+        "tools.provider_coverage.describir_payload"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "_ALIAS_VOLUMEN",
+      "modulo": "tools.provider_coverage",
+      "categoria": "etiqueta",
+      "valor": [
+        "volume",
+        "5. volume",
+        "6. volume",
+        "volumeNotional",
+        "tradesDone",
+        "4b. volume (usd)",
+        "5. volume"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Nombres con que los cuatro proveedores llaman al volumen. Ninguno coincide con otro.",
+      "usado_en": [
+        "tools.provider_coverage.describir_payload"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "_ALPHAVANTAGE_RUTAS",
+      "modulo": "tools.provider_coverage",
+      "categoria": "etiqueta",
+      "valor": {
+        "NVDA": {
+          "function": "TIME_SERIES_DAILY_ADJUSTED",
+          "symbol": "NVDA",
+          "outputsize": "full"
+        },
+        "XAUUSD": {
+          "function": "GOLD_SILVER_HISTORY",
+          "interval": "daily"
+        },
+        "EURUSD": {
+          "function": "FX_DAILY",
+          "from_symbol": "EUR",
+          "to_symbol": "USD",
+          "outputsize": "full"
+        },
+        "GBPUSD": {
+          "function": "FX_DAILY",
+          "from_symbol": "GBP",
+          "to_symbol": "USD",
+          "outputsize": "full"
+        },
+        "USDJPY": {
+          "function": "FX_DAILY",
+          "from_symbol": "USD",
+          "to_symbol": "JPY",
+          "outputsize": "full"
+        },
+        "BTCUSD": {
+          "function": "DIGITAL_CURRENCY_DAILY",
+          "symbol": "BTC",
+          "market": "USD"
+        }
+      },
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Función y parámetros por activo. Alpha Vantage usa endpoints distintos según el tipo de instrumento.",
+      "usado_en": [
+        "tools.provider_coverage.probe_alphavantage"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "_ALPHAVANTAGE_TOPE_OBSERVADO",
+      "modulo": "tools.provider_coverage",
+      "categoria": "parametro",
+      "valor": {
+        "FX_DAILY": 5000,
+        "TIME_SERIES_DAILY_ADJUSTED": null,
+        "DIGITAL_CURRENCY_DAILY": null,
+        "GOLD_SILVER_HISTORY": null
+      },
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Topes por función observados en el sondeo real de profundidad histórica (2026-09-03). `None` = sin tope detectado.",
+      "usado_en": [
+        "tools.provider_coverage.probe_alphavantage"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "_TIINGO_RUTAS",
+      "modulo": "tools.provider_coverage",
+      "categoria": "etiqueta",
+      "valor": {
+        "NVDA": [
+          "https://api.tiingo.com/tiingo/daily/nvda/prices",
+          "nvda"
+        ],
+        "EURUSD": [
+          "https://api.tiingo.com/tiingo/fx/eurusd/prices",
+          "eurusd"
+        ],
+        "GBPUSD": [
+          "https://api.tiingo.com/tiingo/fx/gbpusd/prices",
+          "gbpusd"
+        ],
+        "USDJPY": [
+          "https://api.tiingo.com/tiingo/fx/usdjpy/prices",
+          "usdjpy"
+        ],
+        "XAUUSD": [
+          "https://api.tiingo.com/tiingo/fx/xauusd/prices",
+          "xauusd"
+        ],
+        "BTCUSD": [
+          "https://api.tiingo.com/tiingo/crypto/prices",
+          "btcusd"
+        ]
+      },
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Ruta y ticker por activo.",
+      "usado_en": [
+        "tools.provider_coverage.probe_tiingo"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "_TWELVEDATA_CANDIDATOS",
+      "modulo": "tools.provider_coverage",
+      "categoria": "etiqueta",
+      "valor": {
+        "EURUSD": "EUR/USD",
+        "BTCUSD": "BTC/USD",
+        "AAPL": "AAPL",
+        "XAUUSD": "XAU/USD",
+        "NVDA": "NVDA",
+        "GBPUSD": "GBP/USD",
+        "USDJPY": "USD/JPY"
+      },
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Símbolos candidatos a probar en TwelveData, más amplios que el mapa de producción: el sondeo averigua cuáles responden.",
+      "usado_en": [
+        "tools.provider_coverage.probe_twelvedata"
       ],
       "notas": ""
     }

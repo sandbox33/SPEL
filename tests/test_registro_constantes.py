@@ -45,15 +45,20 @@ runtime del motor para no servirle a nadie en producción.
   Path             -> string POSIX
   None             -> null
   Enum suelto      -> su .value
+  dataclass        -> objeto con sus campos
 
-El último renglón es una EXTENSIÓN sobre la tabla del brief, y hace falta:
-`DRIVE_STREAMS` es un `frozenset` DE Enums, no un dict con claves Enum, y la
-tabla original no cubría esa combinación.
+Los dos últimos renglones son EXTENSIONES sobre la tabla del brief, y las
+dos hicieron falta de verdad: `DRIVE_STREAMS` es un `frozenset` DE Enums (ni
+un dict con claves Enum ni un frozenset de strings), y
+`tools.provider_coverage.PROVIDERS` es un dict de dataclasses -- un `repr()`
+de dataclass en el JSON sería ilegible y se rompería con cualquier cambio de
+formato de repr.
 """
 
 from __future__ import annotations
 
 import ast
+import dataclasses
 import importlib
 import json
 import pathlib
@@ -65,7 +70,12 @@ RAIZ = pathlib.Path(__file__).resolve().parent.parent
 REGISTRO = RAIZ / "config" / "constantes.json"
 
 #: Los paquetes bajo cobertura. `execution` entra: se recorre, no se toca.
-PAQUETES = ("core", "ingestion", "orchestration", "governance", "execution")
+#: `tools` entró el 20-sep-2026: sus constantes deciden qué mide el sistema
+#: sobre sí mismo, y una que se despega de producción hace que un reporte
+#: diga medir algo que no midió -- que es el defecto que este repo ya tuvo
+#: una vez, con el tool midiendo un P90 contra una máscara en P66.
+PAQUETES = ("core", "ingestion", "orchestration", "governance", "execution",
+            "tools")
 
 #: Categorías y niveles de evidencia admitidos. Cerrados a propósito: un
 #: valor nuevo tiene que pasar por acá y por config/README.md, no colarse
@@ -78,6 +88,12 @@ def normalizar(v):
     """Valor de Python -> su forma JSON. Ver la tabla en el docstring."""
     if isinstance(v, Enum):
         return v.value
+    if dataclasses.is_dataclass(v) and not isinstance(v, type):
+        # `tools.provider_coverage.PROVIDERS` es un dict de ProviderSpec.
+        # Se aplana a sus campos: un `repr()` de dataclass en el JSON sería
+        # ilegible y se rompería con cualquier cambio de formato de repr.
+        return {f.name: normalizar(getattr(v, f.name))
+                for f in dataclasses.fields(v)}
     if isinstance(v, pathlib.PurePath):
         return v.as_posix()
     if isinstance(v, (frozenset, set)):
@@ -137,7 +153,7 @@ def por_clave(registro) -> dict[tuple[str, str], dict]:
 # ═══ Forma del archivo ════════════════════════════════════════════════════
 
 def test_el_registro_existe_y_declara_su_esquema(registro):
-    assert registro["schema_version"] == "1.0.0"
+    assert registro["schema_version"] == "1.1.0"
     assert registro["actualizado"]
     assert isinstance(registro["constantes"], list)
 
@@ -149,7 +165,8 @@ def test_la_clave_modulo_mas_nombre_es_unica(registro, por_clave):
 
 
 @pytest.mark.parametrize("campo", ["nombre", "modulo", "categoria", "evidencia",
-                                   "fuente", "usado_en", "notas"])
+                                   "afecta_resultado", "fuente", "usado_en",
+                                   "notas"])
 def test_todas_las_entradas_traen_los_campos_obligatorios(registro, campo):
     faltan = [f'{e.get("modulo")}.{e.get("nombre")}'
               for e in registro["constantes"] if campo not in e]
@@ -247,16 +264,17 @@ def test_cobertura_toda_constante_del_codigo_esta_registrada(por_clave):
         + "\n  ".join(sin_registrar))
 
 
-def test_el_barrido_mira_los_cinco_paquetes_de_verdad():
+def test_el_barrido_mira_los_seis_paquetes_de_verdad():
     """Contraprueba: si `constantes_del_codigo()` devolviera un dict vacío
     por un error de rutas, el test de cobertura pasaría en verde sin haber
     mirado nada. Es el modo de falla silencioso de todo barrido."""
     halladas = constantes_del_codigo()
-    assert len(halladas) > 40, f"solo {len(halladas)} constantes halladas"
+    assert len(halladas) > 80, f"solo {len(halladas)} constantes halladas"
 
     modulos = {mod for mod, _ in halladas}
     for esperado in ("core.scoring", "ingestion.adapters",
-                     "governance.persistence", "orchestration.cycle"):
+                     "governance.persistence", "orchestration.cycle",
+                     "tools.measure_godel_samples"):
         assert esperado in modulos, f"{esperado} quedó fuera del barrido"
 
 
@@ -366,3 +384,113 @@ def test_el_registro_cubre_el_stream_config_que_estaba_vacio():
     assert stream_path(PersistenceStream.CONFIG) == "config/"
     assert (RAIZ / "config").is_dir()
     assert REGISTRO.is_file()
+
+
+# ═══ afecta_resultado: ortogonal a categoria ══════════════════════════════
+
+def test_afecta_resultado_es_booleano_en_todas(registro):
+    """Booleano de verdad, no un string "true". Un campo que a veces es bool
+    y a veces string se filtra por `if e["afecta_resultado"]` y el string
+    "false" evalúa a True."""
+    for e in registro["constantes"]:
+        assert isinstance(e["afecta_resultado"], bool), (
+            f'{e["modulo"]}.{e["nombre"]}: {e["afecta_resultado"]!r}')
+
+
+def test_hay_etiquetas_que_si_afectan_el_resultado(por_clave):
+    """EL PUNTO DEL CAMPO, y por qué no alcanzaba con `categoria`. Las cinco
+    de abajo son `etiqueta` -- son listas de identificadores, no magnitudes --
+    y cambiar cualquiera cambia qué eventos pasan el filtro, qué activos
+    corre el ciclo o qué símbolo se le pide al proveedor.
+
+    Sin este campo, un lector que filtrara por `categoria == "parametro"`
+    para saber qué tocar con cuidado se saltearía exactamente las que más
+    mueven el sistema."""
+    for modulo, nombre in [
+        ("core.scoring", "CORE_COUNTRY_FILTERS"),
+        ("core.scoring", "GOBIERNO_COUNTRY_FILTERS"),
+        ("core.scoring", "FX_GOBIERNO_ONLY_ASSETS"),
+        ("ingestion.adapters", "_DERIV_SYMBOL_MAP"),
+        ("orchestration.cycle", "DEFAULT_CYCLE_ASSETS"),
+    ]:
+        e = por_clave[(modulo, nombre)]
+        assert e["categoria"] == "etiqueta", f"{nombre} dejó de ser etiqueta"
+        assert e["afecta_resultado"] is True, f"{nombre} debería afectar"
+
+
+def test_lo_que_no_afecta_el_resultado_es_solo_texto(registro):
+    """La contracara: `afecta_resultado=False` tiene que ser excepcional y
+    justificable. Si esto crece, el campo dejó de discriminar."""
+    no_afectan = [f'{e["modulo"]}.{e["nombre"]}'
+                  for e in registro["constantes"] if not e["afecta_resultado"]]
+
+    assert len(no_afectan) <= 8, (
+        f"demasiadas constantes declaradas sin efecto ({len(no_afectan)}): "
+        f"{no_afectan}. El campo dejó de discriminar.")
+    assert "core.scoring.GODEL_CRITERIA_VERSION" in no_afectan, (
+        "el sello de criterio pasó a afectar el resultado: si ya existe la "
+        "comprobación que recalcula al detectar una versión vieja, "
+        "actualiza el registro")
+
+
+# ═══ Las dos derivadas de tools/, verificadas de verdad ═══════════════════
+
+def test_el_umbral_zscore_es_phi_inversa_del_percentil_de_la_mascara():
+    """RECALCULADO POR BISECCIÓN sobre la CDF normal, no comparado contra
+    una constante copiada. Si alguien mueve GODEL_MASK_PERCENTILE y no
+    actualiza el umbral del modo ZSCORE, el tool mide un percentil y
+    producción usa otro -- que es el defecto exacto que este repo ya tuvo
+    cuando el tool medía un P90 contra una máscara que operaba en P66.
+
+    Bisección y no `NormalDist.inv_cdf` a secas para que el test verifique
+    la RELACIÓN (Φ(x) = p) y no reproduzca la misma llamada que produciría
+    el valor -- si `inv_cdf` tuviera un bug, comparar contra sí misma no lo
+    vería."""
+    from statistics import NormalDist
+
+    from core.scoring import GODEL_MASK_PERCENTILE
+    from tools.measure_godel_samples import ZSCORE_UMBRAL_GLOBAL_DEFAULT
+
+    objetivo = GODEL_MASK_PERCENTILE / 100.0
+    cdf = NormalDist().cdf
+
+    bajo, alto = -10.0, 10.0
+    for _ in range(200):
+        medio = (bajo + alto) / 2.0
+        if cdf(medio) < objetivo:
+            bajo = medio
+        else:
+            alto = medio
+    z = (bajo + alto) / 2.0
+
+    assert abs(ZSCORE_UMBRAL_GLOBAL_DEFAULT - z) < 1e-9, (
+        f"ZSCORE_UMBRAL_GLOBAL_DEFAULT={ZSCORE_UMBRAL_GLOBAL_DEFAULT} pero "
+        f"Φ⁻¹({objetivo}) = {z}. ¿Cambió GODEL_MASK_PERCENTILE sin que se "
+        f"actualizara el umbral del modo ZSCORE?")
+    assert abs(cdf(ZSCORE_UMBRAL_GLOBAL_DEFAULT) - objetivo) < 1e-9
+
+
+def test_la_ventana_del_tool_es_LA_de_produccion_no_una_copia(por_clave):
+    """`ROLLING_WINDOW_DEFAULT` se importa de core.scoring en vez de repetir
+    el 252. `is` y no `==`: dos literales iguales pasarían un `==` y se
+    separarían silenciosamente en cuanto uno de los dos cambie."""
+    from core.scoring import GODEL_ROLLING_WINDOW_DAYS
+    from tools.measure_godel_samples import ROLLING_WINDOW_DEFAULT
+
+    assert ROLLING_WINDOW_DEFAULT is GODEL_ROLLING_WINDOW_DAYS
+
+    e = por_clave[("tools.measure_godel_samples", "ROLLING_WINDOW_DEFAULT")]
+    assert e["categoria"] == "derivada"
+    assert e["expresion"] == "core.scoring.GODEL_ROLLING_WINDOW_DAYS"
+
+
+def test_un_dict_de_dataclasses_se_aplana_por_campos(por_clave):
+    """`tools.provider_coverage.PROVIDERS`. La segunda extensión de la tabla
+    de normalización, y la encontró este mismo test al ampliarse a tools/."""
+    from tools.provider_coverage import PROVIDERS
+
+    e = por_clave[("tools.provider_coverage", "PROVIDERS")]
+    assert set(e["valor"]) == set(PROVIDERS)
+    for nombre, spec in PROVIDERS.items():
+        assert e["valor"][nombre]["secret_key"] == spec.secret_key
+        assert "ProviderSpec(" not in json.dumps(e["valor"][nombre])

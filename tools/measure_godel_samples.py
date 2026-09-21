@@ -73,6 +73,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from core.scoring import (  # noqa: E402
     GODEL_MASK_PERCENTILE,
+    GODEL_ROLLING_WINDOW_DAYS,
     compute_adaptive_percentile,
     compute_vitality_tesla,
     godel_active,
@@ -161,8 +162,13 @@ class PercentileMode:
         return (cls.ACUMULADO, cls.MOVIL, cls.ZSCORE)
 
 
-#: Ventana de los modos móviles. 252 = días hábiles de un año.
-ROLLING_WINDOW_DEFAULT = 252
+#: Ventana de los modos móviles. SE IMPORTA de producción en vez de repetir
+#: el 252: si `core.scoring` cambia la ventana y este tool no, el tool mide
+#: una ventana distinta de la que usa el motor y el reporte dice medir algo
+#: que no midió. Es el mismo razonamiento que ya gobierna
+#: GODEL_MASK_PERCENTILE, y el mismo defecto que este archivo evitó una vez
+#: cuando el tool medía un P90 contra una máscara que operaba en P66.
+ROLLING_WINDOW_DEFAULT = GODEL_ROLLING_WINDOW_DAYS
 
 #: Default global para el modo ZSCORE. El `--umbral-global-default` del usuario
 #: está en unidades de entropía y no sirve en espacio z, así que hace falta
