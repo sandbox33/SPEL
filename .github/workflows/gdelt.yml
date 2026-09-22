@@ -1,83 +1,104 @@
 # .github/workflows/gdelt.yml
 # ============================
-# Entry point de la ingesta GDELT. Construido sobre heartbeat.yml, que era
-# el ÚNICO andamiaje de `schedule:` probado del repo y quedó anotado como la
-# plantilla de este archivo en el PR #23 -- checkout, setup-python, install,
-# correr un entry point de negocio. Los otros dos workflows (tests.yml,
-# live-tests.yml) corren pytest, que es otra cosa.
+# Ingesta GDELT diaria. ESTE WORKFLOW ES EL ESCRITOR ÚNICO DE LA SERIE desde
+# el 21-sep-2026 (decision-log.md, enmienda a la Decisión #14). Drive dejó de
+# escribir, y ningún notebook vuelve a correr `run_gdelt --write`.
 #
-# Cierra de paso el comentario de tests.yml:13, que desde el patch 0011 daba
-# por existente `python ingestion/run_gdelt.py`. El script no existía: ese
-# hueco es lo que cerró la Incógnita #1 de ESTADO.md.
+# Hasta ese día este archivo decía "ESTE WORKFLOW NUNCA ESCRIBE", y el motivo
+# era correcto: `append_day()` es append puro y `read_series()` deduplica por
+# día, y ese par tolera duplicados pero NO divergencia. Con dos escritores
+# quedan dos series con días distintos y nada que las reconcilie. El motivo
+# sigue en pie; lo que cambió es cuál de los dos escritores se eliminó.
 #
-# ══ ESTE WORKFLOW NUNCA ESCRIBE. NO ES UN OLVIDO ══
+# ══ DÓNDE ESCRIBE ══
 #
-# Corre SIEMPRE en dry-run -- no se le pasa `--write` en ningún lado, y el
-# default del script también es dry-run, así que hacen falta dos errores
-# para que escriba. El escritor único de la serie sigue siendo Drive/Colab.
+# En la rama huérfana `data`, nunca en main. Hay dos checkouts: el código
+# (la rama que disparó el workflow; en el cron, la default) y `data` en
+# ./data-store. `SPEL_DRIVE_ROOT` apunta a ./data-store, y `drive_root()` lo
+# resuelve primero -- así `append_day()` y `read_series()` escriben y leen
+# ahí sin una línea de código nueva. Ver el README de la rama `data`.
 #
-# EL MOTIVO: `append_day()` es append puro y `read_series()` deduplica por
-# día. Ese par tolera duplicados pero NO divergencia -- con CI escribiendo
-# en git y Colab escribiendo en Drive quedan dos series con días distintos y
-# nada que las reconcilie. Y CI no puede ser el escritor único: Colab bajó
-# 640 días en 17 minutos, y a `--max-days 10` eso son 64 corridas de Actions.
+# ══ SIN RECURSIÓN ══
 #
-# CUANDO CI SÍ NECESITE ESCRIBIR, la vía es una rama `data/gdelt-series` con
-# CI como escritor único y Colab leyendo de ahí. Exige entrada en
-# decision-log.md antes de existir en el código: mueve el stream METRICS,
-# declarado en governance/persistence.py como stream de Drive y "NO
-# versionado en git", a git para un caso particular.
+# Los pushes hechos con GITHUB_TOKEN NO disparan workflows: es una regla de
+# GitHub, no de este archivo. Y aunque la regla cambiara, tests.yml solo
+# escucha `main` y este archivo no tiene trigger de push. Un commit en
+# `data` no corre nada.
 #
-# ══ QUÉ PRUEBA ENTONCES, QUE NO ES NADA ══
+# ══ LA ORDEN DE ARRANQUE ══
 #
-# La cadena entera hasta un paso antes de escribir: descarga REAL de GDELT,
-# unzip, parseo de las 57 columnas, aggregate_day(), y el conteo de lo que
-# escribiría. Si la descarga falla o el formato de GDELT cambia, el script
-# sale 1 y este job se pone ROJO. Es a propósito que pueda ponerse rojo: un
-# chequeo que nunca falla no es un chequeo.
+# El cron queda activo al fusionar. Si dispara antes de que la siembra de
+# BTC y XAU esté subida a `data`, `--exigir-serie BTC XAU` hace que salga
+# verde sin bajar ni escribir nada. Sin eso, arrancaría esas dos series por
+# los últimos 10 días y fijaría la marca de inicio ahí, con la siembra
+# llegando después por debajo. Secuencia prevista: fusionar, sembrar,
+# `modo: verificar_siembra`, `modo: ingesta`, y el cron sigue solo.
 #
-# LO QUE NO PRUEBA, dicho acá para que nadie lo lea al revés en el log: el
-# GAP no se puede medir desde Actions. Medirlo exige leer la serie, y
-# drive_root() cae acá al fallback local (.spel_drive_stream), que en un
-# runner recién clonado no existe. Todos los activos van a salir SIN_SERIE
-# y el reporte va a decir "gap NO MEDIDO" -- que no es "gap 0". El monitor
-# de frescura es el mismo script corrido en Colab.
+# ══ `--since` ══
 #
-# ══ EL `schedule:` QUEDA COMENTADO ══
+# El cron NUNCA lo pasa. Un dispatch puede, y con escritura REESCRIBE los
+# días que ya estaban: `read_series()` se queda con la última fila. El
+# script lo avisa en el log.
 #
-# Se activa en un segundo paso, después de una corrida manual exitosa. Hoy
-# nadie confirmó todavía que la descarga funcione desde un runner: este
-# sandbox no tiene data.gdeltproject.org en su whitelist (CONNECT devuelve
-# 403), así que el arreglo de HTTPS de ingestion/gdelt.py está probado
-# contra httpx.MockTransport, no contra la red real. La primera corrida
-# manual de este workflow es lo que lo confirma end-to-end.
+# ══ LÍMITE CONOCIDO ══
 #
-# El cron propuesto es diario, no cada 15 min: GDELT publica UN archivo por
-# día. Correrlo más seguido baja el mismo archivo otra vez.
-#
-# CÓMO ACTIVARLO: descomentar el bloque `schedule:`. Nada más cambia.
+# GitHub desactiva los `schedule:` de un repo sin actividad durante ~60 días,
+# y los commits del bot a `data` pueden no contar como actividad. Ver
+# decision-log.md: la mitigación es la actividad de PRs en main y el
+# `dias_de_retraso` que reporta la alarma.
 
 name: SPEL GDELT
 
 on:
-  # schedule:
-  #   - cron: "30 6 * * *"   # desactivado -- ver nota arriba
+  # Diario: GDELT publica UN archivo por día. 06:30 UTC, y si a esa hora
+  # todavía no publicó el de ayer, el día se escribe vacío y la corrida de
+  # mañana lo reintenta (ver ingestion/run_gdelt.py, reconciliación).
+  schedule:
+    - cron: "30 6 * * *"
   workflow_dispatch:
     inputs:
+      modo:
+        description: "ingesta: baja y escribe en `data`. verificar_siembra: compara BTC/XAU sembrados contra la serie medida, sin escribir."
+        type: choice
+        options: [ingesta, verificar_siembra]
+        default: ingesta
       max_days:
-        description: "Días por corrida (default 10; GDELT tarda ~3 s por día)"
+        description: "Días por corrida. Vacío = DEFAULT_MAX_DAYS de ingestion/run_gdelt.py"
         required: false
-        default: "10"
+        default: ""
       since:
-        description: "Fecha ISO desde la cual bajar (opcional, ignora last_day)"
+        description: "Fecha ISO desde la cual bajar. REESCRIBE los días existentes (gana la última fila). El cron nunca lo usa."
         required: false
         default: ""
 
+# Una sola corrida a la vez sobre `data`, y SIN cancelar la que está en
+# curso: cancelarla a mitad de un push dejaría días escritos en el runner y
+# no en la rama. La que llega espera.
+concurrency:
+  group: gdelt-data
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
 jobs:
-  gdelt:
+  ingesta:
+    if: github.event_name == 'schedule' || inputs.modo == 'ingesta'
     runs-on: ubuntu-latest
+    # El único job con escritura. La verificación no la necesita.
+    permissions:
+      contents: write
+    env:
+      SPEL_DRIVE_ROOT: ${{ github.workspace }}/data-store
     steps:
       - uses: actions/checkout@v4
+
+      - name: Checkout de la rama data
+        uses: actions/checkout@v4
+        with:
+          ref: data
+          path: data-store
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -86,20 +107,86 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      # Sin --write, y el default del script también es dry-run. Ver arriba.
-      #
       # Los inputs entran por `env:`, NO interpolados dentro del `run:`. Un
       # `${{ inputs.x }}` pegado en la línea de comando se expande ANTES de
       # que exista un shell, así que un input con `;` o backticks ejecuta lo
       # que quiera. Pasarlos como variables de entorno los deja como datos.
-      # Acá solo puede dispararlo quien tenga permiso de escritura en el
-      # repo, así que no es un agujero abierto -- es que la forma segura
-      # cuesta lo mismo.
-      - name: Ingesta GDELT (dry-run -- prueba de cadena, no escribe)
+      #
+      # `continue-on-error`: si la cadena se rompe a mitad de corrida, los
+      # días ya escritos se commitean igual (la ingesta es reanudable) y el
+      # job se pone rojo al final, en "Resultado".
+      - name: Ingesta GDELT (escribe en data-store)
+        id: ingesta
+        continue-on-error: true
         env:
-          MAX_DAYS: ${{ inputs.max_days || '10' }}
+          MAX_DAYS: ${{ inputs.max_days }}
           SINCE: ${{ inputs.since }}
         run: |
-          args=(--max-days "$MAX_DAYS")
+          args=(--write --exigir-serie BTC XAU)
+          if [ -n "$MAX_DAYS" ]; then args+=(--max-days "$MAX_DAYS"); fi
           if [ -n "$SINCE" ]; then args+=(--since "$SINCE"); fi
           python ingestion/run_gdelt.py "${args[@]}"
+
+      # Commit SOLO si hay cambios. El mensaje lleva cuántos días sumó cada
+      # activo (una línea por día escrito, incluidos los reintentos que se
+      # curaron). Se cuentan agregadas MENOS borradas: si la siembra llegó sin
+      # salto final, append_day() se lo agrega y git ve la última línea
+      # sembrada como borrada y vuelta a agregar -- sin la resta, el primer
+      # commit diría un día de más. `pull --rebase` antes del push, con un reintento: la
+      # concurrencia ya serializa las corridas, y lo único que puede meterse
+      # en el medio es un commit a mano en `data`.
+      - name: Commit a data
+        working-directory: data-store
+        run: |
+          git add -A metrics
+          if git diff --cached --quiet; then
+            echo "Sin cambios: no hay nada que commitear."
+            exit 0
+          fi
+          resumen=$(git diff --cached --numstat -- metrics/gdelt_series \
+            | awk '{n=$3; sub(".*/", "", n); sub("\\.jsonl$", "", n); printf "%s +%s, ", n, $1 - $2}' \
+            | sed 's/, $//')
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "ingesta GDELT $(date -u +%F): ${resumen:-solo la marca de inicio}" \
+            -m "Corrida ${{ github.run_id }} de ${{ github.workflow }} (${{ github.event_name }})."
+          for intento in 1 2; do
+            git pull --rebase -q origin data && git push -q origin HEAD:data && exit 0
+            echo "Push rechazado (intento $intento)."
+          done
+          exit 1
+
+      # Después del commit, a propósito: una alarma roja no puede impedir que
+      # se guarden los días que sí se bajaron.
+      - name: Alarma de frescura
+        run: python ingestion/frescura.py
+
+      - name: Resultado de la ingesta
+        if: steps.ingesta.outcome == 'failure'
+        run: |
+          echo "La cadena de ingesta se rompió (ver el paso 'Ingesta GDELT'). Lo que se alcanzó a escribir quedó commiteado."
+          exit 1
+
+  verificar_siembra:
+    if: github.event_name == 'workflow_dispatch' && inputs.modo == 'verificar_siembra'
+    runs-on: ubuntu-latest
+    env:
+      SPEL_DRIVE_ROOT: ${{ github.workspace }}/data-store
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout de la rama data
+        uses: actions/checkout@v4
+        with:
+          ref: data
+          path: data-store
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Verificar la siembra (read-only)
+        run: python tools/verificar_siembra.py
