@@ -43,9 +43,10 @@
 # ══ LÍMITE CONOCIDO ══
 #
 # GitHub desactiva los `schedule:` de un repo sin actividad durante ~60 días,
-# y los commits del bot a `data` pueden no contar como actividad. Ver
-# decision-log.md: la mitigación es la actividad de PRs en main y el
-# `dias_de_retraso` que reporta la alarma.
+# y los commits del bot a `data` pueden no contar como actividad. La alarma
+# de frescura de abajo NO lo puede detectar: se apaga junto con este
+# workflow. Ver decision-log.md: la mitigación es la actividad de PRs en main
+# y el `dias_de_retraso` de ingestion/frescura.py leído desde FUERA de acá.
 
 name: SPEL GDELT
 
