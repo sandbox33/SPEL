@@ -97,7 +97,10 @@ corridas seguidas sin intermitencia.
 | `core/price_signals.py` | te_score (proxy TE) + backbone_score (EMA20/63) — **sin poder predictivo demostrado**, ver decision-log 6-sep | 12 | ⚠️ |
 | `ingestion/adapters.py` | DerivAdapter + TwelveDataAdapter + contrato de datos | 65 + 29 | ✅ |
 | `ingestion/sources.py` | **Punto de composición** — `build_price_sources()`; `SourceInventory` distingue capacidad ausente de error | 11 | ✅ |
-| `ingestion/gdelt.py` + `_aggregation` + `_series` | Pipeline GDELT completo, persistencia JSONL | 41 | ✅ |
+| `ingestion/gdelt.py` + `_aggregation` + `_series` | Pipeline GDELT completo, persistencia JSONL | 14 + 15 + 18 | ✅ |
+| `ingestion/run_gdelt.py` + `.github/workflows/gdelt.yml` | Ingesta diaria; CI escritor único en la rama `data`; reintenta los días que GDELT no había publicado | 59 + 12 | ✅ código, 🟡 primera corrida real pendiente de la siembra |
+| `ingestion/frescura.py` | Alarma de la serie: rojo solo por hueco interno posterior a la marca de inicio | 18 | ✅ |
+| `tools/verificar_siembra.py` | Compara BTC/XAU sembrados contra la serie medida | 14 | ✅ código, 🟡 no corrido contra la siembra real |
 | `ingestion/source_registry.py` | Registro versionado de cobertura por fuente | 34 | ✅ |
 | `tools/measure_godel_samples.py` | Mide el `n` post-máscara | 75 | ✅ |
 | `tools/provider_coverage.py` + `import_gdelt_entropy.py` + `audit_data_lake.py` | Inventario de proveedores, import histórico de entropía, auditoría del lake | 58 + 36 + 32 | ✅ |
