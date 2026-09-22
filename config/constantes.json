@@ -1630,6 +1630,33 @@
         "tools.provider_coverage.probe_twelvedata"
       ],
       "notas": ""
+    },
+    {
+      "nombre": "CIFRAS_SIEMBRA",
+      "modulo": "tools.verificar_siembra",
+      "categoria": "parametro",
+      "valor": {
+        "BTC": {
+          "filas": 4880,
+          "validos": 4880,
+          "primer_dia": "2013-04-01",
+          "ultimo_dia": "2026-09-03"
+        },
+        "XAU": {
+          "filas": 4879,
+          "validos": 4879,
+          "primer_dia": "2013-04-01",
+          "ultimo_dia": "2026-09-03"
+        }
+      },
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Medición del 19-sep-2026 sobre la serie de Drive (tools/calibrar_umbral_entropia.py: n = 4.880 BTC, 4.879 XAU días con entropía); rango y filas del Brief D v2 del 21-sep-2026. Cierran contra el calendario: 4.904 días, 24 y 25 huecos.",
+      "usado_en": [
+        "tools.verificar_siembra.verificar_activo",
+        "tools.verificar_siembra.main"
+      ],
+      "notas": "Se comparan dentro del rango sembrado, no sobre el archivo entero: los días que CI agrega después no ponen la verificación en rojo."
     }
   ]
 }
