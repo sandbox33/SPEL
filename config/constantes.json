@@ -1,6 +1,6 @@
 {
   "schema_version": "1.1.0",
-  "actualizado": "2026-09-20",
+  "actualizado": "2026-09-22",
   "constantes": [
     {
       "nombre": "EPSILON_BREAKEVEN",
@@ -669,6 +669,19 @@
         "tools.provider_coverage"
       ],
       "notas": ""
+    },
+    {
+      "nombre": "MARCA_INICIO_ARCHIVO",
+      "modulo": "ingestion.frescura",
+      "categoria": "etiqueta",
+      "valor": "ingesta_automatica.json",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief D v2 (21-sep-2026): la rama `data` lleva metrics/ingesta_automatica.json con {\"desde\": ...}. Es el día desde el cual CI es responsable de la serie.",
+      "usado_en": [
+        "ingestion.frescura.ruta_marca"
+      ],
+      "notas": "Renombrarla sin mover el archivo deja a la alarma sin marca: evalúa nada y nunca pone rojo. Por eso afecta_resultado."
     },
     {
       "nombre": "DOWNLOAD_TIMEOUT_S",
