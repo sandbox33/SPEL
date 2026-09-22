@@ -40,7 +40,11 @@ anterior a que el activo exista no es un hueco de ese activo.
   · ROJO (exit 1) -- un HUECO INTERNO dentro del rango: el día X está
     ausente o vacío y sin embargo un día posterior ya se bajó con datos. Si
     GDELT publicó el X+1, publicó el X; que falte es una falla real, y la
-    corrida siguiente no lo arregla porque `last_day()` ya pasó de largo.
+    ingesta normal no vuelve a él porque `last_day()` ya pasó de largo. Si
+    el día está vacío en TODOS los activos, la reconciliación de
+    `run_gdelt` lo reintenta en cada corrida y el rojo se apaga solo si
+    GDELT termina publicándolo. Si falta la fila entera, nada lo reintenta.
+    En los dos casos, un rojo que sigue es un día que hay que mirar.
   · VERDE CON AVISO -- el día pendiente está en la PUNTA: es GDELT que
     todavía no publicó a las 06:30 UTC. La corrida siguiente lo reintenta.
     Sin esta distinción el job se pone rojo casi a diario y la alarma se
@@ -235,8 +239,10 @@ def evaluar_activo(
             asset, Nivel.ROJO, ultimo, retraso, internos, punta,
             motivo=(f"día(s) vacío(s) o ausente(s) con datos posteriores ya "
                     f"bajados: {', '.join(d.isoformat() for d in internos[:5])}"
-                    f"{' …' if len(internos) > 5 else ''}. No se cura solo: "
-                    f"last_day() ya pasó de largo."))
+                    f"{' …' if len(internos) > 5 else ''}. last_day() ya pasó "
+                    f"de largo: si el día está vacío en todos los activos, la "
+                    f"reconciliación lo reintenta en cada corrida; si falta la "
+                    f"fila, nada lo vuelve a pedir. Si el rojo sigue, mirarlo."))
     if punta or retraso:
         partes = []
         if punta:
