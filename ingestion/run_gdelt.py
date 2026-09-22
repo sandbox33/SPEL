@@ -72,53 +72,55 @@ una vez y se agrega N veces. No es una optimización prematura: con
 `--max-days 10` y 5 activos son 10 descargas en vez de 50, y el techo de
 tiempo de un job de Actions es real.
 
-══ EN CI NO ESCRIBE. DECISIÓN DE CONTRATO, NO UN OLVIDO ══
+══ CI ES EL ESCRITOR ÚNICO. DESDE EL 21-SEP-2026 ══
 
-`.github/workflows/gdelt.yml` corre este script SIEMPRE en dry-run. El
-escritor único de la serie sigue siendo Drive/Colab.
+`.github/workflows/gdelt.yml` corre este script con `--write` todos los
+días, apuntando `SPEL_DRIVE_ROOT` a un checkout de la rama huérfana `data`,
+y commitea ahí lo que escribió. Drive dejó de ser escritor, y NINGÚN
+notebook vuelve a correr `run_gdelt --write`. Ver `decision-log.md`
+(enmienda a la Decisión #14).
 
-EL MOTIVO, que es el que manda: `append_day()` es append puro y
-`read_series()` deduplica por día. Ese par tolera DUPLICADOS pero no
-DIVERGENCIA -- si CI escribiera en el repo y Colab en Drive, quedarían dos
-series con días distintos y nada que las reconcilie. La deduplicación por
-día no sirve de nada cuando los días no son los mismos.
+EL MOTIVO, que es el mismo que antes impedía que CI escribiera:
+`append_day()` es append puro y `read_series()` deduplica por día. Ese par
+tolera DUPLICADOS pero no DIVERGENCIA -- con dos escritores quedarían dos
+series con días distintos y nada que las reconcilie. Antes se resolvía
+dejando a Drive como único escritor; ahora se resuelve dejando a CI. Lo que
+no cambia es que haya UNO.
 
-Y el escritor único no puede ser CI: Colab bajó 640 días en 17 minutos; con
-`--max-days 10` eso son 64 corridas de Actions.
+Lo que antes lo impedía -- Colab bajó 640 días en 17 minutos, y con
+`--max-days 10` eso eran 64 corridas de Actions -- ya no aplica: la
+historia llega sembrada a mano en la rama `data` (subir un archivo por la
+web no es escribir código), y CI solo cierra el gap desde ahí. Con el cron
+diario, el gap de régimen es de un día.
 
-QUÉ HACE EL WORKFLOW ENTONCES, que no es nada:
+LO QUE ESTE SCRIPT SIGUE HACIENDO EN DRY-RUN, que es el default:
 
   1. MIDE EL GAP. Reporta, por activo, cuántos días faltan entre
-     `last_day(asset)` y el último día publicado. Si el gap crece corrida a
-     corrida, es que nadie corrió Colab. Eso convierte al script en un
-     monitor de frescura de la serie, que es un rol real y que hoy no tiene
-     nadie.
+     `last_day(asset)` y el último día publicado.
   2. PRUEBA LA CADENA ENTERA HASTA UN PASO ANTES DE ESCRIBIR. Descarga real
      de GDELT, unzip, parseo de las 57 columnas, `aggregate_day()`, y el
      conteo de lo que escribiría. Si la descarga falla o el formato cambia,
-     el script sale != 0 y el workflow se pone rojo. Un dry-run que no baja
-     nada no prueba nada; este baja de verdad.
+     el script sale != 0 y el workflow se pone rojo.
 
-  LOS DOS ROLES NO CORREN EN EL MISMO LADO, y conviene decirlo antes de que
-  alguien lea el log de Actions y saque la conclusión contraria: el gap se
-  mide leyendo la serie, y en Actions `drive_root()` cae al fallback local
-  (`.spel_drive_stream`, que no existe en un runner recién clonado). O sea
-  **en CI el gap no se puede medir**: todos los activos salen SIN_SERIE.
-  Eso NO es un gap de cero y el reporte lo imprime distinto a propósito
-  ("gap NO MEDIDO", nunca "0"). En CI este script es el punto 2; el punto 1
-  es lo que da correr el MISMO script en Colab, donde la serie sí está
-  montada. Es una limitación de la opción elegida, no un defecto del
-  reporte -- y desaparece sola el día que se tome el destino de abajo.
+  Sin `SPEL_DRIVE_ROOT` apuntando a la serie, `drive_root()` cae al fallback
+  local (`.spel_drive_stream`, que no existe en un clon recién hecho) y
+  todos los activos salen SIN_SERIE. Eso NO es un gap de cero y el reporte
+  lo imprime distinto a propósito ("gap NO MEDIDO", nunca "0").
 
-DESTINO, PARA CUANDO CI SÍ NECESITE ESCRIBIR: la vía es una rama
-`data/gdelt-series` con CI como escritor ÚNICO -- Colab pasa a leer de ahí
-en vez de escribir en Drive. Es lo único que resuelve la divergencia de
-raíz, porque la resuelve eliminando el segundo escritor en vez de intentar
-reconciliar dos. NO se hace en este patch y NO se hace sin una entrada en
-`decision-log.md`: mueve el stream METRICS (declarado en
-`governance/persistence.py` como stream de Drive, "NO versionado en git") a
-git para un caso particular, y esa contradicción tiene que quedar escrita
-antes de existir en el código, no después.
+══ DÍAS QUE GDELT TODAVÍA NO HABÍA PUBLICADO ══
+
+Si GDELT publica el día anterior después de las 06:30 UTC, el cron lo
+escribe vacío (404) y `last_day()` avanza. Antes de avanzar, cada corrida
+vuelve a pedir esos días -- ver `run_ingesta` y `ingestion/frescura.py`,
+que define cuándo un día cuenta como no publicado. Un día vacío SOLO en
+EURUSD no se reintenta: eso es su filtro, no GDELT.
+
+══ `--since` REESCRIBE ══
+
+El cron nunca lo pasa. Un `workflow_dispatch` puede, y con `--write` los
+días que ya estaban en la serie se vuelven a escribir: `read_series()` se
+queda con la última fila, así que el reproceso GANA. El script lo avisa en
+el log; no es un error, es la semántica de la serie.
 
 ══ LOS CÓDIGOS DE SALIDA DICEN COSAS DISTINTAS ══
 
@@ -133,12 +135,19 @@ antes de existir en el código, no después.
   2  Fallo de invocación (activo desconocido, flags contradictorios) --
      misma convención que tools/measure_godel_samples.py y heartbeat.py.
 
+`--exigir-serie BTC XAU` sale 0 SIN BAJAR NADA si alguno de esos activos no
+tiene serie todavía. Es la guarda contra una carrera concreta: el cron queda
+activo al fusionar, y si dispara antes de que la siembra esté subida,
+empezaría BTC y XAU desde los últimos 10 días -- y la marca de inicio
+quedaría fijada ahí, con la siembra llegando después por debajo.
+
 Uso:
     python ingestion/run_gdelt.py                      # dry-run (default)
     python ingestion/run_gdelt.py --max-days 3
     python ingestion/run_gdelt.py --assets BTC XAU
     python ingestion/run_gdelt.py --since 2026-09-01   # días explícitos
     python ingestion/run_gdelt.py --write              # escribe de verdad
+    python ingestion/run_gdelt.py --write --exigir-serie BTC XAU   # lo de CI
 """
 
 from __future__ import annotations
@@ -169,6 +178,12 @@ from ingestion.gdelt_aggregation import (  # noqa: E402
     MIN_EVENTS_FOR_VALID_DAY,
     DailyAggregationResult,
     aggregate_day,
+)
+from ingestion.frescura import (  # noqa: E402
+    dias_no_publicados,
+    indexar,
+    leer_marca_de_inicio,
+    registrar_inicio_si_falta,
 )
 from ingestion.gdelt_series import append_day, last_day  # noqa: E402
 from orchestration.cycle import DEFAULT_CYCLE_ASSETS  # noqa: E402
@@ -230,6 +245,14 @@ class RunReport:
     downloads: int = 0
     assets: list[AssetRun] = field(default_factory=list)
     chain_error: Optional[str] = None
+    #: Reconciliación de días que GDELT no había publicado (ver
+    #: `run_ingesta`). Se cuentan DÍAS, no filas: un día reintentado vale
+    #: para todos los activos a la vez porque sale del mismo archivo.
+    reintentos_pedidos: int = 0
+    reintentos_curados: int = 0
+    reintentos_siguen_vacios: int = 0
+    #: La marca de inicio de la automatización, si esta corrida la fijó.
+    marca_fijada: Optional[str] = None
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -264,8 +287,8 @@ def planificar_asset(
 
     SERIE VACÍA: no hay `last_day()` del cual ser incremental, así que no se
     inventa un origen. Se toma la ventana de `max_days` días más recientes
-    y se marca SIN_SERIE en el reporte -- para una carga histórica está
-    `--since`, y para eso está Colab, que baja 640 días en 17 minutos.
+    y se marca SIN_SERIE en el reporte. Una carga histórica no se hace desde
+    acá: se siembra el archivo en la rama `data` (ver `--exigir-serie`).
     """
     tope = ultimo_dia_disponible(hoy)
     ultimo = last_day(asset)
@@ -283,8 +306,8 @@ def planificar_asset(
         run = AssetRun(asset=asset, status="SIN_SERIE")
         run.notes.append(
             f"No hay serie para {asset}: no hay last_day() del cual ser "
-            f"incremental. Se toman los últimos {max_days} día(s) para probar "
-            f"la cadena; la carga histórica va por Colab o por --since.")
+            f"incremental. Se toman los últimos {max_days} día(s); la carga "
+            f"histórica va por siembra en la rama `data`, no por acá.")
     else:
         desde = ultimo + timedelta(days=1)
         run = AssetRun(asset=asset, status="CON_GAP", last_day=str(ultimo),
@@ -353,18 +376,62 @@ async def run_ingesta(
                        max_days=max_days,
                        series_root=stream_path(PersistenceStream.METRICS))
 
+    # ── RECONCILIACIÓN: los días que GDELT no había publicado ─────────────
+    # El cron corre a las 06:30 UTC y GDELT a veces publica el día anterior
+    # más tarde. Ese día se escribe vacío (404) y `last_day()` avanza igual:
+    # sin esto, cada publicación tardía dejaría un agujero PERMANENTE. Antes
+    # de avanzar, se vuelven a pedir.
+    #
+    # Cuáles: los de `frescura.dias_no_publicados` -- todos los activos en
+    # cero y al menos uno CORE --, solo desde la marca de inicio (lo que CI
+    # escribió; la historia heredada es deuda, no se toca) y solo sin
+    # `--since`, que es reproceso explícito de un humano.
+    #
+    # CONSUMEN EL MISMO PRESUPUESTO de `max_days`: no se agrega ninguna
+    # constante. Un día que GDELT nunca publique va a costar una descarga por
+    # corrida para siempre -- y va a dejar la alarma en rojo en cuanto haya
+    # un día posterior con datos, que es el aviso de que hace falta mirarlo.
+    desde_ci = leer_marca_de_inicio()
+    reintentos: list[date] = []
+    indice = {}
+    if desde_ci is not None and since is None:
+        indice = indexar(assets)
+        reintentos = sorted(dias_no_publicados(indice, desde=desde_ci, hasta=tope))
+
     planes: dict[str, list[date]] = {}
+    reintentos_de: dict[str, list[date]] = {}
     for asset in assets:
         run, dias = planificar_asset(asset, hoy=hoy, max_days=max_days, since=since)
+        propios = [d for d in reintentos if d in indice.get(asset, {})][:max_days]
+        restante = max_days - len(propios)
+        if len(dias) > restante:
+            dias = dias[:restante]
+            run.days_planned = len(dias)
+            run.first_planned = str(dias[0]) if dias else None
+            run.last_planned = str(dias[-1]) if dias else None
+        if propios:
+            run.notes.append(
+                f"{len(propios)} día(s) que GDELT no había publicado se vuelven a "
+                f"pedir antes de avanzar; consumen el mismo presupuesto de "
+                f"--max-days ({max_days}).")
         report.assets.append(run)
         planes[asset] = dias
+        reintentos_de[asset] = propios
 
-    por_dia: dict[date, list[str]] = {}
+    #: {día: [(activo, es_reintento)]}. Un día se baja UNA vez aunque sea
+    #: reintento para unos activos y día nuevo para otros.
+    por_dia: dict[date, list[tuple[str, bool]]] = {}
     for asset, dias in planes.items():
         for dia in dias:
-            por_dia.setdefault(dia, []).append(asset)
+            por_dia.setdefault(dia, []).append((asset, False))
+    for asset, dias in reintentos_de.items():
+        for dia in dias:
+            por_dia.setdefault(dia, []).append((asset, True))
 
     runs = {r.asset: r for r in report.assets}
+    dias_reintentados = {d for ds in reintentos_de.values() for d in ds}
+    report.reintentos_pedidos = len(dias_reintentados)
+    primer_dia_nuevo_escrito: Optional[date] = None
 
     for i, dia in enumerate(sorted(por_dia)):
         if i and pausa_s:
@@ -379,12 +446,34 @@ async def run_ingesta(
         report.downloads += 1
         eventos = resultado.events
 
-        for asset in por_dia[dia]:
+        if dia in dias_reintentados:
+            if resultado.no_data:
+                report.reintentos_siguen_vacios += 1
+            else:
+                report.reintentos_curados += 1
+
+        for asset, es_reintento in por_dia[dia]:
+            if es_reintento and resultado.no_data:
+                # Sigue sin publicarse: NO se vuelve a escribir la fila vacía.
+                # Ya está en la serie, y reescribirla haría crecer el archivo
+                # una línea por activo por corrida sin agregar información.
+                continue
             fila = aggregate_day(eventos, asset, dia)
             _contabilizar(runs[asset], fila, resultado.no_data)
             if write:
                 append_day(fila)
                 runs[asset].days_written += 1
+                if not es_reintento and (primer_dia_nuevo_escrito is None
+                                         or dia < primer_dia_nuevo_escrito):
+                    primer_dia_nuevo_escrito = dia
+
+    # La marca de inicio se fija con el PRIMER día que escribió CI, una sola
+    # vez. No se conoce antes: por eso la rama `data` nace con
+    # `{"desde": null}`. Ver ingestion/frescura.py. (En dry-run
+    # `primer_dia_nuevo_escrito` queda en None: solo se asigna al escribir.)
+    if primer_dia_nuevo_escrito is not None:
+        if registrar_inicio_si_falta(primer_dia_nuevo_escrito):
+            report.marca_fijada = str(primer_dia_nuevo_escrito)
 
     for run in report.assets:
         if run.days_planned and run.status not in ("AL_DIA",):
@@ -462,14 +551,21 @@ def render_text(report: RunReport) -> str:
     if sin_medir:
         out.append(f"  Sin gap medible ({len(sin_medir)}): "
                    f"{', '.join(r.asset for r in sin_medir)} — no hay serie "
-                   f"que leer en {report.series_root}. Es lo ESPERADO en "
-                   f"GitHub Actions, que no tiene Drive montado: ahí este "
-                   f"script es la prueba de cadena, y el monitor de gap es lo "
-                   f"que da correrlo en Colab. No es un gap de cero.")
+                   f"que leer en {report.series_root}. Si SPEL_DRIVE_ROOT no "
+                   f"apunta a un checkout de la rama `data`, es lo esperado. "
+                   f"No es un gap de cero.")
+    if report.reintentos_pedidos:
+        out.append(f"RECONCILIACIÓN: {report.reintentos_pedidos} día(s) que "
+                   f"GDELT no había publicado se volvieron a pedir — "
+                   f"curados: {report.reintentos_curados}, siguen vacíos: "
+                   f"{report.reintentos_siguen_vacios}.")
+    if report.marca_fijada:
+        out.append(f"MARCA DE INICIO fijada en {report.marca_fijada}: la "
+                   f"alarma de frescura evalúa desde ese día. No se mueve más.")
     if not report.write:
-        out.append("  El gap NO se cerró: este script no escribe sin --write, "
-                   "y en CI no se le pasa (ver el docstring del módulo). Si el "
-                   "gap crece corrida a corrida, es que nadie corrió Colab.")
+        out.append("  El gap NO se cerró: sin --write este script no escribe. "
+                   "El escritor único de la serie es el workflow gdelt.yml, "
+                   "sobre la rama `data` (ver el docstring del módulo).")
     if report.chain_error:
         out.append("")
         out.append(f"ERROR DE CADENA: {report.chain_error}")
@@ -510,9 +606,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--write", action="store_true",
-        help="Escribe de verdad con append_day(). En CI NO se usa: el "
-             "escritor único de la serie es Drive/Colab (ver el docstring "
-             "del módulo).",
+        help="Escribe de verdad con append_day(). Lo usa SOLO el workflow "
+             "gdelt.yml, escritor único de la serie en la rama `data`. "
+             "Ningún notebook lo corre (ver el docstring del módulo).",
+    )
+    p.add_argument(
+        "--exigir-serie", nargs="+", default=None, metavar="ASSET",
+        help="Si alguno de estos activos no tiene serie, sale 0 sin bajar "
+             "nada. Guarda contra un cron que dispara antes de la siembra.",
     )
     p.add_argument("--format", choices=("text", "json"), default="text")
     return p
@@ -543,6 +644,22 @@ def main(argv: Optional[Sequence[str]] = None, *, hoy: Optional[date] = None) ->
             print(f"ERROR: --since no es una fecha ISO válida: {args.since!r}",
                   file=sys.stderr)
             return 2
+
+    if args.exigir_serie:
+        sin_serie = [a for a in args.exigir_serie if last_day(a) is None]
+        if sin_serie:
+            print(f"SIEMBRA PENDIENTE: {', '.join(sin_serie)} sin serie en "
+                  f"{stream_path(PersistenceStream.METRICS)}. No se baja ni "
+                  f"se escribe nada hasta que la siembra esté subida a la "
+                  f"rama `data`. No es un error.")
+            return 0
+
+    if since is not None and args.write:
+        # No es un error: es la semántica de la serie. Pero tiene que quedar
+        # en el log de la corrida, porque cambia días que ya estaban.
+        print(f"AVISO: --since {since} con --write REESCRIBE los días que ya "
+              f"estaban en la serie. read_series() se queda con la última "
+              f"fila escrita: el reproceso gana.", file=sys.stderr)
 
     report = asyncio.run(run_ingesta(
         args.assets, hoy=hoy or date.today(), max_days=args.max_days,
