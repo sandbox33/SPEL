@@ -1,0 +1,5 @@
+# Las series se leen y se escriben byte a byte. Git no normaliza finales de
+# línea en ellas: un archivo sembrado desde la web o desde Windows queda
+# exactamente como se subió, y el sha256 que imprime
+# tools/verificar_siembra.py se puede cotejar contra el original.
+*.jsonl -text
