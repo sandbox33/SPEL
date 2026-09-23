@@ -6,7 +6,7 @@ directorio no existía. Esto es su primer contenido.
 
 ## `constantes.json` — qué es
 
-El registro de **las 97 constantes de módulo** de `core/`, `ingestion/`,
+El registro de **las 99 constantes de módulo** de `core/`, `ingestion/`,
 `orchestration/`, `governance/`, `execution/` y `tools/`. Una entrada por
 constante, con su valor, de dónde salió, qué tan sostenido está ese valor, y
 si cambiarlo cambia algo.
@@ -53,7 +53,7 @@ activos corre el ciclo o qué instrumento se le pide al proveedor.
 saber qué tocar con cuidado se saltearía exactamente las que más mueven el
 sistema.**
 
-`false` es excepcional: hoy son **5 de 97**, y hay un test que falla si pasan
+`false` es excepcional: hoy son **5 de 99**, y hay un test que falla si pasan
 de 8. El caso que más enseña es `GODEL_CRITERIA_VERSION`: el sello se
 registra en `AssetCycleResult` y **nada ramifica sobre él** —el propio campo
 documenta que "la comprobación no existe todavía"—, así que hoy es `false` y

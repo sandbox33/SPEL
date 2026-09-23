@@ -168,3 +168,55 @@ class TestInsufficientEventsSePersisteIgual:
         serie = read_series("NVDA")
         assert serie[0].insufficient_events is True
         assert serie[0].entropy_shannon is None
+
+
+# ─── Siembra desde la web: el salto de línea final ────────────────────────
+
+class TestArchivoSembradoSinSaltoFinal:
+    """La serie vive en la rama `data` desde el 21-sep-2026 y se siembra
+    subiendo el archivo por la web de GitHub. Un editor que recorta el
+    salto de línea final hacía que el primer `append_day()` pegara su línea
+    a la última sembrada: se perdían DOS días en silencio (medido antes de
+    este arreglo: de 3 días escritos, `read_series` devolvía 1)."""
+
+    def _sembrar_sin_salto_final(self):
+        from ingestion.gdelt_series import _series_file_path
+
+        append_day(_dia(date(2026, 9, 2)))
+        append_day(_dia(date(2026, 9, 3)))
+        p = _series_file_path("NVDA")
+        p.write_bytes(p.read_bytes().rstrip(b"\n"))
+        return p
+
+    def test_el_primer_append_no_se_come_el_ultimo_dia_sembrado(self):
+        self._sembrar_sin_salto_final()
+        append_day(_dia(date(2026, 9, 4)))
+
+        assert [r.day for r in read_series("NVDA")] == [
+            date(2026, 9, 2), date(2026, 9, 3), date(2026, 9, 4)]
+
+    def test_no_agrega_una_linea_vacia_si_el_salto_ya_estaba(self):
+        """Contraprueba: el caso normal no cambia. Una línea vacía extra no
+        rompería la lectura, pero sí el sha256 que compara la siembra."""
+        from ingestion.gdelt_series import _series_file_path
+
+        append_day(_dia(date(2026, 9, 2)))
+        append_day(_dia(date(2026, 9, 3)))
+        texto = _series_file_path("NVDA").read_text(encoding="utf-8")
+
+        assert "\n\n" not in texto
+        assert texto.count("\n") == 2
+
+    def test_crlf_no_rompe_la_lectura(self):
+        """Por qué el `.gitattributes -text` de la rama `data` NO es para
+        salvar el parseo: `read_series` hace strip() y tolera CRLF. Sirve
+        para otra cosa -- que los bytes queden idénticos a los de Drive y el
+        sha256 de la verificación post-siembra compare."""
+        from ingestion.gdelt_series import _series_file_path
+
+        append_day(_dia(date(2026, 9, 2)))
+        p = _series_file_path("NVDA")
+        p.write_bytes(p.read_bytes().replace(b"\n", b"\r\n"))
+        append_day(_dia(date(2026, 9, 3)))
+
+        assert len(read_series("NVDA")) == 2

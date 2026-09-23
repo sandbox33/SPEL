@@ -30,6 +30,15 @@ LOS 4 STREAMS:
                    cambian en cada ejecución. Mismo tratamiento que
                    METRICS, por la misma razón y no por analogía.
 
+ENMIENDA DEL 21-SEP-2026 (decision-log.md, enmienda a la Decisión #14):
+los streams son los mismos y este módulo los declara igual. Lo que cambia
+es dónde vive FÍSICAMENTE una parte de METRICS: las series diarias
+append-only (metrics/gdelt_series/, metrics/regimen/) viven en la rama
+huérfana `data` de este repo, con .github/workflows/gdelt.yml como escritor
+único. No hizo falta tocar nada acá: el workflow apunta SPEL_DRIVE_ROOT a un
+checkout de esa rama, y drive_root() lo resuelve primero. Ojo con eso fuera
+de CI: la variable mueve los TRES streams de Drive, no solo METRICS.
+
 Por qué Drive vs GitHub y no todo en un solo lugar: git no está
 pensado para binarios grandes ni datos que cambian a cada corrida
 (bloatea el repo, historial inútil). Drive no tiene control de

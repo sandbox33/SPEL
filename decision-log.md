@@ -1124,3 +1124,184 @@ como tales, no como algo verificado acá.
 Lo que sí se verificó en esta sesión es todo lo demás: las 55 constantes, sus
 valores, y que el test falla cuando debe (entrada borrada, valor alterado, constante
 nueva sin registrar, entrada huérfana — los cuatro comprobados uno por uno).
+
+---
+
+## 2026-09-21 — Enmienda a la Decisión #14: las series diarias viven en la rama `data`
+
+**Fuente:** decisión del Admin del 21-sep-2026 (Brief D v2); `governance/persistence.py`
+(`drive_root()`, `DRIVE_STREAMS`); `ingestion/gdelt_series.py`; `.github/workflows/gdelt.yml`.
+
+**Lo que decía la Decisión #14:** METRICS es un stream de Drive, "NO versionado en git",
+porque cambia todo el tiempo y no es código.
+
+**Lo que cambia:** las series diarias **append-only** —la serie GDELT por activo y,
+cuando existan, las anotaciones de régimen— pasan a una rama huérfana de este repo,
+`data`, que **no se fusiona nunca** con `main`. CI (`gdelt.yml`) es su **escritor
+único**. Drive deja de escribirlas: la carpeta `metrics/gdelt_series` se renombra a
+`metrics/gdelt_series_OBSOLETO_2026-09-21`, y **ningún notebook vuelve a correr
+`run_gdelt --write`**.
+
+**Lo que no cambia:** los streams siguen siendo los mismos y `persistence.py` los declara
+igual. METRICS sigue siendo un stream de Drive; lo que cambia es **dónde vive
+físicamente una parte** de él. No hizo falta tocar una línea de persistencia: la raíz de
+la rama hace de `drive_root()`, y `SPEL_DRIVE_ROOT` —que `drive_root()` resuelve
+primero— apunta ahí.
+
+**Por qué git sirve para ESTO y la regla de la #14 sigue valiendo para lo demás.** La
+#14 excluía de git lo que cambia en cada corrida y crece sin techo. Una serie diaria
+append-only es la excepción justa:
+
+| | cifra | de dónde |
+|---|---|---|
+| bytes por línea | 242 (brief); **239–251, media 245** | medido el 22-sep con `_result_to_line()` real y floats de precisión completa |
+| línea de un día vacío | 185 | ídem |
+| un activo, 4.880 días | **1,19 MB** | 4.880 × 245 |
+| cinco activos, 20 años | **8,9 MB** (brief: 8,8 con 242) | 5 × 7.305 × 245 |
+| diff diario | **5 líneas**, una por activo | una fila por día y activo |
+
+Un diff de cinco líneas por día es revisable a ojo, `git revert` deshace una corrida
+entera, y el historial dice qué día escribió qué. Nada de eso existía en Drive. Las
+cifras de tamaño **no se midieron sobre la serie real** —el sandbox no la tiene—, sino
+con el serializador real y valores sintéticos.
+
+**El motivo del escritor único no cambió; cambió cuál se elimina.** `append_day()` es
+append puro y `read_series()` deduplica por día: el par tolera duplicados, no
+divergencia. Hasta hoy el escritor único era Drive, y CI corría en dry-run. Lo que
+impedía que fuera CI —Colab bajó 640 días en 17 minutos; a `--max-days 10` eran 64
+corridas— se resuelve con la **siembra**: la historia 2013-04-01 .. 2026-09-03 de BTC y
+XAU se sube a mano, una vez, por la web. Es la excepción permitida a la directiva de
+autodeterminismo (entrada siguiente): subir un archivo no es escribir código.
+
+**Hallazgo que el brief no preveía:** `SPEL_DRIVE_ROOT` no mueve solo METRICS, mueve
+**los tres** streams de Drive (METRICS, MODELS, TRADE_LEDGER), porque todos se resuelven
+contra `drive_root()`. En CI no importa: la ingesta solo escribe METRICS. En Colab sí:
+un notebook que apunta la variable al clon de `data` para leer la serie y después guarda
+un checkpoint lo pierde al cerrar la sesión. El README de la rama lo dice; si F2 lo
+necesita resolver de raíz, es un override por stream en `persistence.py`, y es una
+decisión aparte.
+
+**Riesgo del brief que se corrigió al verificarlo:** el brief advertía que un archivo
+sembrado con CRLF rompería el parseo. No lo rompe: `read_series()` hace `strip()`. El
+riesgo real era el **salto final ausente**: la primera escritura de CI pegaba su línea a
+la última sembrada y se perdían dos días en silencio. `append_day()` ahora lo agrega
+(commit `gdelt_series: append_day agrega el salto final...`), y la rama nace con
+`*.jsonl -text` para que git no toque los finales de línea.
+
+**Reversión:** renombrar la carpeta de Drive de vuelta, quitar el `--write` de
+`gdelt.yml`, y copiar la serie de la rama a Drive. La rama queda como archivo.
+
+---
+
+## 2026-09-21 — El nombre de la rama es `data`, no `data/gdelt-series`
+
+**Fuente:** el docstring de `ingestion/run_gdelt.py` (PR #24), que proponía
+`data/gdelt-series` como destino; decisión del Admin del 21-sep.
+
+Dos motivos. El primero es de alcance: la rama no guarda solo la serie GDELT; guarda las
+series diarias append-only, y las anotaciones de régimen (`metrics/regimen/`) son la
+segunda. Un nombre por serie pediría una rama por serie.
+
+El segundo es de git: una rama `data/gdelt-series` **impide** que exista una rama
+`data` (una ref no puede ser a la vez archivo y directorio), y cualquier segunda serie
+quedaría como `data/otra` —una rama más que clonar, que permisar y que el workflow
+tendría que conocer—. Con una sola rama `data`, la estructura interna es la de
+`metrics/` que `persistence.py` ya declara.
+
+`tests/test_run_gdelt.py` fijaba el nombre viejo en el docstring; ahora fija el nuevo
+y que el viejo no aparezca.
+
+---
+
+## 2026-09-21 — Directiva de autodeterminismo, y protocolo de notebooks para F2
+
+**Fuente:** decisión del Admin del 21-sep-2026.
+
+**La directiva:** toda tarea que exija Colab por peso (entrenamiento, backfills, lectura
+de la serie completa) la genera el repo o un workflow como un **`.ipynb` completo**. El
+Admin solo lo ejecuta. No edita celdas, no pega código, no decide parámetros en el
+momento.
+
+**La excepción, y por qué no la rompe:** la siembra de la rama `data`. Subir un archivo
+por la web no es escribir código: no hay lógica que se pueda equivocar, y lo que se
+subió se verifica después (`gdelt.yml`, `modo: verificar_siembra`, contra las cifras
+medidas).
+
+**Protocolo para los notebooks de F2** (el generador está fuera del alcance de este
+brief y queda pendiente):
+
+1. El notebook sale del repo, versionado. Se regenera, no se edita a mano.
+2. Lee la serie clonando la rama `data`, nunca de la carpeta `_OBSOLETO` de Drive.
+3. **No escribe la serie.** Nunca corre `run_gdelt --write`.
+4. Si apunta `SPEL_DRIVE_ROOT` al clon para leer, lo saca antes de escribir modelos o
+   ledger (ver la entrada de la enmienda: la variable mueve los tres streams de Drive).
+
+---
+
+## 2026-09-21 — Límite conocido: GitHub desactiva el cron tras 60 días sin actividad
+
+**Fuente:** documentación de GitHub Actions sobre workflows programados; visibilidad del
+repo verificada el 22-sep-2026 (**público**).
+
+En un repo público, GitHub desactiva los `schedule:` cuando el repo pasa **60 días sin
+actividad**. SPEL es público, así que aplica. Lo que no está claro es si los commits de
+`github-actions[bot]` en `data` cuentan como actividad; se asume que **no**, que es el
+caso que no sorprende.
+
+**Lo que esto significa:** si durante dos meses nadie hace un PR a `main`, la ingesta
+se apaga sola, y **la alarma de frescura no lo puede ver**: corre dentro del mismo
+workflow, así que se apaga con él. Una alarma no puede detectar su propia muerte.
+
+**Mitigación:**
+
+- La actividad de PRs en `main`: seis fusiones entre el 14 y el 21-sep-2026.
+- El `dias_de_retraso` por activo que `ingestion/frescura.py` calcula, para que el Brief C
+  lo lea **desde fuera del workflow de ingesta** (el ciclo diario, o quien consuma la
+  serie). Un retraso que crece es la firma de un cron desactivado.
+- Reactivarlo es un clic en la pestaña Actions; no se pierde nada, porque la ingesta es
+  incremental y cierra el gap sola en las corridas siguientes.
+
+---
+
+## 2026-09-21 — Acta de congelamiento: `core/execution_costs.py` y `core/trade_ledger.py`
+
+**Fuente:** PR #25 (los dos módulos); decisión del Admin del 21-sep-2026.
+
+Los dos módulos quedan **congelados** tal como están en `main`: sin consumidores nuevos,
+sin funciones nuevas, sin tarifas. Sus tests siguen corriendo en cada PR. No se retiran
+a `research/`: no están muertos, están esperando algo que costear.
+
+**Motivo:** hoy no hay nada a qué aplicarlos. `execution_costs` calcula P&L neto sobre
+tarifas que recibe como parámetro obligatorio (no vive ninguna tarifa en el módulo), y
+no hay ni instrumento elegido cuyas tarifas cargar ni estrategia que backtestear.
+Seguir construyendo sobre ellos sería construir un backtester sin nada que probar.
+
+**Briefs 4 y 5** (el backtester y lo que dependía de él) **se descartan por ahora.**
+
+**CONDICIÓN DE REVERSIÓN**, cualquiera de las dos:
+
+1. F2.7 identifica un instrumento de Deriv cuyos costos cubren estos módulos (taker/maker,
+   funding, fills parciales) y hay tarifas verificadas para él.
+2. F2 produce una estrategia que backtestear.
+
+---
+
+## 2026-09-21 — Deuda heredada: los huecos de la serie sembrada no se curan
+
+**Fuente:** cifras de la medición del 19-sep-2026; `tools/verificar_siembra.py`;
+`ingestion/frescura.py::inventariar_huecos`.
+
+Entre 2013-04-01 y 2026-09-03 hay **4.904 días de calendario**. BTC tiene 4.880 filas y
+XAU 4.879: **24 huecos en BTC y 25 en XAU**. Las cifras cierran entre sí, y hay un test
+que lo verifica (`test_las_cifras_cierran_contra_el_calendario`).
+
+**Las fechas no están acá**, y no por descuido: el sandbox no tiene la serie
+(`drive_root()` resuelve a `.spel_drive_stream`, que no existe, y `read_series()` devuelve
+0 días). La primera corrida de `gdelt.yml` con `modo: verificar_siembra` las imprime una
+por una; esa lista es la que completa esta entrada.
+
+**Decisión:** son deuda conocida y **no se rellenan**. La alarma de frescura no las
+evalúa —solo mira desde la marca de inicio `metrics/ingesta_automatica.json`, el primer
+día que escribió CI— y la reconciliación de 404 tampoco las reintenta. Rellenarlas sería
+un backfill con `--since`, que reescribe, y es trabajo aparte con su propio brief si
+alguna vez hace falta.

@@ -624,12 +624,311 @@ def test_escribe_solo_por_la_api_publica_de_la_serie():
             f"run_gdelt usa {prohibido}: está escribiendo por fuera de la API")
 
 
-def test_el_docstring_documenta_la_rama_de_datos_como_destino():
-    """Requisito explícito: cuando CI necesite escribir, la vía es
-    `data/gdelt-series` con CI como escritor único, y exige entrada en
-    decision-log.md. Si esto no está escrito, la próxima sesión reabre la
-    discusión desde cero."""
+def test_el_docstring_documenta_a_ci_como_escritor_unico_en_la_rama_data():
+    """Hasta el 21-sep-2026 este test fijaba `data/gdelt-series` como
+    DESTINO futuro. La enmienda a la Decisión #14 lo volvió presente y le
+    cambió el nombre a `data`. Lo que se sigue exigiendo es lo mismo: que el
+    escritor único esté escrito, y dónde se decidió."""
     doc = rg.__doc__ or ""
-    assert "data/gdelt-series" in doc
+    assert "rama huérfana `data`" in doc
+    assert "data/gdelt-series" not in doc
     assert "decision-log.md" in doc
-    assert "escritor" in doc
+    assert "ESCRITOR ÚNICO" in doc
+    assert "NINGÚN\nnotebook vuelve a correr `run_gdelt --write`" in doc
+
+
+# ═══ Reconciliación: días que GDELT todavía no había publicado ════════════
+#
+# Todas las series arrancan en CORTE y la marca de inicio está fijada ahí:
+# es la situación de régimen, con CI como escritor y la alarma evaluando.
+
+CORTE = date(2026, 9, 4)
+
+
+def _sembrar_con_vacios(asset, desde, hasta, vacios=()):
+    """Filas hasta `hasta` inclusive. Los días de `vacios` se escriben como
+    los escribe un 404 de verdad: `aggregate_day([], ...)`."""
+    from ingestion.gdelt_aggregation import aggregate_day
+    d = desde
+    while d <= hasta:
+        eventos = [] if d in vacios else _dia_con_eventos()
+        append_day(aggregate_day(eventos, asset, d))
+        d += timedelta(days=1)
+
+
+def _bytes_de_la_serie(assets):
+    from ingestion.gdelt_series import _series_file_path
+    return {a: _series_file_path(a).read_bytes() for a in assets}
+
+
+class TestReconciliacion:
+    @pytest.fixture(autouse=True)
+    def _marca(self):
+        from ingestion.frescura import registrar_inicio_si_falta
+        registrar_inicio_si_falta(CORTE)
+
+    @pytest.mark.asyncio
+    async def test_un_dia_vacio_en_todos_los_activos_se_reintenta(self):
+        """El caso del brief. El día se pide aunque las dos series estén al
+        día -- sin esto, una publicación tardía deja un agujero para siempre."""
+        vacio = date(2026, 9, 8)
+        for a in ("BTC", "XAU"):
+            _sembrar_con_vacios(a, CORTE, AYER, vacios={vacio})
+        adapter = AdapterFalso()
+
+        report = await _correr(["BTC", "XAU"], adapter=adapter, write=True)
+
+        assert adapter.pedidos == [vacio], "un día, UNA descarga para los dos"
+        assert (report.reintentos_pedidos, report.reintentos_curados,
+                report.reintentos_siguen_vacios) == (1, 1, 0)
+        for a in ("BTC", "XAU"):
+            fila = next(f for f in read_series(a) if f.day == vacio)
+            assert fila.n_events > 0, f"{a}: el reintento no curó el día"
+
+    @pytest.mark.asyncio
+    async def test_un_dia_vacio_solo_en_eurusd_no_se_reintenta(self):
+        """EURUSD tiene días en cero por construcción de su filtro. Si GDELT
+        publicó ese día (BTC y XAU tienen datos), pedirlo otra vez daría el
+        mismo cero -- una descarga por corrida para siempre, a cambio de
+        nada."""
+        from ingestion.gdelt_aggregation import aggregate_day
+        for a in ("BTC", "XAU"):
+            _sembrar_con_vacios(a, CORTE, AYER)
+        d = CORTE
+        while d <= AYER:
+            append_day(aggregate_day([], "EURUSD", d))
+            d += timedelta(days=1)
+        adapter = AdapterFalso()
+
+        report = await _correr(["BTC", "XAU", "EURUSD"], adapter=adapter,
+                               write=True)
+
+        assert adapter.pedidos == []
+        assert report.reintentos_pedidos == 0
+
+    @pytest.mark.asyncio
+    async def test_si_sigue_vacio_no_se_reescribe_la_fila(self):
+        """Ya está en la serie. Reescribirla haría crecer el archivo una
+        línea por activo por corrida sin agregar nada."""
+        vacio = date(2026, 9, 8)
+        for a in ("BTC", "XAU"):
+            _sembrar_con_vacios(a, CORTE, AYER, vacios={vacio})
+        antes = _bytes_de_la_serie(["BTC", "XAU"])
+        adapter = AdapterFalso(sin_datos={vacio})
+
+        report = await _correr(["BTC", "XAU"], adapter=adapter, write=True)
+
+        assert adapter.pedidos == [vacio]
+        assert (report.reintentos_curados, report.reintentos_siguen_vacios) == (0, 1)
+        assert _bytes_de_la_serie(["BTC", "XAU"]) == antes
+
+    @pytest.mark.asyncio
+    async def test_los_reintentos_consumen_el_mismo_presupuesto(self):
+        """Sin constante nueva: un reintento es un día más dentro de
+        --max-days, y va ANTES que los días nuevos."""
+        vacio = date(2026, 9, 6)
+        for a in ("BTC", "XAU"):
+            _sembrar_con_vacios(a, CORTE, date(2026, 9, 10), vacios={vacio})
+        adapter = AdapterFalso()
+
+        report = await _correr(["BTC", "XAU"], adapter=adapter, write=True,
+                               max_days=2)
+
+        assert adapter.pedidos == [vacio, date(2026, 9, 11)]
+        assert all(r.days_written == 2 for r in report.assets)
+
+    @pytest.mark.asyncio
+    async def test_un_dia_anterior_a_la_marca_no_se_reintenta(self):
+        """La historia sembrada es deuda conocida, no responsabilidad de CI."""
+        viejo = CORTE - timedelta(days=2)
+        for a in ("BTC", "XAU"):
+            _sembrar_con_vacios(a, viejo, AYER, vacios={viejo})
+        adapter = AdapterFalso()
+
+        await _correr(["BTC", "XAU"], adapter=adapter, write=True)
+
+        assert adapter.pedidos == []
+
+    @pytest.mark.asyncio
+    async def test_con_since_no_se_reintenta(self):
+        """--since es reproceso explícito de un humano: pide lo que pide."""
+        vacio = date(2026, 9, 8)
+        for a in ("BTC", "XAU"):
+            _sembrar_con_vacios(a, CORTE, AYER, vacios={vacio})
+        adapter = AdapterFalso()
+
+        await _correr(["BTC", "XAU"], adapter=adapter, since=AYER)
+
+        assert adapter.pedidos == [AYER]
+
+    @pytest.mark.asyncio
+    async def test_el_reporte_dice_cuantos_se_curaron(self):
+        vacios = {date(2026, 9, 7), date(2026, 9, 8)}
+        for a in ("BTC", "XAU"):
+            _sembrar_con_vacios(a, CORTE, AYER, vacios=vacios)
+        adapter = AdapterFalso(sin_datos={date(2026, 9, 8)})
+
+        texto = render_text(await _correr(["BTC", "XAU"], adapter=adapter,
+                                          write=True))
+
+        assert ("2 día(s) que GDELT no había publicado se volvieron a pedir "
+                "— curados: 1, siguen vacíos: 1") in texto
+
+
+@pytest.mark.asyncio
+async def test_sin_marca_no_se_reintenta_nada():
+    """Antes de la primera escritura de CI no hay tramo del que CI sea
+    responsable."""
+    vacio = date(2026, 9, 8)
+    for a in ("BTC", "XAU"):
+        _sembrar_con_vacios(a, CORTE, AYER, vacios={vacio})
+    adapter = AdapterFalso()
+
+    await _correr(["BTC", "XAU"], adapter=adapter, write=True)
+
+    assert adapter.pedidos == []
+
+
+# ═══ Marca de inicio ══════════════════════════════════════════════════════
+
+class TestMarcaDeInicio:
+    @pytest.mark.asyncio
+    async def test_la_primera_escritura_fija_la_marca_en_su_primer_dia_nuevo(self):
+        """La rama `data` nace con `{"desde": null}`. El primer día que CI
+        escribe es el día desde el cual la alarma evalúa."""
+        from ingestion.frescura import leer_marca_de_inicio, ruta_marca
+        ruta_marca().parent.mkdir(parents=True, exist_ok=True)
+        ruta_marca().write_text('{"desde": null}\n', encoding="utf-8")
+        _sembrar("BTC", [date(2026, 9, 3)])
+        _sembrar("XAU", [date(2026, 9, 3)])
+
+        report = await _correr(["BTC", "XAU"], adapter=AdapterFalso(), write=True)
+
+        assert leer_marca_de_inicio() == CORTE
+        assert report.marca_fijada == str(CORTE)
+        assert "MARCA DE INICIO fijada en 2026-09-04" in render_text(report)
+
+    @pytest.mark.asyncio
+    async def test_un_dry_run_no_fija_la_marca(self):
+        from ingestion.frescura import leer_marca_de_inicio
+        _sembrar("BTC", [date(2026, 9, 3)])
+
+        report = await _correr(["BTC"], adapter=AdapterFalso())
+
+        assert leer_marca_de_inicio() is None
+        assert report.marca_fijada is None
+
+
+# ═══ Idempotencia: se verifica, no se supone ══════════════════════════════
+
+class TestIdempotencia:
+    def _siembra(self):
+        from ingestion.frescura import ruta_marca
+        ruta_marca().parent.mkdir(parents=True, exist_ok=True)
+        ruta_marca().write_text('{"desde": null}\n', encoding="utf-8")
+        for a in ("BTC", "XAU"):
+            _sembrar(a, [date(2026, 9, 1), date(2026, 9, 2), date(2026, 9, 3)])
+
+    def _instantanea(self):
+        from ingestion.frescura import ruta_marca
+        return _bytes_de_la_serie(["BTC", "XAU"]), ruta_marca().read_bytes()
+
+    ARGS = ["--write", "--assets", "BTC", "XAU", "--exigir-serie", "BTC", "XAU"]
+
+    def test_una_segunda_corrida_seguida_no_escribe_nada_y_sale_verde(
+            self, monkeypatch, capsys):
+        """El criterio de aceptación del brief, contra `main()` con los
+        mismos argumentos que pasa el workflow. Se comparan BYTES: una fila
+        repetida no cambiaría lo que devuelve read_series() y el test la
+        dejaría pasar."""
+        from ingestion import frescura
+        self._siembra()
+        primera, segunda = AdapterFalso(), AdapterFalso()
+        adapters = iter([primera, segunda])
+        monkeypatch.setattr(rg, "GDELTDailyAdapter", lambda **kw: next(adapters))
+
+        assert main(self.ARGS, hoy=HOY) == 0
+        assert len(primera.pedidos) == 10
+        despues_de_la_primera = self._instantanea()
+
+        assert main(self.ARGS, hoy=HOY) == 0
+        assert segunda.pedidos == []
+        assert self._instantanea() == despues_de_la_primera
+
+        capsys.readouterr()
+        assert frescura.main(["--assets", "BTC", "XAU"], hoy=HOY) == 0
+
+    def test_con_la_punta_sin_publicar_la_segunda_la_pide_y_no_escribe(
+            self, monkeypatch, capsys):
+        """El caso real de las 06:30 UTC: AYER dio 404 en la primera. La
+        segunda lo vuelve a pedir -- eso es la reconciliación -- y si sigue
+        sin publicarse, no escribe nada."""
+        self._siembra()
+        primera = AdapterFalso(sin_datos={AYER})
+        segunda = AdapterFalso(sin_datos={AYER})
+        adapters = iter([primera, segunda])
+        monkeypatch.setattr(rg, "GDELTDailyAdapter", lambda **kw: next(adapters))
+
+        assert main(self.ARGS, hoy=HOY) == 0
+        despues_de_la_primera = self._instantanea()
+
+        assert main(self.ARGS, hoy=HOY) == 0
+        assert segunda.pedidos == [AYER]
+        assert self._instantanea() == despues_de_la_primera
+
+
+# ═══ La compuerta de siembra y el aviso de --since ════════════════════════
+
+class ExplotaSiSeUsa:
+    def __init__(self, **kw):
+        pass
+
+    async def fetch_day(self, day):
+        raise AssertionError("bajó un día con la siembra pendiente")
+
+
+def test_exigir_serie_sin_siembra_sale_cero_sin_bajar_ni_escribir(
+        monkeypatch, capsys):
+    """El cron queda activo al fusionar. Si dispara antes de que la siembra
+    esté subida, no puede arrancar BTC y XAU por su cuenta: la marca de
+    inicio quedaría fijada ahí y la siembra llegaría después por debajo."""
+    from ingestion.frescura import leer_marca_de_inicio
+    from ingestion.gdelt_series import _series_file_path
+    _sembrar("BTC", [date(2026, 9, 3)])
+    monkeypatch.setattr(rg, "GDELTDailyAdapter", ExplotaSiSeUsa)
+
+    codigo = main(["--write", "--assets", "BTC", "XAU", "NVDA",
+                   "--exigir-serie", "BTC", "XAU"], hoy=HOY)
+
+    assert codigo == 0
+    assert "SIEMBRA PENDIENTE: XAU" in capsys.readouterr().out
+    assert not _series_file_path("XAU").exists()
+    assert not _series_file_path("NVDA").exists()
+    assert leer_marca_de_inicio() is None
+
+
+def test_exigir_serie_con_siembra_corre_normal(monkeypatch, capsys):
+    for a in ("BTC", "XAU"):
+        _sembrar(a, [date(2026, 9, 12)])
+    adapter = AdapterFalso()
+    monkeypatch.setattr(rg, "GDELTDailyAdapter", lambda **kw: adapter)
+
+    assert main(["--assets", "BTC", "XAU", "--exigir-serie", "BTC", "XAU"],
+                hoy=HOY) == 0
+    assert adapter.pedidos == [AYER]
+
+
+def test_since_con_write_avisa_que_reescribe(monkeypatch, capsys):
+    monkeypatch.setattr(rg, "GDELTDailyAdapter", lambda **kw: AdapterFalso())
+
+    main(["--assets", "BTC", "--since", str(AYER), "--write"], hoy=HOY)
+
+    assert "REESCRIBE" in capsys.readouterr().err
+
+
+def test_since_sin_write_no_avisa_nada(monkeypatch, capsys):
+    monkeypatch.setattr(rg, "GDELTDailyAdapter", lambda **kw: AdapterFalso())
+
+    main(["--assets", "BTC", "--since", str(AYER)], hoy=HOY)
+
+    assert "REESCRIBE" not in capsys.readouterr().err

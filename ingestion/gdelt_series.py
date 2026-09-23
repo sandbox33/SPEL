@@ -91,7 +91,25 @@ def append_day(result: DailyAggregationResult) -> None:
     """
     path = _series_file_path(result.asset)
     path.parent.mkdir(parents=True, exist_ok=True)
+    # SI EL ARCHIVO NO TERMINA EN "\n", SE AGREGA UNO ANTES DE ESCRIBIR.
+    # Desde el 21-sep-2026 la serie vive en la rama `data` y se siembra
+    # subiendo el archivo desde la web de GitHub, a veces desde un móvil. Un
+    # editor que recorta el salto final hace que esta escritura pegue su
+    # línea a la última del archivo: las dos quedan como UNA línea con dos
+    # JSON, `read_series()` la descarta con un warning, y se pierden DOS
+    # días -- el último sembrado y el primero de CI -- sin que nada falle.
+    # Medido, no supuesto: ver tests/test_gdelt_series.py.
+    #
+    # (Los CRLF, en cambio, no rompen nada: read_series() hace strip().)
+    if path.exists() and path.stat().st_size > 0:
+        with path.open("rb") as f:
+            f.seek(-1, 2)
+            falta_salto = f.read(1) != b"\n"
+    else:
+        falta_salto = False
     with path.open("a", encoding="utf-8") as f:
+        if falta_salto:
+            f.write("\n")
         f.write(_result_to_line(result))
         f.write("\n")
     logger.debug("gdelt_series: día %s agregado para %s", result.day, result.asset)

@@ -22,3 +22,10 @@
 # entró por cada lado.
 
 pyarrow
+
+# tests/test_workflow_gdelt.py lee los workflows como YAML. Desde el Brief D
+# gdelt.yml ESCRIBE en la rama `data`, y lo que lo mantiene lejos de main
+# -- permisos por job, la compuerta de siembra, que tests.yml no escuche
+# `data` -- tiene que estar fijado en un test, no en un comentario. Parsear
+# YAML con regex sería el grep que este repo ya decidió no usar.
+pyyaml
