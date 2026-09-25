@@ -14,6 +14,10 @@ esta rama.
 |---|---|
 | `metrics/gdelt_series/{ACTIVO}.jsonl` | una línea JSON por día y activo; la escribe `ingestion/gdelt_series.py::append_day()` |
 | `metrics/regimen/` | reservado para las anotaciones de régimen; hoy vacío |
+| `metrics/velas/{SÍMBOLO}/86400.jsonl` | velas diarias cerradas de Deriv (BTC y oro), una por línea; las escribe `ingestion/velas.py` (desde el Brief H1-A) |
+| `metrics/velas/{SÍMBOLO}/revisiones_86400.jsonl` | velas que volvieron de la API con otros valores: se registran acá y **no** se sobrescriben |
+| `metrics/instrumentos/{SÍMBOLO}_{FECHA}.json` | la sonda de instrumentos de Deriv: contratos, multiplicadores, stake, comisión, con el sha256 de cada respuesta cruda; siete días |
+| `metrics/instrumentos/resumen_{FECHA}.json` | el estado de cada día de sonda (OK, PETICION_ADMIN, …) |
 | `metrics/ingesta_automatica.json` | `{"desde": ...}`: el primer día que escribió CI. Nace en `null`, lo fija la primera escritura y no se mueve más |
 | `.gitattributes` | `*.jsonl -text`: git no toca los finales de línea de las series |
 
@@ -23,8 +27,18 @@ escribe sin cambios, solo con `SPEL_DRIVE_ROOT` apuntando acá.
 
 ## Quién escribe
 
-**Solo `.github/workflows/gdelt.yml`**, como `github-actions[bot]`, una vez
-por día (06:30 UTC). Un commit por corrida, y solo si hubo cambios.
+**Solo los workflows de `main` del grupo de concurrency `gdelt-data`**, como
+`github-actions[bot]`, uno a la vez y un commit por corrida, solo si hubo
+cambios:
+
+| workflow | qué escribe | cuándo (UTC) |
+|---|---|---|
+| `gdelt.yml` | `metrics/gdelt_series/`, `metrics/ingesta_automatica.json` | 06:30 |
+| `velas.yml` | `metrics/velas/` | 00:15 |
+| `sonda.yml` | `metrics/instrumentos/`; se detiene sola a los siete días | 00:45 |
+
+Los dos últimos existen desde el Brief H1-A y hablan con Deriv en
+`--entorno demo`, solo con mensajes de lectura.
 
 - **Ningún notebook corre `run_gdelt --write`.** Ni contra esta rama ni
   contra Drive. Con dos escritores quedan dos series con días distintos, y
