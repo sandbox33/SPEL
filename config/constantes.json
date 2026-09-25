@@ -891,6 +891,85 @@
       "notas": ""
     },
     {
+      "nombre": "CONTROL_POSITIVO",
+      "modulo": "ingestion.sonda_instrumentos",
+      "categoria": "etiqueta",
+      "valor": "frxEURUSD",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief H1-A v2: sin frxEURUSD en active_symbols la corrida es INVALIDO. También es el primer símbolo del mapa verificado de DerivAdapter.",
+      "usado_en": [
+        "ingestion.sonda_instrumentos.seleccionar",
+        "ingestion.sonda_instrumentos.sondear"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "DIAS_DE_SONDA",
+      "modulo": "ingestion.sonda_instrumentos",
+      "categoria": "parametro",
+      "valor": 7,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief H1-A v2: una proposal por día durante siete días.",
+      "usado_en": [
+        "ingestion.sonda_instrumentos.sondear"
+      ],
+      "notas": "H1-B no arranca hasta siete días después de fusionar H1-A."
+    },
+    {
+      "nombre": "MERCADO_CRIPTO",
+      "modulo": "ingestion.sonda_instrumentos",
+      "categoria": "etiqueta",
+      "valor": "cryptocurrency",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Valor de active_symbols[].market para cripto. No verificado contra una respuesta real desde el sandbox (Deriv bloqueado); si no coincide, la sonda sale SIN_BTC listando los mercados vistos.",
+      "usado_en": [
+        "ingestion.sonda_instrumentos.seleccionar"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "MERCADO_METALES",
+      "modulo": "ingestion.sonda_instrumentos",
+      "categoria": "etiqueta",
+      "valor": "commodities",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Valor de active_symbols[].market para el oro spot. Mismo estado de verificación que MERCADO_CRIPTO.",
+      "usado_en": [
+        "ingestion.sonda_instrumentos.seleccionar"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "ORO_PREREGISTRADO",
+      "modulo": "ingestion.sonda_instrumentos",
+      "categoria": "etiqueta",
+      "valor": "frxXAUUSD",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": false,
+      "fuente": "research/preregistro_h1.md, cláusula de réplica en oro.",
+      "usado_en": [
+        "ingestion.sonda_instrumentos.sondear"
+      ],
+      "notas": "Solo se verifica que exista en active_symbols y se reporta; la selección de candidatos de oro no depende de este valor."
+    },
+    {
+      "nombre": "SCHEMA_VERSION",
+      "modulo": "ingestion.sonda_instrumentos",
+      "categoria": "etiqueta",
+      "valor": "1.0.0",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": false,
+      "fuente": "Versión del formato de metrics/instrumentos/*.json.",
+      "usado_en": [
+        "ingestion.sonda_instrumentos._escribir"
+      ],
+      "notas": ""
+    },
+    {
       "nombre": "REGISTRY_PATH",
       "modulo": "ingestion.source_registry",
       "categoria": "derivada",
