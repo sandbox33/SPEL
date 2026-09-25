@@ -671,6 +671,53 @@
       "notas": ""
     },
     {
+      "nombre": "MENSAJES_PERMITIDOS",
+      "modulo": "ingestion.deriv_ws",
+      "categoria": "etiqueta",
+      "valor": [
+        "active_symbols",
+        "authorize",
+        "contracts_for",
+        "ping",
+        "proposal",
+        "ticks_history",
+        "time"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief H1-A v2 (25-sep-2026): lista blanca de mensajes de solo lectura. Cualquier otro se rechaza antes del socket.",
+      "usado_en": [
+        "ingestion.deriv_ws.nombre_del_mensaje"
+      ],
+      "notas": "Agregar un mensaje acá es ampliar lo que el sistema puede hacerle a una cuenta. Los de orden no entran hasta que H1-B muestre ventaja neta de costos (decision-log 25-sep)."
+    },
+    {
+      "nombre": "PERMISO_REAL_ENV_VAR",
+      "modulo": "ingestion.deriv_ws",
+      "categoria": "etiqueta",
+      "valor": "SPEL_DERIV_PERMITIR_REAL",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief H1-A v2: `real` exige una variable de entorno explícita, distinta del token.",
+      "usado_en": [
+        "ingestion.deriv_ws.verificar_entorno"
+      ],
+      "notas": "Tiene que valer exactamente \"1\"."
+    },
+    {
+      "nombre": "TIMEOUT_RESPUESTA_S",
+      "modulo": "ingestion.deriv_ws",
+      "categoria": "derivada",
+      "expresion": "inspect.signature(DerivAdapter.__init__).parameters['timeout_s'].default",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "El default de DerivAdapter.__init__, leído de la firma para no duplicar el literal.",
+      "usado_en": [
+        "ingestion.deriv_ws.abrir_sesion"
+      ],
+      "notas": ""
+    },
+    {
       "nombre": "MARCA_INICIO_ARCHIVO",
       "modulo": "ingestion.frescura",
       "categoria": "etiqueta",

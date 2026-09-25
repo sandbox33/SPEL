@@ -350,6 +350,25 @@ _DERIV_GRANULARITY_SECONDS: dict[str, int] = {
 WebSocketConnector = Callable[[str], Any]
 
 
+def raise_if_deriv_error(resp: dict, *, context: str, source: str = "deriv") -> None:
+    """Deriv señaliza fallos con un campo 'error' en el JSON, no con
+    códigos de status HTTP — esta función es el punto único donde ese
+    vocabulario específico de Deriv se traduce al vocabulario común
+    del adapter (AdapterAuthError / AdapterConnectionError).
+
+    Era un método de DerivAdapter; es de módulo desde que
+    ingestion/deriv_ws.py habla con la misma API sin pasar por el adapter,
+    para que la traducción siga siendo UNA."""
+    err = resp.get("error")
+    if not err:
+        return
+    code = err.get("code", "")
+    message = err.get("message", str(err))
+    if code in ("AuthorizationRequired", "InvalidToken", "InvalidAppID"):
+        raise AdapterAuthError(f"[{source}:{context}] {code}: {message}")
+    raise AdapterConnectionError(f"[{source}:{context}] {code}: {message}")
+
+
 class DerivAdapter(BaseAdapter):
     """
     Adapter OHLCV contra la API oficial de Deriv.
@@ -480,18 +499,7 @@ class DerivAdapter(BaseAdapter):
         return json.loads(raw)
 
     def _raise_if_error(self, resp: dict, *, context: str) -> None:
-        """Deriv señaliza fallos con un campo 'error' en el JSON, no con
-        códigos de status HTTP — este método es el punto único donde ese
-        vocabulario específico de Deriv se traduce al vocabulario común
-        del adapter (AdapterAuthError / AdapterConnectionError)."""
-        err = resp.get("error")
-        if not err:
-            return
-        code = err.get("code", "")
-        message = err.get("message", str(err))
-        if code in ("AuthorizationRequired", "InvalidToken", "InvalidAppID"):
-            raise AdapterAuthError(f"[{self.source_name}:{context}] {code}: {message}")
-        raise AdapterConnectionError(f"[{self.source_name}:{context}] {code}: {message}")
+        raise_if_deriv_error(resp, context=context, source=self.source_name)
 
     def _to_dataframe(self, candles: list[dict], granularity: int, *, symbol: str) -> pd.DataFrame:
         # El parámetro se llamaba `source` y recibía el símbolo del usuario
