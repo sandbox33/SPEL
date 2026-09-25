@@ -33,9 +33,10 @@ LOS 4 STREAMS:
 ENMIENDA DEL 21-SEP-2026 (decision-log.md, enmienda a la Decisión #14):
 los streams son los mismos y este módulo los declara igual. Lo que cambia
 es dónde vive FÍSICAMENTE una parte de METRICS: las series diarias
-append-only (metrics/gdelt_series/, metrics/regimen/) viven en la rama
-huérfana `data` de este repo, con .github/workflows/gdelt.yml como escritor
-único. No hizo falta tocar nada acá: el workflow apunta SPEL_DRIVE_ROOT a un
+append-only (metrics/gdelt_series/, metrics/regimen/, y desde el Brief H1-A
+metrics/velas/ y metrics/instrumentos/) viven en la rama huérfana `data` de
+este repo. La escriben solo los workflows del grupo de concurrency
+`gdelt-data` (gdelt.yml, velas.yml, sonda.yml), uno a la vez. No hizo falta tocar nada acá: el workflow apunta SPEL_DRIVE_ROOT a un
 checkout de esa rama, y drive_root() lo resuelve primero. Ojo con eso fuera
 de CI: la variable mueve los TRES streams de Drive, no solo METRICS.
 

@@ -1305,3 +1305,95 @@ evalúa —solo mira desde la marca de inicio `metrics/ingesta_automatica.json`,
 día que escribió CI— y la reconciliación de 404 tampoco las reintenta. Rellenarlas sería
 un backfill con `--since`, que reescribe, y es trabajo aparte con su propio brief si
 alguna vez hace falta.
+
+---
+
+## 2026-09-25 — Deriv: la API legacy no separa demo y real; la nueva sí
+
+**Fuente:** esquemas oficiales de `deriv-com/deriv-api-docs` (`config/v3/*/send.json` y
+`receive.json`, leídos el 25-sep-2026); búsqueda sobre `developers.deriv.com/docs/options/websocket/`
+(el sitio está bloqueado desde el sandbox: lo que sigue de la API nueva sale del extracto del
+buscador, no de la página leída); `ingestion/adapters.py`; `ingestion/deriv_ws.py`.
+
+**La API legacy** —`wss://ws.derivws.com/websockets/v3?app_id=…`, la de `DERIV_WS_ENDPOINT`—
+tiene **un endpoint único**, y **el token decide la cuenta**. Nada en la URL dice si la
+conexión es demo o real.
+
+**La API nueva de opciones separa las cuentas por ruta:**
+`wss://api.derivws.com/trading/v1/options/ws/demo` y `…/ws/real`, autenticadas con un OTP de
+un solo uso que se pide por REST por cuenta (válido 120 segundos, según el extracto).
+
+**El adapter está en la legacy, y Deriv está migrando.** Lo segundo lo reportó el Admin; el
+calendario de la migración no se pudo leer desde acá.
+
+**Consecuencia en el código:** `ingestion/deriv_ws.py` exige `entorno: "demo" | "real"` sin
+default en todo punto de entrada, y `real` exige además `SPEL_DERIV_PERMITIR_REAL=1`,
+comprobado **antes** de abrir la conexión. Como en la legacy el entorno no se puede verificar
+por la URL, se verifica contra la cuenta: con token, se llama a `authorize` y se compara
+`authorize.is_virtual` ("1 or 0, indicating whether the account is a virtual-money account",
+según el esquema) con el entorno pedido. Un token de cuenta real con `entorno="demo"` corta la
+sesión. Migrar a la API nueva haría esa verificación estructural en vez de por respuesta.
+
+---
+
+## 2026-09-25 — La demo valida integración, no ejecución
+
+**Fuente:** decisión del Admin (Brief H1-A).
+
+Una cuenta demo **no es evidencia suficiente de deslizamiento ni de rechazos**: el
+precio de llenado y la probabilidad de rechazo de una cuenta virtual no tienen por qué
+parecerse a los de una real, y no hay forma de saber cuánto difieren sin operar en real.
+
+Para lo que **sí** sirve: validar **integración** (que los mensajes sean los que la API
+acepta), **idempotencia** (que una corrida repetida no duplique nada) y **reconciliación**
+(que lo que el sistema cree que pasó coincida con lo que la cuenta dice que pasó).
+
+Cualquier número de costo de ejecución que salga de la demo se reporta como tal, y no
+reemplaza a la comisión del pre-registro (`research/preregistro_h1.md`, sección 8).
+
+---
+
+## 2026-09-25 — El 1,246× en BTC no es operativo todavía
+
+**Fuente:** entrada del 2026-09-04 ("Magnitud — sí discrimina, y solo en BTC"); decisión del
+Admin (Brief H1-A).
+
+La razón de volatilidad de **1,246** (Mann-Whitney, p = 3,4×10⁻⁹) dentro vs. fuera del
+régimen de entropía se midió **contemporáneamente**: la entropía del día `t` contra la
+magnitud del retorno del día `t`. Para usarla en el dimensionamiento hace falta que prediga,
+no que acompañe.
+
+**Queda como no operativa hasta superar dos pruebas:**
+
+1. **El rezago a `t−1`:** la entropía de `t−1` tiene que discriminar la magnitud de `t`.
+2. **La comparación contra HAR-RV:** tiene que aportar algo sobre un modelo HAR de volatilidad
+   realizada, que ya predice volatilidad con la propia historia de precios. Si la entropía no
+   mejora lo que HAR-RV ya hace, es una forma cara de medir lo mismo.
+
+Ninguna de las dos se corrió. El sizing del pre-registro H1 usa volatilidad realizada de 20
+días, **no** la entropía.
+
+---
+
+## 2026-09-25 — Nada de órdenes automáticas, ni en demo, hasta que H1-B dé ventaja neta
+
+**Fuente:** decisión del Admin (Brief H1-A); `ingestion/deriv_ws.py`; `tests/test_deriv_ws.py`.
+
+Ninguna orden automática, **tampoco en demo**, hasta que H1-B produzca una ventaja **neta de
+costos** que pase las compuertas del pre-registro.
+
+**Cómo se sostiene, y no solo se promete:**
+
+- `ingestion/deriv_ws.py` solo envía siete mensajes (`active_symbols`, `contracts_for`,
+  `proposal`, `ticks_history`, `time`, `authorize`, `ping`). Cualquier otro se rechaza antes
+  de tocar el socket.
+- `proposal` sale sin `subscribe`: es una cotización, no un stream. El brief pedía
+  `subscribe: 0`, pero el esquema oficial solo admite el valor 1, y omitir el campo es lo
+  equivalente sin arriesgar un error de validación.
+- `tests/test_deriv_ws.py` recorre por AST `core/`, `ingestion/`, `orchestration/`,
+  `governance/`, `execution/`, `tools/` y `research/`, y falla si aparece como literal el
+  nombre de un mensaje de orden.
+
+**Condición de reversión:** H1-B pasa las compuertas (Sharpe neto fuera de muestra ≥ 0,5,
+PSR(0) ≥ 0,90 y DSR ≥ 0,90), y un brief propio amplía la lista blanca con su decision-log.
+`execution/` sigue congelado hasta Fase 4 y esto no lo toca.
