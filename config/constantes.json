@@ -492,6 +492,38 @@
       "notas": ""
     },
     {
+      "nombre": "DERIV_MAX_COUNT",
+      "modulo": "ingestion.adapters",
+      "categoria": "parametro",
+      "valor": 5000,
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Tope por request observado en el sondeo real de Deriv (2026-09-03).",
+      "usado_en": [
+        "ingestion.velas.descargar",
+        "tools.provider_coverage.build_parser",
+        "tools.provider_coverage.probe_deriv"
+      ],
+      "notas": "Movida de tools.provider_coverage a ingestion.adapters el 25-sep-2026 (Brief H1-A): ingestion/ no importa de tools/."
+    },
+    {
+      "nombre": "DERIV_MAX_PAGES_DEFAULT",
+      "modulo": "ingestion.adapters",
+      "categoria": "parametro",
+      "valor": 12,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Techo de paginación del sondeo. Elección de ingeniería para acotar el tiempo.",
+      "usado_en": [
+        "ingestion.velas.descargar",
+        "tools.provider_coverage.build_parser",
+        "tools.provider_coverage.probe_deriv",
+        "tools.provider_coverage.probe_provider",
+        "tools.provider_coverage.run_inventory"
+      ],
+      "notas": "Movida de tools.provider_coverage a ingestion.adapters el 25-sep-2026."
+    },
+    {
       "nombre": "DERIV_WS_ENDPOINT",
       "modulo": "ingestion.adapters",
       "categoria": "etiqueta",
@@ -1462,36 +1494,6 @@
       "fuente": "Activos que el sondeo cubre por defecto.",
       "usado_en": [
         "tools.provider_coverage.build_parser"
-      ],
-      "notas": ""
-    },
-    {
-      "nombre": "DERIV_MAX_COUNT",
-      "modulo": "tools.provider_coverage",
-      "categoria": "parametro",
-      "valor": 5000,
-      "evidencia": "medido",
-      "afecta_resultado": true,
-      "fuente": "Tope por request observado en el sondeo real de Deriv (2026-09-03).",
-      "usado_en": [
-        "tools.provider_coverage.build_parser",
-        "tools.provider_coverage.probe_deriv"
-      ],
-      "notas": ""
-    },
-    {
-      "nombre": "DERIV_MAX_PAGES_DEFAULT",
-      "modulo": "tools.provider_coverage",
-      "categoria": "parametro",
-      "valor": 12,
-      "evidencia": "provisional_sin_evidencia",
-      "afecta_resultado": true,
-      "fuente": "Techo de paginación del sondeo. Elección de ingeniería para acotar el tiempo.",
-      "usado_en": [
-        "tools.provider_coverage.build_parser",
-        "tools.provider_coverage.probe_deriv",
-        "tools.provider_coverage.probe_provider",
-        "tools.provider_coverage.run_inventory"
       ],
       "notas": ""
     },

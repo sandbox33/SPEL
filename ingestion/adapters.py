@@ -309,6 +309,17 @@ class BaseAdapter(abc.ABC):
 
 DERIV_WS_ENDPOINT = "wss://ws.derivws.com/websockets/v3?app_id={app_id}"
 
+#: `ticks_history`: `count` tope 5000 por petición (VERIFICADO en el sondeo
+#: previo de tools/provider_coverage.py). El esquema oficial documenta el
+#: default (1000), no el tope. Para llegar al fondo de la historia hay que
+#: paginar hacia atrás.
+DERIV_MAX_COUNT = 5000
+
+#: Tope de páginas por símbolo. Existe para que una serie muy profunda --o
+#: una API que nunca deja de responder-- no cuelgue la corrida. Al toparlo,
+#: quien pagina lo dice, y no "esto es todo".
+DERIV_MAX_PAGES_DEFAULT = 12
+
 #: Solo símbolos CONFIRMADOS contra la documentación oficial de Deriv.
 #: No se agrega nada acá "por analogía" — un símbolo mal mapeado pide datos
 #: de un instrumento distinto al que el llamador cree que está pidiendo,
