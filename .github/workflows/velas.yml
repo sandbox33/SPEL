@@ -1,0 +1,98 @@
+# .github/workflows/velas.yml
+# ============================
+# Velas diarias de Deriv para BTC y el oro (Brief H1-A, Entregable 2).
+# Escribe en la rama `data`, en metrics/velas/<símbolo>/86400.jsonl, con el
+# mismo patrón que gdelt.yml: checkout de `data` en ./data-store,
+# SPEL_DRIVE_ROOT apuntando ahí, commit solo si hay cambios.
+#
+# COMPARTE EL GRUPO DE CONCURRENCY CON gdelt.yml y sonda.yml: los tres
+# escriben en `data`, y dos pushes simultáneos se pisarían. Uno a la vez,
+# sin cancelar el que está en curso.
+#
+# ENTORNO: `--entorno demo`, explícito. `real` no aparece en ningún workflow:
+# exigiría además SPEL_DERIV_PERMITIR_REAL=1, que no se define en ninguno.
+#
+# 00:15 UTC: la vela diaria cierra a las 00:00 UTC. El script decide qué
+# está cerrado con la hora del SERVIDOR de Deriv, no con la del runner.
+#
+# Los pushes hechos con GITHUB_TOKEN no disparan workflows, y ninguno
+# escucha `data`: sin recursión.
+
+name: SPEL velas
+
+on:
+  schedule:
+    - cron: "15 0 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: gdelt-data
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  velas:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      SPEL_DRIVE_ROOT: ${{ github.workspace }}/data-store
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout de la rama data
+        uses: actions/checkout@v4
+        with:
+          ref: data
+          path: data-store
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      # Los secrets entran por `env:` de ESTE paso, no del job: ningún otro
+      # paso los necesita. Nunca como argumento: los argumentos aparecen en
+      # el log y en la lista de procesos.
+      #
+      # `continue-on-error`: una vela inválida sale 1 DESPUÉS de escribir las
+      # válidas; se commitean y el job se pone rojo al final.
+      - name: Velas diarias (escribe en data-store)
+        id: velas
+        continue-on-error: true
+        env:
+          DERIV_APP_ID: ${{ secrets.DERIV_APP_ID }}
+          DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
+        run: python ingestion/velas.py --entorno demo --write
+
+      - name: Commit a data
+        working-directory: data-store
+        run: |
+          git add -A metrics/velas
+          if git diff --cached --quiet; then
+            echo "Sin cambios: no hay nada que commitear."
+            exit 0
+          fi
+          resumen=$(git diff --cached --numstat -- 'metrics/velas/*/86400.jsonl' \
+            | awk '{split($3, p, "/"); printf "%s +%s, ", p[3], $1 - $2}' \
+            | sed 's/, $//')
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "velas diarias $(date -u +%F): ${resumen:-solo revisiones}" \
+            -m "Corrida ${{ github.run_id }} de ${{ github.workflow }} (${{ github.event_name }})."
+          for intento in 1 2; do
+            git pull --rebase -q origin data && git push -q origin HEAD:data && exit 0
+            echo "Push rechazado (intento $intento)."
+          done
+          exit 1
+
+      - name: Resultado
+        if: steps.velas.outcome == 'failure'
+        run: |
+          echo "La ingesta de velas falló (ver el paso 'Velas diarias'). Lo válido quedó commiteado."
+          exit 1
