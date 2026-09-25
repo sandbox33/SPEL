@@ -70,6 +70,8 @@ from governance.secrets import SecretKey, load_secret  # noqa: E402
 # vocabularios para lo mismo divergen en cuanto alguien edita uno solo.
 from ingestion.source_registry import DepthKind  # noqa: E402
 from ingestion.adapters import (  # noqa: E402
+    DERIV_MAX_COUNT,
+    DERIV_MAX_PAGES_DEFAULT,
     DERIV_WS_ENDPOINT,
     REQUIRED_COLUMNS,
     TWELVEDATA_ENDPOINT,
@@ -275,14 +277,10 @@ TWELVEDATA_MAX_OUTPUTSIZE = 5000
 #: el proveedor y no la petición.
 TIINGO_START_DATE = "1900-01-01"
 
-#: Deriv: `count` tope 5000 por petición (VERIFICADO en el sondeo previo).
-#: Es el único de los cuatro que necesita paginación para llegar al fondo.
-DERIV_MAX_COUNT = 5000
-
-#: Tope de páginas de Deriv por activo. Existe para que una serie muy
-#: profunda —o una API que nunca deja de responder— no cuelgue la corrida.
-#: Al toparlo, el resultado dice TOPE_DE_PETICION y no "esto es todo".
-DERIV_MAX_PAGES_DEFAULT = 12
+# DERIV_MAX_COUNT y DERIV_MAX_PAGES_DEFAULT vivían acá. Desde el Brief H1-A
+# viven en ingestion/adapters.py, junto al endpoint: ingestion/velas.py
+# pagina con los mismos valores, e ingestion/ no importa de tools/. Se
+# importan arriba y siguen siendo atributos de este módulo.
 
 #: Topes OBSERVADOS por endpoint de Alpha Vantage. Alpha Vantage no acepta
 #: un conteo —solo `outputsize=full`—, así que la única forma de detectar

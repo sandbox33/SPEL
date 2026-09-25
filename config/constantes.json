@@ -117,6 +117,200 @@
       "notas": "Citado pero sin backtest. Ver core/monte_carlo.py:34."
     },
     {
+      "nombre": "APALANCAMIENTO_MAXIMO",
+      "modulo": "core.preregistro_h1",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h1.md (fusionado antes del backtest; ver tests/test_preregistro_h1.py).",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta H1-B.",
+      "valor": 2.0
+    },
+    {
+      "nombre": "COMISION_REFERENCIA_FRACCION",
+      "modulo": "core.preregistro_h1",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h1.md (fusionado antes del backtest; ver tests/test_preregistro_h1.py).",
+      "usado_en": [],
+      "notas": "Cifra citada por el Admin del documento de multiplicadores de cripto de Deriv; no se pudo leer desde el sandbox.",
+      "valor": 0.001
+    },
+    {
+      "nombre": "COMISION_REFERENCIA_MINIMO_USD",
+      "modulo": "core.preregistro_h1",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h1.md (fusionado antes del backtest; ver tests/test_preregistro_h1.py).",
+      "usado_en": [],
+      "notas": "Ídem.",
+      "valor": 0.1
+    },
+    {
+      "nombre": "DSR_MINIMO",
+      "modulo": "core.preregistro_h1",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h1.md (fusionado antes del backtest; ver tests/test_preregistro_h1.py).",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta H1-B.",
+      "valor": 0.9
+    },
+    {
+      "nombre": "ENSAYOS_PREVIOS_FALLIDOS",
+      "modulo": "core.preregistro_h1",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h1.md (fusionado antes del backtest; ver tests/test_preregistro_h1.py).",
+      "usado_en": [
+        "core.preregistro_h1.N_INGENUO"
+      ],
+      "notas": "Máscara Gödel, proxy de transfer entropy, EMA 20/63.",
+      "valor": 3
+    },
+    {
+      "nombre": "ENTRENAMIENTO_INICIAL_BARRAS",
+      "modulo": "core.preregistro_h1",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h1.md (fusionado antes del backtest; ver tests/test_preregistro_h1.py).",
+      "usado_en": [
+        "core.preregistro_h1.historia_requerida"
+      ],
+      "notas": "",
+      "valor": 504
+    },
+    {
+      "nombre": "FRACCION_VOL_OBJETIVO",
+      "modulo": "core.preregistro_h1",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h1.md (fusionado antes del backtest; ver tests/test_preregistro_h1.py).",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta H1-B.",
+      "valor": 0.25
+    },
+    {
+      "nombre": "N_FOLDS",
+      "modulo": "core.preregistro_h1",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h1.md (fusionado antes del backtest; ver tests/test_preregistro_h1.py).",
+      "usado_en": [
+        "core.preregistro_h1.historia_requerida"
+      ],
+      "notas": "",
+      "valor": 4
+    },
+    {
+      "nombre": "N_INGENUO",
+      "modulo": "core.preregistro_h1",
+      "categoria": "derivada",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h1.md (fusionado antes del backtest; ver tests/test_preregistro_h1.py).",
+      "usado_en": [],
+      "notas": "Vale 10: la cota pesimista del DSR.",
+      "expresion": "len(REJILLA_H1) + 1 + ENSAYOS_PREVIOS_FALLIDOS"
+    },
+    {
+      "nombre": "OOS_BARRAS_POR_FOLD",
+      "modulo": "core.preregistro_h1",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h1.md (fusionado antes del backtest; ver tests/test_preregistro_h1.py).",
+      "usado_en": [
+        "core.preregistro_h1.historia_requerida"
+      ],
+      "notas": "",
+      "valor": 126
+    },
+    {
+      "nombre": "PSR_MINIMO",
+      "modulo": "core.preregistro_h1",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h1.md (fusionado antes del backtest; ver tests/test_preregistro_h1.py).",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta H1-B.",
+      "valor": 0.9
+    },
+    {
+      "nombre": "RAZON_STOPOUT_SALIDA",
+      "modulo": "core.preregistro_h1",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h1.md (fusionado antes del backtest; ver tests/test_preregistro_h1.py).",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta H1-B.",
+      "valor": 1.5
+    },
+    {
+      "nombre": "REJILLA_H1",
+      "modulo": "core.preregistro_h1",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h1.md (fusionado antes del backtest; ver tests/test_preregistro_h1.py).",
+      "usado_en": [
+        "core.preregistro_h1.rejilla_soportada",
+        "core.preregistro_h1.N_INGENUO"
+      ],
+      "notas": "",
+      "valor": [
+        10,
+        20,
+        40,
+        80,
+        160,
+        320
+      ]
+    },
+    {
+      "nombre": "SHARPE_MINIMO_AVANZAR",
+      "modulo": "core.preregistro_h1",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h1.md (fusionado antes del backtest; ver tests/test_preregistro_h1.py).",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta H1-B.",
+      "valor": 0.5
+    },
+    {
+      "nombre": "SHARPE_UMBRAL_ALTERNATIVA",
+      "modulo": "core.preregistro_h1",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h1.md (fusionado antes del backtest; ver tests/test_preregistro_h1.py).",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta H1-B.",
+      "valor": 0.3
+    },
+    {
+      "nombre": "VENTANA_VOL_BARRAS",
+      "modulo": "core.preregistro_h1",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h1.md (fusionado antes del backtest; ver tests/test_preregistro_h1.py).",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta H1-B.",
+      "valor": 20
+    },
+    {
       "nombre": "CORE_COUNTRY_FILTERS",
       "modulo": "core.scoring",
       "categoria": "etiqueta",
@@ -492,6 +686,38 @@
       "notas": ""
     },
     {
+      "nombre": "DERIV_MAX_COUNT",
+      "modulo": "ingestion.adapters",
+      "categoria": "parametro",
+      "valor": 5000,
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Tope por request observado en el sondeo real de Deriv (2026-09-03).",
+      "usado_en": [
+        "ingestion.velas.descargar",
+        "tools.provider_coverage.build_parser",
+        "tools.provider_coverage.probe_deriv"
+      ],
+      "notas": "Movida de tools.provider_coverage a ingestion.adapters el 25-sep-2026 (Brief H1-A): ingestion/ no importa de tools/."
+    },
+    {
+      "nombre": "DERIV_MAX_PAGES_DEFAULT",
+      "modulo": "ingestion.adapters",
+      "categoria": "parametro",
+      "valor": 12,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Techo de paginación del sondeo. Elección de ingeniería para acotar el tiempo.",
+      "usado_en": [
+        "ingestion.velas.descargar",
+        "tools.provider_coverage.build_parser",
+        "tools.provider_coverage.probe_deriv",
+        "tools.provider_coverage.probe_provider",
+        "tools.provider_coverage.run_inventory"
+      ],
+      "notas": "Movida de tools.provider_coverage a ingestion.adapters el 25-sep-2026."
+    },
+    {
       "nombre": "DERIV_WS_ENDPOINT",
       "modulo": "ingestion.adapters",
       "categoria": "etiqueta",
@@ -671,6 +897,53 @@
       "notas": ""
     },
     {
+      "nombre": "MENSAJES_PERMITIDOS",
+      "modulo": "ingestion.deriv_ws",
+      "categoria": "etiqueta",
+      "valor": [
+        "active_symbols",
+        "authorize",
+        "contracts_for",
+        "ping",
+        "proposal",
+        "ticks_history",
+        "time"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief H1-A v2 (25-sep-2026): lista blanca de mensajes de solo lectura. Cualquier otro se rechaza antes del socket.",
+      "usado_en": [
+        "ingestion.deriv_ws.nombre_del_mensaje"
+      ],
+      "notas": "Agregar un mensaje acá es ampliar lo que el sistema puede hacerle a una cuenta. Los de orden no entran hasta que H1-B muestre ventaja neta de costos (decision-log 25-sep)."
+    },
+    {
+      "nombre": "PERMISO_REAL_ENV_VAR",
+      "modulo": "ingestion.deriv_ws",
+      "categoria": "etiqueta",
+      "valor": "SPEL_DERIV_PERMITIR_REAL",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief H1-A v2: `real` exige una variable de entorno explícita, distinta del token.",
+      "usado_en": [
+        "ingestion.deriv_ws.verificar_entorno"
+      ],
+      "notas": "Tiene que valer exactamente \"1\"."
+    },
+    {
+      "nombre": "TIMEOUT_RESPUESTA_S",
+      "modulo": "ingestion.deriv_ws",
+      "categoria": "derivada",
+      "expresion": "inspect.signature(DerivAdapter.__init__).parameters['timeout_s'].default",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "El default de DerivAdapter.__init__, leído de la firma para no duplicar el literal.",
+      "usado_en": [
+        "ingestion.deriv_ws.abrir_sesion"
+      ],
+      "notas": ""
+    },
+    {
       "nombre": "MARCA_INICIO_ARCHIVO",
       "modulo": "ingestion.frescura",
       "categoria": "etiqueta",
@@ -844,6 +1117,85 @@
       "notas": ""
     },
     {
+      "nombre": "CONTROL_POSITIVO",
+      "modulo": "ingestion.sonda_instrumentos",
+      "categoria": "etiqueta",
+      "valor": "frxEURUSD",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief H1-A v2: sin frxEURUSD en active_symbols la corrida es INVALIDO. También es el primer símbolo del mapa verificado de DerivAdapter.",
+      "usado_en": [
+        "ingestion.sonda_instrumentos.seleccionar",
+        "ingestion.sonda_instrumentos.sondear"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "DIAS_DE_SONDA",
+      "modulo": "ingestion.sonda_instrumentos",
+      "categoria": "parametro",
+      "valor": 7,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief H1-A v2: una proposal por día durante siete días.",
+      "usado_en": [
+        "ingestion.sonda_instrumentos.sondear"
+      ],
+      "notas": "H1-B no arranca hasta siete días después de fusionar H1-A."
+    },
+    {
+      "nombre": "MERCADO_CRIPTO",
+      "modulo": "ingestion.sonda_instrumentos",
+      "categoria": "etiqueta",
+      "valor": "cryptocurrency",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Valor de active_symbols[].market para cripto. No verificado contra una respuesta real desde el sandbox (Deriv bloqueado); si no coincide, la sonda sale SIN_BTC listando los mercados vistos.",
+      "usado_en": [
+        "ingestion.sonda_instrumentos.seleccionar"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "MERCADO_METALES",
+      "modulo": "ingestion.sonda_instrumentos",
+      "categoria": "etiqueta",
+      "valor": "commodities",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Valor de active_symbols[].market para el oro spot. Mismo estado de verificación que MERCADO_CRIPTO.",
+      "usado_en": [
+        "ingestion.sonda_instrumentos.seleccionar"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "ORO_PREREGISTRADO",
+      "modulo": "ingestion.sonda_instrumentos",
+      "categoria": "etiqueta",
+      "valor": "frxXAUUSD",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": false,
+      "fuente": "research/preregistro_h1.md, cláusula de réplica en oro.",
+      "usado_en": [
+        "ingestion.sonda_instrumentos.sondear"
+      ],
+      "notas": "Solo se verifica que exista en active_symbols y se reporta; la selección de candidatos de oro no depende de este valor."
+    },
+    {
+      "nombre": "SCHEMA_VERSION",
+      "modulo": "ingestion.sonda_instrumentos",
+      "categoria": "etiqueta",
+      "valor": "1.0.0",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": false,
+      "fuente": "Versión del formato de metrics/instrumentos/*.json.",
+      "usado_en": [
+        "ingestion.sonda_instrumentos._escribir"
+      ],
+      "notas": ""
+    },
+    {
       "nombre": "REGISTRY_PATH",
       "modulo": "ingestion.source_registry",
       "categoria": "derivada",
@@ -870,6 +1222,59 @@
         "tools.calibrar_umbral_entropia.a_documento"
       ],
       "notas": "Bloquea la lectura: source_registry.py:349 rechaza el archivo si no coincide. No es una etiqueta decorativa."
+    },
+    {
+      "nombre": "ESQUEMA_VELAS",
+      "modulo": "ingestion.velas",
+      "categoria": "etiqueta",
+      "valor": {
+        "epoch": "Int64",
+        "open": "Float64",
+        "high": "Float64",
+        "low": "Float64",
+        "close": "Float64"
+      },
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Campos de ticks_history.candles[] en el esquema oficial (epoch entero, precios number).",
+      "usado_en": [
+        "ingestion.velas.leer_velas"
+      ],
+      "notas": "El orden de las columnas es parte del contrato."
+    },
+    {
+      "nombre": "GRANULARIDAD_DIARIA",
+      "modulo": "ingestion.velas",
+      "categoria": "derivada",
+      "expresion": "_DERIV_GRANULARITY_SECONDS['1d']",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "El mapa verificado de DerivAdapter; 86400 también está en el enum de granularity del esquema oficial de ticks_history.",
+      "usado_en": [
+        "ingestion.velas.ingerir",
+        "ingestion.velas.leer_velas",
+        "ingestion.velas.ruta_serie"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "_PRECIOS",
+      "modulo": "ingestion.velas",
+      "categoria": "etiqueta",
+      "valor": [
+        "open",
+        "high",
+        "low",
+        "close"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Los cuatro campos de precio de una vela.",
+      "usado_en": [
+        "ingestion.velas.normalizar_vela",
+        "ingestion.velas._validar_tipos"
+      ],
+      "notas": ""
     },
     {
       "nombre": "DEFAULT_CYCLE_ASSETS",
@@ -1336,36 +1741,6 @@
       "fuente": "Activos que el sondeo cubre por defecto.",
       "usado_en": [
         "tools.provider_coverage.build_parser"
-      ],
-      "notas": ""
-    },
-    {
-      "nombre": "DERIV_MAX_COUNT",
-      "modulo": "tools.provider_coverage",
-      "categoria": "parametro",
-      "valor": 5000,
-      "evidencia": "medido",
-      "afecta_resultado": true,
-      "fuente": "Tope por request observado en el sondeo real de Deriv (2026-09-03).",
-      "usado_en": [
-        "tools.provider_coverage.build_parser",
-        "tools.provider_coverage.probe_deriv"
-      ],
-      "notas": ""
-    },
-    {
-      "nombre": "DERIV_MAX_PAGES_DEFAULT",
-      "modulo": "tools.provider_coverage",
-      "categoria": "parametro",
-      "valor": 12,
-      "evidencia": "provisional_sin_evidencia",
-      "afecta_resultado": true,
-      "fuente": "Techo de paginación del sondeo. Elección de ingeniería para acotar el tiempo.",
-      "usado_en": [
-        "tools.provider_coverage.build_parser",
-        "tools.provider_coverage.probe_deriv",
-        "tools.provider_coverage.probe_provider",
-        "tools.provider_coverage.run_inventory"
       ],
       "notas": ""
     },

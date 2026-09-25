@@ -101,6 +101,10 @@ corridas seguidas sin intermitencia.
 | `ingestion/run_gdelt.py` + `.github/workflows/gdelt.yml` | Ingesta diaria; CI escritor único en la rama `data`; reintenta los días que GDELT no había publicado | 59 + 12 | ✅ código, 🟡 primera corrida real pendiente de la siembra |
 | `ingestion/frescura.py` | Alarma de la serie: rojo solo por hueco interno posterior a la marca de inicio | 18 | ✅ |
 | `tools/verificar_siembra.py` | Compara BTC/XAU sembrados contra la serie medida | 14 | ✅ código, 🟡 no corrido contra la siembra real |
+| `ingestion/deriv_ws.py` | Sesión de solo lectura con Deriv: `entorno` obligatorio, `real` con permiso aparte, lista blanca de siete mensajes | 29 | ✅ |
+| `ingestion/sonda_instrumentos.py` + `.github/workflows/sonda.yml` | Contratos, multiplicadores, stake y comisión de BTC y oro, desde la API, siete días | 19 + 6 | ✅ código, 🟡 no corrido contra Deriv real (bloqueado desde el sandbox) |
+| `ingestion/velas.py` + `.github/workflows/velas.yml` | Velas diarias de BTC y oro en la rama `data`, profundidad usable, `leer_velas()` en polars | 33 + 6 | ✅ código, 🟡 no corrido contra Deriv real |
+| `core/preregistro_h1.py` + `research/preregistro_h1.md` | Reglas del experimento H1, fijadas antes del backtest | 26 | 🟡 dos cláusulas PENDIENTES del Admin |
 | `ingestion/source_registry.py` | Registro versionado de cobertura por fuente | 34 | ✅ |
 | `tools/measure_godel_samples.py` | Mide el `n` post-máscara | 75 | ✅ |
 | `tools/provider_coverage.py` + `import_gdelt_entropy.py` + `audit_data_lake.py` | Inventario de proveedores, import histórico de entropía, auditoría del lake | 58 + 36 + 32 | ✅ |
@@ -527,7 +531,17 @@ salvedad que hay que resolver **antes** de revertir.
 
 ## ▶️ PRÓXIMO PASO CONCRETO
 
-**Decidir qué mide el éxito de Fase 2, ahora que el ciclo diario emite solo régimen.**
+**Completar las dos cláusulas PENDIENTES de `research/preregistro_h1.md` y fusionar H1-A.**
+
+La alternativa para Sharpe < 0,3, y qué pasa entre 0,3 y 0,5 o con PSR/DSR por debajo de
+0,90. Sin eso el pre-registro no cierra, y declararlas después de ver un resultado es lo que
+el documento existe para impedir. H1-B —el backtest— arranca siete días después de fusionar,
+cuando la sonda haya medido la comisión siete veces.
+
+*(Lo que estaba acá —"decidir qué mide el éxito de Fase 2"— lo contesta el pre-registro H1
+con sus compuertas: Sharpe neto fuera de muestra, PSR y DSR. Queda abajo como historia.)*
+
+**Antes: decidir qué mide el éxito de Fase 2, ahora que el ciclo diario emite solo régimen.**
 
 El entry point de GDELT ya existe (`ingestion/run_gdelt.py`, PR #24) y el motor quedó
 limpio de la cadena muerta (PR #27). Lo que queda sin contestar es lo que bloquea
