@@ -1224,6 +1224,59 @@
       "notas": "Bloquea la lectura: source_registry.py:349 rechaza el archivo si no coincide. No es una etiqueta decorativa."
     },
     {
+      "nombre": "ESQUEMA_VELAS",
+      "modulo": "ingestion.velas",
+      "categoria": "etiqueta",
+      "valor": {
+        "epoch": "Int64",
+        "open": "Float64",
+        "high": "Float64",
+        "low": "Float64",
+        "close": "Float64"
+      },
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Campos de ticks_history.candles[] en el esquema oficial (epoch entero, precios number).",
+      "usado_en": [
+        "ingestion.velas.leer_velas"
+      ],
+      "notas": "El orden de las columnas es parte del contrato."
+    },
+    {
+      "nombre": "GRANULARIDAD_DIARIA",
+      "modulo": "ingestion.velas",
+      "categoria": "derivada",
+      "expresion": "_DERIV_GRANULARITY_SECONDS['1d']",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "El mapa verificado de DerivAdapter; 86400 también está en el enum de granularity del esquema oficial de ticks_history.",
+      "usado_en": [
+        "ingestion.velas.ingerir",
+        "ingestion.velas.leer_velas",
+        "ingestion.velas.ruta_serie"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "_PRECIOS",
+      "modulo": "ingestion.velas",
+      "categoria": "etiqueta",
+      "valor": [
+        "open",
+        "high",
+        "low",
+        "close"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Los cuatro campos de precio de una vela.",
+      "usado_en": [
+        "ingestion.velas.normalizar_vela",
+        "ingestion.velas._validar_tipos"
+      ],
+      "notas": ""
+    },
+    {
       "nombre": "DEFAULT_CYCLE_ASSETS",
       "modulo": "orchestration.cycle",
       "categoria": "etiqueta",

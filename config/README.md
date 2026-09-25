@@ -6,7 +6,7 @@ directorio no existía. Esto es su primer contenido.
 
 ## `constantes.json` — qué es
 
-El registro de **las 108 constantes de módulo** de `core/`, `ingestion/`,
+El registro de **las 127 constantes de módulo** de `core/`, `ingestion/`,
 `orchestration/`, `governance/`, `execution/` y `tools/`. Una entrada por
 constante, con su valor, de dónde salió, qué tan sostenido está ese valor, y
 si cambiarlo cambia algo.
@@ -53,7 +53,7 @@ activos corre el ciclo o qué instrumento se le pide al proveedor.
 saber qué tocar con cuidado se saltearía exactamente las que más mueven el
 sistema.**
 
-`false` es excepcional: hoy son **7 de 108**, y hay un test que falla si pasan
+`false` es excepcional: hoy son **7 de 127**, y hay un test que falla si pasan
 de 8. El caso que más enseña es `GODEL_CRITERIA_VERSION`: el sello se
 registra en `AssetCycleResult` y **nada ramifica sobre él** —el propio campo
 documenta que "la comprobación no existe todavía"—, así que hoy es `false` y
@@ -126,6 +126,7 @@ del motor sin servirle a nadie en producción.
 | `None` | `null` | igualdad estricta |
 | `Enum` suelto | su `.value` | igualdad |
 | `dataclass` | objeto con sus campos | por campo |
+| tipo de polars (`pl.Int64`) | su nombre (`"Int64"`) | igualdad de string |
 | `categoria: "derivada"` | `expresion` en vez de `valor` | **no compara valor** |
 
 Los dos últimos renglones de valor son extensiones, y las dos hicieron falta
