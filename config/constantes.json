@@ -117,6 +117,69 @@
       "notas": "Citado pero sin backtest. Ver core/monte_carlo.py:34."
     },
     {
+      "nombre": "ALFA_DIEBOLD_MARIANO",
+      "modulo": "core.preregistro_h2",
+      "categoria": "parametro",
+      "valor": 0.05,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h2.md, sección 7: alfa fijado antes, test unilateral.",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta el PR de evaluación de H2."
+    },
+    {
+      "nombre": "HAR_VENTANAS_CONTINUO",
+      "modulo": "core.preregistro_h2",
+      "categoria": "parametro",
+      "valor": [
+        1,
+        7,
+        30
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h2.md, sección 4: componentes diario, semanal y mensual del HAR en calendario continuo.",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta el PR de evaluación de H2."
+    },
+    {
+      "nombre": "HAR_VENTANAS_HABIL",
+      "modulo": "core.preregistro_h2",
+      "categoria": "parametro",
+      "valor": [
+        1,
+        5,
+        22
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h2.md, sección 4: componentes diario, semanal y mensual del HAR en calendario hábil.",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta el PR de evaluación de H2."
+    },
+    {
+      "nombre": "REZAGO_ENTROPIA_BARRAS",
+      "modulo": "core.preregistro_h2",
+      "categoria": "parametro",
+      "valor": 1,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h2.md, sección 3: el rezago del brief (t−1).",
+      "usado_en": [],
+      "notas": "[PENDIENTE DEL ADMIN]: GDELT publica el día t−1 durante el día t (ingestion.run_gdelt.DIAS_DE_RETRASO_DE_PUBLICACION), así que al abrir el día t no se conoce. La alternativa es 2."
+    },
+    {
+      "nombre": "VENTANA_INICIAL_BARRAS",
+      "modulo": "core.preregistro_h2",
+      "categoria": "parametro",
+      "valor": 504,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h2.md, sección 4: la ventana expansiva arranca con 504 barras.",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta el PR de evaluación de H2."
+    },
+    {
       "nombre": "CORE_COUNTRY_FILTERS",
       "modulo": "core.scoring",
       "categoria": "etiqueta",
