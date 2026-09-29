@@ -34,9 +34,7 @@ una página de reglas prácticas.
    que coincide con el broker donde se ejecuta de verdad. Todo lo demás es
    aproximación de entrenamiento — se declara así.
 
-6. **Capital real solo después de que el paper trading lo demuestre.**
-   Cuánto tiempo/cuántos ciclos, se decide una vez y se escribe acá — no se
-   negocia por sesión bajo presión de tiempo.
+6. **Capital real solo después de 6 meses de forward en demo**, y solo si la hipótesis aprueba las compuertas de su pre-registro sobre histórico + forward, con el mismo N (DG-3, decision-log 25-sep-2026).
 
 7. **APIs oficiales únicamente.** Si un broker o fuente no tiene API
    oficial, no entra al sistema, sin excepción — es la razón real por la
