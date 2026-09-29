@@ -51,6 +51,10 @@ jobs:
     # procesos; una variable de entorno no.
     env:
       TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+      # La sonda de endpoints de Deriv (tests/test_deriv_endpoints_live.py,
+      # Brief final v3 §0.A) lo necesita para la URL del endpoint legacy. No
+      # es un token: no autoriza ninguna cuenta. El informe lo enmascara.
+      DERIV_APP_ID: ${{ secrets.DERIV_APP_ID }}
       # Le dice al guardián de tests/test_sources.py que en ESTE entorno la
       # ausencia de credenciales no es lo esperado, sino una falla de
       # plomería. Sin esto el guardián se saltea y un secreto mal escrito
