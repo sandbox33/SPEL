@@ -1347,3 +1347,42 @@ ya escrito (16 y 17 días de desfase). Al registrarse DG-6, `dd9ea63..main` ten�
 merges: el test nace en rojo y lo pone en verde la actualización de `ESTADO.md` del mismo
 PR. El umbral vive en `governance/estado.py::MAX_MERGES_SIN_ACTUALIZAR_ESTADO` y en
 `config/constantes.json`.
+
+---
+
+## 2026-09-29 — La siembra, verificada: coincide con la serie medida, y la deuda tiene fecha
+
+**Fuente:** `tools/verificar_siembra.py` corrido el 29-sep-2026 contra la rama `data` en el
+commit `11e45f6`, con `SPEL_DRIVE_ROOT` apuntando a un `git archive` de esa rama. La
+verificación no se corrió por el workflow: el dispatch de `gdelt.yml` con
+`modo: verificar_siembra` nunca se hizo (las siete corridas de `gdelt.yml` del 19 al 28-sep
+son un dispatch del 19-sep, anterior a la rama `data`, y seis del cron). Es el mismo código
+sobre los mismos datos.
+
+**Resultado: VERDE en los dos activos.**
+
+| | filas en el rango sembrado | válidos | rango | líneas corruptas | salto final |
+|---|---|---|---|---|---|
+| BTC | 4.880 (esperadas 4.880) | 4.880 (4.880) | 2013-04-01 .. 2026-09-03 | 0 | sí |
+| XAU | 4.879 (esperadas 4.879) | 4.879 (4.879) | 2013-04-01 .. 2026-09-03 | 0 | sí |
+
+sha256 de los archivos **tal como se subieron** (commit de la siembra `03206fd`, 22-sep-2026),
+para cotejar a mano con el original de Drive:
+
+- `BTC.jsonl`: `57819bd8a65414ea29438d4f6d7689c7a75d1be59e28cfea294c939b3eadef1c`
+- `XAU.jsonl`: `00cd613177e8b003062f2acccb9a15139e5fdd7cb0c0d6bdd6187f6e980d7eb1`
+
+Los dos terminan en salto de línea, así que la guarda de `append_day()` no tuvo que actuar.
+
+**Las fechas de la deuda heredada** (la entrada del 21-sep decía que esta lista la
+completaba):
+
+- **BTC, 24 huecos:** 2014-01-23, 2014-01-24, 2014-01-25, 2014-03-19, 2022-11-10,
+  2023-03-23, y **2025-06-14 .. 2025-07-01** (18 días seguidos).
+- **XAU, 25 huecos:** los mismos, más 2014-03-10.
+
+**El hallazgo es el tramo de 2025:** 18 días de calendario seguidos sin fila en los dos
+activos. No es ruido suelto; es un corte de la serie. Cualquier análisis que use la
+entropía de esos meses —H2 en particular, que compara la entropía de `t−1` contra la
+volatilidad de `t`— tiene que declarar antes de mirar qué hace con él. Sigue sin
+rellenarse, como decidió la entrada del 21-sep.
