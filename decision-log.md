@@ -1305,3 +1305,45 @@ evalúa —solo mira desde la marca de inicio `metrics/ingesta_automatica.json`,
 día que escribió CI— y la reconciliación de 404 tampoco las reintenta. Rellenarlas sería
 un backfill con `--since`, que reescribe, y es trabajo aparte con su propio brief si
 alguna vez hace falta.
+
+---
+
+## 2026-09-25 — Gobernanza: DG-1 a DG-6
+
+**Fuente:** decisiones del Admin del 25-sep-2026 (Brief final v3, §0). Se registran en el PR
+de gobernanza (PR-G), antes que cualquier otro PR del brief.
+
+| ID | Decisión |
+|---|---|
+| DG-1 | El **repositorio es la única fuente canónica**. `SPEL_MANUAL_OPERACION.md` (Drive, 7-sep-2026) deja de ser canónico: se regenera desde el repo o se archiva, y lo hace el Admin en Drive. Se elimina la regla "gana el manual sin verificar fecha". |
+| DG-2 | El capital de referencia es de **100 USD** y reemplaza los "$10" de `BLUEPRINT.md`. |
+| DG-3 | `governance/PRINCIPLES.md` #6: **6 meses de forward en demo** antes de cualquier capital real. El paso a real exige que la hipótesis apruebe sus compuertas del pre-registro **sobre histórico + forward**, con el mismo N. |
+| DG-4 | H3 usa **un contrato por activo**: largo si al menos la mitad de los lookbacks soportados están largos, fuera en caso contrario. |
+| DG-5 | **H1 se mantiene** sin cambios de diseño, salvo los del cierre de H1-A (PR-0). H3 es la ruta principal. |
+| DG-6 | El test anti-desfase de `ESTADO.md` falla si hay **más de 3 PRs fusionados** desde su commit de referencia. |
+
+**DG-1, por qué ahora.** La regla de desempate que ponía al manual por encima del repo
+decía "sin excepción y sin necesidad de verificar cuál de los dos se escribió después".
+Con la ingesta escribiendo en `data` todos los días y el estado cambiando PR a PR, un
+documento en Drive que nadie regenera queda atrás en días, y la regla lo hacía ganar igual.
+El código en `main` manda sobre cualquier documento.
+
+**DG-2, el motivo con los números.** Con 10 USD, el piso de comisión de 0,10 USD de los
+multiplicadores de cripto sería de ~2,5 % de una posición típica. Verificado: con el sizing
+del pre-registro H1 y una volatilidad del 60 % —el supuesto de la sonda—, la posición
+completa es de 10 × 0,25 / 0,60 = 4,17 USD, y 0,10 USD es el **2,40 %**. Por sub-posición
+del ensemble (1/6) sería el **14,4 %**. Con 100 USD: 0,24 % y 1,4 %.
+
+**DG-3** queda escrito en `governance/PRINCIPLES.md` #6, que decía que la duración "se
+decide una vez y se escribe acá": esta es esa vez.
+
+**DG-4 y DG-5** van a `research/preregistro_h3.md` (PR-H3), que se fusiona **antes** que el
+PR #31: al fusionar el #31 el cron empieza a escribir los precios del universo, y el
+pre-registro de H3 tiene que existir antes de que haya un precio que mirar.
+
+**DG-6** es `tests/test_estado_al_dia.py`. La regla vieja —punto 6 de "cómo actualizar
+este archivo"— dependía de que alguien se acordara, y falló dos veces con el diagnóstico
+ya escrito (16 y 17 días de desfase). Al registrarse DG-6, `dd9ea63..main` tenía **5**
+merges: el test nace en rojo y lo pone en verde la actualización de `ESTADO.md` del mismo
+PR. El umbral vive en `governance/estado.py::MAX_MERGES_SIN_ACTUALIZAR_ESTADO` y en
+`config/constantes.json`.
