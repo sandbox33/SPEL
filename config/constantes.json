@@ -398,6 +398,45 @@
       "notas": ""
     },
     {
+      "nombre": "MAX_MERGES_SIN_ACTUALIZAR_ESTADO",
+      "modulo": "governance.estado",
+      "categoria": "parametro",
+      "valor": 3,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "DG-6, decisión del Admin del 25-sep-2026 (Brief final v3 §0): el test anti-desfase falla con más de 3 PRs fusionados desde el commit de referencia de ESTADO.md.",
+      "usado_en": [
+        "governance.estado.Desfase.al_dia"
+      ],
+      "notas": "Al registrarse, dd9ea63..main tenía 5 merges: la regla nació en rojo y la puso en verde la actualización de ESTADO.md del mismo PR."
+    },
+    {
+      "nombre": "PATRON_COMMIT_DE_REFERENCIA",
+      "modulo": "governance.estado",
+      "categoria": "etiqueta",
+      "valor": "^\\*\\*Commit de referencia:\\*\\*\\s*`([0-9a-f]{7,40})`",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "El formato con que ESTADO.md declara su commit de referencia desde antes de DG-6 (\"**Commit de referencia:** `dd9ea63`\").",
+      "usado_en": [
+        "governance.estado.commit_de_referencia"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "RAIZ",
+      "modulo": "governance.estado",
+      "categoria": "derivada",
+      "expresion": "Path(__file__).resolve().parent.parent",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "La raíz del repo clonado, donde viven ESTADO.md y .git.",
+      "usado_en": [
+        "governance.estado.medir"
+      ],
+      "notas": ""
+    },
+    {
       "nombre": "COLAB_DRIVE_ROOT",
       "modulo": "governance.persistence",
       "categoria": "etiqueta",
