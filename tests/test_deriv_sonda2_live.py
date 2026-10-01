@@ -1,0 +1,701 @@
+"""
+tests/test_deriv_sonda2_live.py
+=================================
+Sonda §0.A-2 (addendum del 29-sep-2026, ítem 6). Mide lo que hace falta
+saber ANTES de migrar `deriv_ws.py` al WS público nuevo. Solo lectura, el
+mismo patrón live que la §0.A (tests/test_deriv_endpoints_live.py): corre
+en live-tests.yml, publica un informe JSON en el log del job y no escribe
+nada en ningún lado.
+
+══ LO QUE CONTESTA ══
+
+  a) PROFUNDIDAD. `ticks_history` diario (count 5000, end latest) sobre el
+     BTC y el oro que elige `seleccionar()` de `active_symbols` por mercado,
+     sin símbolo fijo. Después pagina hacia atrás (end = primera_epoch − 1,
+     start explícito) hasta una respuesta vacía o un error. Por página: las
+     velas, la primera y la última epoch. En total: velas, velas alineadas y
+     primera epoch. La §0.A vio que count 5000 devolvió 256 velas, 365 días
+     justos hacia atrás desde la hora de la corrida.
+  b) ALINEACIÓN. Cuántas velas de cada página tienen una epoch que no es
+     múltiplo de la granularidad. En la §0.A, la primera vela (1759337176)
+     no lo era.
+  c) `contracts_for` de BTC, del oro y de frxEURUSD (el control positivo de
+     sonda_instrumentos): si hay MULTUP, el `multiplier_range`, y los
+     límites de stake que traiga cada ítem MULTUP.
+  d) `proposal` MULTUP, que es una COTIZACIÓN, no una compra, en ws/public
+     con `underlying_symbol`: ¿responde o exige cuenta?
+  e) REST, solo GET: `/trading/v1/options/accounts` con DERIV_API_TOKEN
+     como Bearer y `Deriv-App-ID`. ¿Autentica? Solo el `account_type` de
+     cada cuenta, con el ID enmascarado. Y
+     `/trading/v1/options/legacy/migration-status`. Ningún OTP, ningún POST.
+
+══ FUENTES ══
+
+Esquemas oficiales, github.com/deriv-com/deriv-api-schemas, release
+`production_v20260901_0` (commit 54e3538):
+  · `ticks_history_request`: `end` es string (`latest` o epoch), `start`
+    es entero; ninguno de los dos tiene tope documentado.
+  · `proposal_request`: requiere `proposal` (1), `contract_type`,
+    `currency` y `underlying_symbol`. `auth_required: 0`.
+  · `contracts_for_response`: `multiplier_range`, `default_stake`, y
+    `min_stake`/`max_stake` "[Only for turbos options]". Para MULTUP el
+    stake mínimo real sale de `proposal.validation_params` (ver
+    sonda_instrumentos), y se reporta si aparece.
+  · `get_accounts_request` y `legacy_migration_status_request`: headers
+    `Authorization: Bearer` y `Deriv-App-ID`. `get_accounts_response`:
+    `data[].account_type` ∈ {demo, real}.
+  · `rest-api-openapi.json` declara `/accounts` con GET y POST; el POST
+    CREA una cuenta y acá no se usa.
+
+[INTERPRETACIÓN] El host REST. El OpenAPI no declara `servers`. Se usa
+`https://api.derivws.com` porque `/trading/v1/options/ws/public` está en
+el MISMO OpenAPI que `/accounts`, y la §0.A verificó que ese path responde
+en `api.derivws.com`.
+
+[INTERPRETACIÓN] El `start` de cada página. El addendum pide "start
+explícito" sin dar el valor. Se usa `end − DERIV_MAX_COUNT × granularidad`
+(acotado a 0): la ventana que cubriría el count pedido, con las constantes
+que ya existen.
+
+[INTERPRETACIÓN] La moneda de la `proposal`. El esquema la exige, y la
+regla de sonda_instrumentos es que no se escribe a mano. Sale de la cuenta
+DEMO que devuelve `/accounts` (e). Si (e) no autentica o no hay cuenta
+demo, la `proposal` no se manda, y el informe dice por qué.
+
+══ CUÁNDO SE PONE ROJO ══
+
+Solo por plomería o por fuga: falta DERIV_APP_ID o DERIV_API_TOKEN en el
+job, aparece un secreto en el informe, o el handshake del WS público (que
+el registro da por DISPONIBLE) falla. Todo lo que Deriv conteste, incluido
+un error, es el resultado de la sonda y va al informe sin poner el job en
+rojo. Si falta el token, la parte WS se corre igual y el job falla al final.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import json
+import re
+from typing import Any, Awaitable, Callable, Optional
+
+import httpx
+import pytest
+
+from governance.secrets import SecretKey, load_secret
+from ingestion.adapters import DERIV_MAX_COUNT, DerivAdapter
+from ingestion.deriv_ws import TIMEOUT_RESPUESTA_S, nombre_del_mensaje
+from ingestion.sonda_instrumentos import (
+    CONTROL_POSITIVO,
+    codigo,
+    resumir_contratos,
+    seleccionar,
+)
+from ingestion.velas import GRANULARIDAD_DIARIA
+from tests.test_deriv_endpoints_live import (
+    _EXTRACTO,
+    _SOLO_EN_LIVE_TESTS,
+    ENDPOINT_PUBLICO_NUEVO,
+    _http_de,
+    _publicar,
+)
+
+#: [INTERPRETACIÓN] Ver el docstring: el host del ws/public verificado.
+BASE_REST = "https://api.derivws.com"
+
+#: Las ÚNICAS rutas REST que la sonda puede pedir, y solo con GET.
+RUTAS_REST_PERMITIDAS: frozenset[str] = frozenset({
+    "/trading/v1/options/accounts",
+    "/trading/v1/options/legacy/migration-status",
+})
+
+#: El umbral del addendum, ítem 8: si la historia diaria de BTC no llega a
+#: esto ni paginando, se detiene todo y decide el Admin. Es
+#: `historia_requerida(320)` de H3 (320 + 756, core/preregistro_h3.py en el
+#: PR #33).
+UMBRAL_ADMIN_VELAS_BTC = 1076
+
+#: GET async: (url, headers) -> (status HTTP, cuerpo).
+Getter = Callable[[str, dict], Awaitable[tuple[int, str]]]
+
+
+def enmascarar_id(cuenta: str) -> str:
+    """Los dígitos de un account_id, tapados. Queda el prefijo de letras,
+    que dice la clase de cuenta y no la cuenta."""
+    return re.sub(r"\d", "*", str(cuenta))
+
+
+def _limpiador(secretos: tuple[str, ...]) -> Callable[[str], str]:
+    def limpiar(texto: str) -> str:
+        for s in secretos:
+            if s:
+                texto = texto.replace(s, "***")
+        return texto
+    return limpiar
+
+
+# ═══ e) REST ══════════════════════════════════════════════════════════════
+
+async def _get_httpx(url: str, headers: dict) -> tuple[int, str]:
+    async with httpx.AsyncClient(timeout=TIMEOUT_RESPUESTA_S) as cliente:
+        r = await cliente.get(url, headers=headers)
+        return r.status_code, r.text
+
+
+async def sondear_rest(*, token: str, app_id: str, get: Getter = _get_httpx) -> dict:
+    """Las dos rutas de solo lectura. Nunca lanza. Devuelve el informe
+    publicable y, aparte, la moneda de la primera cuenta demo activa (no es
+    un secreto; la usa la `proposal` de d)."""
+    limpiar = _limpiador((token, app_id))
+    headers = {"Authorization": f"Bearer {token}", "Deriv-App-ID": app_id}
+    informe: dict[str, Any] = {"base": BASE_REST}
+
+    async def pedir(ruta: str) -> tuple[dict, Optional[Any]]:
+        if ruta not in RUTAS_REST_PERMITIDAS:
+            raise ValueError(f"{ruta}: fuera de las rutas REST de solo lectura")
+        entrada: dict[str, Any] = {"ok": False}
+        informe[ruta] = entrada
+        try:
+            status, cuerpo = await get(BASE_REST + ruta, headers)
+        except Exception as exc:   # noqa: BLE001 -- se reporta, no se oculta
+            entrada["error"] = limpiar(f"{type(exc).__name__}: {exc}")
+            return entrada, None
+        entrada["http"] = status
+        entrada["sha256"] = hashlib.sha256(cuerpo.encode("utf-8")).hexdigest()
+        try:
+            datos = json.loads(cuerpo)
+        except json.JSONDecodeError:
+            datos = None
+        if status != 200:
+            # El cuerpo de un rechazo sí va (recortado y limpio): es lo que
+            # dice POR QUÉ no autenticó. El de un 200 de /accounts no va
+            # nunca: trae IDs y saldos.
+            entrada["error"] = limpiar(cuerpo[:_EXTRACTO])
+            return entrada, None
+        entrada["ok"] = True
+        return entrada, datos
+
+    moneda_demo: Optional[str] = None
+    entrada, datos = await pedir("/trading/v1/options/accounts")
+    if datos is not None:
+        cuentas = datos.get("data") if isinstance(datos, dict) else None
+        if not isinstance(cuentas, list):
+            entrada["ok"] = False
+            entrada["error"] = "200 sin `data` como lista"
+        else:
+            entrada["cuentas"] = [{"account_id": enmascarar_id(c.get("account_id", "")),
+                                   "account_type": c.get("account_type")}
+                                  for c in cuentas]
+            demo = [c for c in cuentas if c.get("account_type") == "demo"
+                    and c.get("status") == "active" and c.get("currency")]
+            moneda_demo = demo[0]["currency"] if demo else None
+
+    entrada, datos = await pedir("/trading/v1/options/legacy/migration-status")
+    if datos is not None:
+        entrada["status"] = datos.get("status") if isinstance(datos, dict) else None
+
+    return {"informe": informe, "moneda_demo": moneda_demo}
+
+
+# ═══ a)–d) WS público ═════════════════════════════════════════════════════
+
+class _Canal:
+    """Un WS abierto, con el registro de cada mensaje. Cada payload pasa por
+    `nombre_del_mensaje()`, la lista blanca de solo lectura de deriv_ws, que
+    rechaza `proposal` con `subscribe` y todo lo que abra o cierre un
+    contrato."""
+
+    def __init__(self, ws: Any) -> None:
+        self.ws = ws
+        self.req_id = 0
+
+    async def pedir(self, payload: dict) -> tuple[dict, Optional[dict]]:
+        nombre_del_mensaje(payload)
+        self.req_id += 1
+        entrada: dict[str, Any] = {"ok": False}
+        try:
+            await self.ws.send(json.dumps({**payload, "req_id": self.req_id}))
+            crudo = await asyncio.wait_for(self.ws.recv(), TIMEOUT_RESPUESTA_S)
+        except Exception as exc:   # noqa: BLE001
+            entrada["error"] = f"{type(exc).__name__}: {exc}"
+            return entrada, None
+        entrada["sha256"] = hashlib.sha256(crudo.encode("utf-8")).hexdigest()
+        try:
+            datos = json.loads(crudo)
+        except json.JSONDecodeError as exc:
+            entrada["error"] = f"no es JSON: {exc}"
+            entrada["extracto"] = crudo[:_EXTRACTO]
+            return entrada, None
+        if datos.get("error"):
+            entrada["error"] = {"code": datos["error"].get("code"),
+                                "message": str(datos["error"].get("message"))}
+            return entrada, None
+        entrada["ok"] = True
+        return entrada, datos
+
+
+def desalineadas(epochs: list[int], granularidad: int) -> int:
+    return sum(1 for e in epochs if e % granularidad != 0)
+
+
+async def profundidad(canal: _Canal, simbolo: str, granularidad: int) -> dict:
+    """a) y b). Pagina hacia atrás hasta vacía, error, o una página que no
+    retrocede (la API repitiendo la misma ventana: sin este corte, el bucle
+    no termina). No corta por página corta, a diferencia de
+    `velas.descargar()`: con 256 velas por página, ese corte habría parado
+    en la primera, y es justo lo que se quiere medir."""
+    paginas: list[dict] = []
+    fin: Any = "latest"
+    inicio: Optional[int] = None
+    epochs: set[int] = set()
+    corte = ""
+    while True:
+        payload: dict[str, Any] = {"ticks_history": simbolo, "end": str(fin),
+                                   "count": DERIV_MAX_COUNT, "style": "candles",
+                                   "granularity": granularidad}
+        if inicio is not None:
+            payload["start"] = inicio
+        entrada, datos = await canal.pedir(payload)
+        pagina: dict[str, Any] = {"end": str(fin), "start": inicio}
+        if datos is None:
+            pagina["error"] = entrada.get("error")
+            paginas.append(pagina)
+            corte = "error"
+            break
+        velas = datos.get("candles") or []
+        pagina.update(n_velas=len(velas), sha256=entrada["sha256"])
+        if not velas:
+            paginas.append(pagina)
+            corte = "respuesta vacía"
+            break
+        ep = [int(c["epoch"]) for c in velas]
+        primera = min(ep)
+        pagina.update(primera_epoch=primera, ultima_epoch=max(ep),
+                      desalineadas=desalineadas(ep, granularidad))
+        paginas.append(pagina)
+        previa = paginas[-2].get("primera_epoch") if len(paginas) > 1 else None
+        epochs.update(ep)
+        if previa is not None and primera >= previa:
+            corte = "la página no retrocedió"
+            break
+        fin = primera - 1
+        if fin <= 0:
+            corte = "se llegó a la epoch 0"
+            break
+        inicio = max(0, fin - DERIV_MAX_COUNT * granularidad)
+    return {
+        "simbolo": simbolo,
+        "corte": corte,
+        "paginas": paginas,
+        "velas_por_pagina": [p.get("n_velas") for p in paginas],
+        "total": len(epochs),
+        "total_alineadas": len(epochs) - desalineadas(sorted(epochs), granularidad),
+        "primera_epoch": min(epochs) if epochs else None,
+    }
+
+
+def _limites_multup(cf: dict) -> list[dict]:
+    claves = ("multiplier_range", "default_stake", "min_stake", "max_stake",
+              "cancellation_range")
+    return [{k: c.get(k) for k in claves if k in c}
+            for c in (cf.get("available") or []) if c.get("contract_type") == "MULTUP"]
+
+
+async def contratos_y_cotizacion(canal: _Canal, simbolo: str,
+                                 moneda: Optional[str]) -> dict:
+    """c) y d) para un símbolo."""
+    out: dict[str, Any] = {"simbolo": simbolo}
+    entrada, datos = await canal.pedir({"contracts_for": simbolo})
+    out["contracts_for"] = entrada
+    if datos is None:
+        return out
+    cf = datos.get("contracts_for") or {}
+    r = resumir_contratos(cf)
+    entrada.update(multup=r.multup, multdown=r.multdown,
+                   multiplier_range=r.multiplicadores,
+                   limites_multup=_limites_multup(cf))
+    if not r.multup:
+        out["proposal"] = {"sin_enviar": "el instrumento no ofrece MULTUP"}
+    elif not moneda:
+        out["proposal"] = {"sin_enviar": "sin moneda de una cuenta demo (ver e): "
+                                         "no se escribe una a mano"}
+    elif r.default_stake is None or not r.multiplicadores:
+        out["proposal"] = {"sin_enviar": "contracts_for sin default_stake o "
+                                         "multiplier_range para MULTUP"}
+    else:
+        payload = {"proposal": 1, "contract_type": "MULTUP", "basis": "stake",
+                   "amount": r.default_stake, "currency": moneda,
+                   "underlying_symbol": simbolo, "multiplier": r.multiplicadores[0]}
+        entrada, datos = await canal.pedir(payload)
+        entrada["enviado"] = {k: payload[k] for k in ("amount", "currency", "multiplier")}
+        if datos is not None:
+            prop = datos.get("proposal") or {}
+            stake = (prop.get("validation_params") or {}).get("stake")
+            entrada.update(validation_params_stake=stake,
+                           commission=prop.get("commission"))
+        out["proposal"] = entrada
+    return out
+
+
+async def sondear_ws_publico(*, abrir: Callable[[str], Any],
+                             moneda: Optional[str]) -> dict:
+    """a)–d) sobre ENDPOINT_PUBLICO_NUEVO. Nunca lanza."""
+    informe: dict[str, Any] = {"endpoint": ENDPOINT_PUBLICO_NUEVO, "handshake": None}
+    try:
+        async with abrir(ENDPOINT_PUBLICO_NUEVO) as ws:
+            informe["handshake"] = {"ok": True}
+            canal = _Canal(ws)
+            informe["time"], _ = await canal.pedir({"time": 1})
+            entrada, datos = await canal.pedir({"active_symbols": "brief"})
+            informe["active_symbols"] = entrada
+            if datos is None:
+                return informe
+            items = datos.get("active_symbols") or []
+            sel = seleccionar(items)
+            entrada.update(n_simbolos=len(items), mercados=sel.mercados_vistos,
+                           control_presente=sel.control_presente,
+                           btc=[codigo(i)[0] for i in sel.btc],
+                           oro=[codigo(i)[0] for i in sel.oro])
+            elegidos = [codigo(i)[0] for i in sel.btc + sel.oro]
+            informe["profundidad"] = [await profundidad(canal, s, GRANULARIDAD_DIARIA)
+                                      for s in elegidos]
+            con_control = elegidos + ([CONTROL_POSITIVO] if sel.control_presente else [])
+            informe["contratos"] = [await contratos_y_cotizacion(canal, s, moneda)
+                                    for s in con_control]
+    except Exception as exc:   # noqa: BLE001
+        clave = "handshake" if informe["handshake"] is None else "error_de_conexion"
+        informe[clave] = {"ok": False, "http": _http_de(exc),
+                          "error": f"{type(exc).__name__}: {exc}"}
+    return informe
+
+
+def veredicto_umbral(ws: dict) -> dict:
+    """Ítem 8: ¿la historia diaria de cada BTC llega al umbral? Se cuentan
+    las velas ALINEADAS: las desalineadas se descartan en la migración."""
+    btc = set((ws.get("active_symbols") or {}).get("btc") or [])
+    return {p["simbolo"]: {"total_alineadas": p["total_alineadas"],
+                           "umbral": UMBRAL_ADMIN_VELAS_BTC,
+                           "alcanza": p["total_alineadas"] >= UMBRAL_ADMIN_VELAS_BTC}
+            for p in ws.get("profundidad") or [] if p["simbolo"] in btc}
+
+
+# ═══ La sonda real ════════════════════════════════════════════════════════
+
+@pytest.mark.live
+@_SOLO_EN_LIVE_TESTS
+async def test_live_sonda_2(capsys):
+    app_id = load_secret(SecretKey.DERIV_APP_ID, required=False)
+    token = load_secret(SecretKey.DERIV_API_TOKEN, required=False)
+    rest: dict[str, Any] = {"informe": {"omitido": "falta DERIV_API_TOKEN o DERIV_APP_ID"},
+                            "moneda_demo": None}
+    if token and app_id:
+        rest = await sondear_rest(token=token, app_id=app_id)
+    ws = await sondear_ws_publico(abrir=DerivAdapter._default_connector,
+                                  moneda=rest["moneda_demo"])
+    informe = {"sonda": "§0.A-2", "rest": rest["informe"],
+               "moneda_usada": rest["moneda_demo"], "ws_publico": ws,
+               "umbral_btc": veredicto_umbral(ws)}
+    texto = json.dumps(informe, ensure_ascii=False)
+    for secreto in (token, app_id):
+        if secreto:
+            assert secreto not in texto, "un secreto llegó al informe: no se publica"
+    _publicar(capsys, informe)
+    assert app_id, "SPEL_EXPECT_SECRETS=1 pero DERIV_APP_ID no llegó al job"
+    assert token, ("SPEL_EXPECT_SECRETS=1 pero DERIV_API_TOKEN no llegó al job: "
+                   "revisar el env: de live-tests.yml y el secret del repo")
+    assert ws["handshake"]["ok"], "el WS público, registrado DISPONIBLE, no abrió"
+
+
+# ═══ La sonda misma, offline ══════════════════════════════════════════════
+
+from tests.deriv_falso import DerivFalso  # noqa: E402
+
+_DIA = GRANULARIDAD_DIARIA
+_AHORA = 1_790_873_176          # la `time` de la §0.A: no es múltiplo de 86400
+_VENTANA = 365 * _DIA           # lo que la §0.A vio por página
+
+
+def _historia(piso: int, *, ignora_end: bool = False):
+    """ticks_history falso: velas diarias alineadas desde `piso`, más una
+    primera vela desalineada por página (como la de la §0.A), dentro de
+    una ventana de 365 días que termina en `end`."""
+    def manejar(p: dict) -> dict:
+        fin = _AHORA if ignora_end or p["end"] == "latest" else int(p["end"])
+        desde = max(piso, fin - _VENTANA, p.get("start") or 0)
+        if desde > fin:
+            return {"candles": []}
+        alineadas = list(range(-(-desde // _DIA) * _DIA, fin + 1, _DIA))
+        epochs = ([desde] if desde % _DIA else []) + alineadas
+        return {"candles": [{"epoch": e, "open": 1, "high": 1, "low": 1, "close": 1}
+                            for e in epochs]}
+    return manejar
+
+
+def _contratos(*, multup: bool = True):
+    def manejar(p: dict) -> dict:
+        disp = [{"contract_type": "CALL"}]
+        if multup:
+            disp.append({"contract_type": "MULTUP", "multiplier_range": [100, 50, 200],
+                         "default_stake": 10, "min_stake": None, "max_stake": None})
+        return {"contracts_for": {"available": disp}}
+    return manejar
+
+
+def _deriv(**extra) -> DerivFalso:
+    base = {
+        "time": lambda p: {"time": _AHORA},
+        "active_symbols": lambda p: {"active_symbols": [
+            {"underlying_symbol": "R_50", "market": "synthetic_index"},
+            {"underlying_symbol": "BTCVOL", "market": "synthetic_index"},
+            {"underlying_symbol": "frxEURUSD", "market": "forex"},
+            {"underlying_symbol": "cryBTCUSD", "market": "cryptocurrency"},
+            {"underlying_symbol": "frxXAUUSD", "market": "commodities"}]},
+        "ticks_history": _historia(_AHORA - 4 * _VENTANA),
+        "contracts_for": _contratos(),
+        "proposal": lambda p: {"proposal": {"commission": 0.1,
+                                            "validation_params": {"stake": {"min": "1", "max": "2000"}}}},
+    }
+    base.update(extra)
+    return DerivFalso(base)
+
+
+async def _profundidad(d: DerivFalso) -> dict:
+    async with d.connector("wss://x") as ws:
+        return await profundidad(_Canal(ws), "cryBTCUSD", _DIA)
+
+
+async def test_pagina_hacia_atras_hasta_la_respuesta_vacia():
+    d = _deriv()
+    p = await _profundidad(d)
+    pedidos = d.de_tipo("ticks_history")
+    assert p["corte"] == "respuesta vacía"
+    assert pedidos[0]["end"] == "latest" and "start" not in pedidos[0]
+    assert pedidos[0]["count"] == DERIV_MAX_COUNT
+    for previa, pedido in zip(p["paginas"], pedidos[1:]):
+        fin = previa["primera_epoch"] - 1
+        assert pedido["end"] == str(fin), "end = primera_epoch − 1, como string"
+        assert pedido["start"] == fin - DERIV_MAX_COUNT * _DIA
+    assert p["velas_por_pagina"][-1] == 0
+    assert len(p["paginas"]) == 5, "el piso cierra la cuarta ventana; la quinta, vacía"
+    assert p["primera_epoch"] == _AHORA - 4 * _VENTANA
+
+
+async def test_no_corta_por_pagina_corta():
+    """A diferencia de velas.descargar(): 256 velas < 5000 no es el fondo."""
+    p = await _profundidad(_deriv())
+    assert p["velas_por_pagina"][0] < DERIV_MAX_COUNT
+    assert len(p["paginas"]) > 1
+
+
+async def test_cuenta_las_desalineadas_por_pagina():
+    p = await _profundidad(_deriv())
+    assert p["paginas"][0]["desalineadas"] == 1
+    assert p["paginas"][0]["primera_epoch"] % _DIA != 0
+    assert p["total"] - p["total_alineadas"] == sum(
+        pg.get("desalineadas", 0) for pg in p["paginas"])
+
+
+def test_desalineadas_cuenta_las_que_no_son_multiplo():
+    assert desalineadas([0, _DIA, _DIA + 1, 3 * _DIA, 7], _DIA) == 2
+
+
+async def test_corta_si_la_pagina_no_retrocede():
+    p = await _profundidad(_deriv(ticks_history=_historia(0, ignora_end=True)))
+    assert p["corte"] == "la página no retrocedió"
+    assert len(p["paginas"]) == 2
+
+
+async def test_corta_por_error_y_lo_registra():
+    llamadas = []
+
+    def falla_la_segunda(pedido):
+        llamadas.append(pedido)
+        if len(llamadas) == 2:
+            return {"error": {"code": "InvalidStartEnd", "message": "no"}}
+        return _historia(0)(pedido)
+    p = await _profundidad(_deriv(ticks_history=falla_la_segunda))
+    assert p["corte"] == "error"
+    assert p["paginas"][-1]["error"]["code"] == "InvalidStartEnd"
+    assert p["total"] == p["velas_por_pagina"][0]
+
+
+async def test_corta_en_la_epoch_cero_sin_pedir_un_end_invalido():
+    """El esquema de ticks_history exige `end` con el patrón
+    ^(latest|[0-9]{1,10})$: un end negativo sería un pedido mal formado."""
+    d = _deriv(ticks_history=_historia(0))
+    p = await _profundidad(d)
+    assert p["corte"] == "se llegó a la epoch 0"
+    assert p["primera_epoch"] == 0
+    for pedido in d.de_tipo("ticks_history"):
+        assert re.fullmatch(r"latest|[0-9]{1,10}", pedido["end"]), pedido["end"]
+
+
+async def _cotizar(d: DerivFalso, moneda):
+    async with d.connector("wss://x") as ws:
+        return await contratos_y_cotizacion(_Canal(ws), "cryBTCUSD", moneda)
+
+
+async def test_la_proposal_es_multup_con_underlying_symbol_y_sin_subscribe():
+    d = _deriv()
+    out = await _cotizar(d, "USD")
+    [p] = d.de_tipo("proposal")
+    assert p["underlying_symbol"] == "cryBTCUSD" and "symbol" not in p
+    assert p["contract_type"] == "MULTUP" and p["proposal"] == 1
+    assert "subscribe" not in p
+    assert p["multiplier"] == 50, "el multiplicador más bajo del rango"
+    assert p["amount"] == 10 and p["basis"] == "stake" and p["currency"] == "USD"
+    assert out["proposal"]["ok"] is True
+    assert out["proposal"]["validation_params_stake"] == {"min": "1", "max": "2000"}
+    assert out["contracts_for"]["multiplier_range"] == [50.0, 100.0, 200.0]
+    assert out["contracts_for"]["limites_multup"][0]["default_stake"] == 10
+
+
+async def test_sin_moneda_no_se_manda_la_proposal():
+    d = _deriv()
+    out = await _cotizar(d, None)
+    assert d.de_tipo("proposal") == []
+    assert "moneda" in out["proposal"]["sin_enviar"]
+
+
+async def test_sin_multup_no_se_manda_la_proposal():
+    d = _deriv(contracts_for=_contratos(multup=False))
+    out = await _cotizar(d, "USD")
+    assert d.de_tipo("proposal") == []
+    assert out["contracts_for"]["multup"] is False
+
+
+async def test_una_proposal_rechazada_queda_registrada():
+    d = _deriv(proposal=lambda p: {"error": {"code": "AuthorizationRequired",
+                                             "message": "Please log in."}})
+    out = await _cotizar(d, "USD")
+    assert out["proposal"]["ok"] is False
+    assert out["proposal"]["error"]["code"] == "AuthorizationRequired"
+
+
+async def test_la_sonda_ws_elige_por_mercado_y_suma_el_control():
+    d = _deriv()
+    ws = await sondear_ws_publico(abrir=d.connector, moneda="USD")
+    assert d.uri == ENDPOINT_PUBLICO_NUEVO
+    assert ws["active_symbols"]["btc"] == ["cryBTCUSD"]
+    assert ws["active_symbols"]["oro"] == ["frxXAUUSD"]
+    assert [p["simbolo"] for p in ws["profundidad"]] == ["cryBTCUSD", "frxXAUUSD"]
+    assert [c["simbolo"] for c in ws["contratos"]] == ["cryBTCUSD", "frxXAUUSD", "frxEURUSD"]
+    pedidos = {p["ticks_history"] for p in d.de_tipo("ticks_history")}
+    assert pedidos == {"cryBTCUSD", "frxXAUUSD"}, "ningún sintético, aunque diga BTC"
+
+
+async def test_la_sonda_ws_solo_manda_mensajes_de_lectura(monkeypatch):
+    import tests.test_deriv_sonda2_live as mod
+    vistos = []
+    original = mod.nombre_del_mensaje
+    monkeypatch.setattr(mod, "nombre_del_mensaje",
+                        lambda payload: vistos.append(payload) or original(payload))
+    d = _deriv()
+    await sondear_ws_publico(abrir=d.connector, moneda="USD")
+    assert vistos == d.enviados_sin_req_id(), "cada payload pasó por la lista blanca"
+    assert {next(iter(p)) for p in d.enviados} == {
+        "time", "active_symbols", "ticks_history", "contracts_for", "proposal"}
+
+
+async def test_un_handshake_rechazado_no_lanza():
+    import websockets
+    from websockets.datastructures import Headers
+    from websockets.http11 import Response
+
+    def rechaza(url):
+        raise websockets.exceptions.InvalidStatus(Response(520, "x", Headers(), b""))
+    ws = await sondear_ws_publico(abrir=rechaza, moneda=None)
+    assert ws["handshake"] == {"ok": False, "http": 520, "error": ws["handshake"]["error"]}
+
+
+# ── e) REST ──────────────────────────────────────────────────────────────
+
+_CUENTAS = {"data": [
+    {"account_id": "DOT90004580", "balance": 10000, "currency": "USD", "group": "row",
+     "status": "active", "account_type": "demo"},
+    {"account_id": "ROT12345678", "balance": 37.5, "currency": "EUR", "group": "row",
+     "status": "active", "account_type": "real"}],
+    "meta": {"endpoint": "/accounts", "method": "GET", "timing": 1}}
+
+
+def _getter(respuestas: dict[str, tuple[int, Any]]):
+    vistos: list[tuple[str, dict]] = []
+
+    async def get(url: str, headers: dict) -> tuple[int, str]:
+        vistos.append((url, headers))
+        status, cuerpo = respuestas[url.removeprefix(BASE_REST)]
+        return status, cuerpo if isinstance(cuerpo, str) else json.dumps(cuerpo)
+    return get, vistos
+
+
+async def test_rest_pide_solo_las_dos_rutas_con_bearer_y_app_id():
+    get, vistos = _getter({"/trading/v1/options/accounts": (200, _CUENTAS),
+                           "/trading/v1/options/legacy/migration-status": (200, {"status": "complete"})})
+    r = await sondear_rest(token="TOK", app_id="APP", get=get)
+    assert [u for u, _ in vistos] == [BASE_REST + ruta for ruta in (
+        "/trading/v1/options/accounts", "/trading/v1/options/legacy/migration-status")]
+    assert {u.removeprefix(BASE_REST) for u, _ in vistos} == RUTAS_REST_PERMITIDAS
+    for _, h in vistos:
+        assert h == {"Authorization": "Bearer TOK", "Deriv-App-ID": "APP"}
+    assert r["informe"]["/trading/v1/options/legacy/migration-status"]["status"] == "complete"
+
+
+async def test_rest_publica_solo_account_type_con_el_id_enmascarado():
+    get, _ = _getter({"/trading/v1/options/accounts": (200, _CUENTAS),
+                      "/trading/v1/options/legacy/migration-status": (200, {"status": "pending"})})
+    r = await sondear_rest(token="TOK", app_id="APP", get=get)
+    ep = r["informe"]["/trading/v1/options/accounts"]
+    assert ep["cuentas"] == [{"account_id": "DOT********", "account_type": "demo"},
+                             {"account_id": "ROT********", "account_type": "real"}]
+    texto = json.dumps(r["informe"])
+    for dato in ("90004580", "12345678", "10000", "37.5", "row", "EUR"):
+        assert dato not in texto, dato
+    assert r["moneda_demo"] == "USD", "la de la cuenta DEMO, no la de la real"
+
+
+async def test_rest_sin_cuenta_demo_no_da_moneda():
+    solo_real = {"data": [_CUENTAS["data"][1]]}
+    get, _ = _getter({"/trading/v1/options/accounts": (200, solo_real),
+                      "/trading/v1/options/legacy/migration-status": (200, {"status": "complete"})})
+    assert (await sondear_rest(token="TOK", app_id="APP", get=get))["moneda_demo"] is None
+
+
+async def test_rest_un_rechazo_registra_el_motivo_sin_secretos():
+    get, _ = _getter({"/trading/v1/options/accounts": (401, '{"error": "bad token TOK for APP"}'),
+                      "/trading/v1/options/legacy/migration-status": (403, "forbidden")})
+    r = await sondear_rest(token="TOK", app_id="APP", get=get)
+    ep = r["informe"]["/trading/v1/options/accounts"]
+    assert ep["ok"] is False and ep["http"] == 401
+    assert "TOK" not in json.dumps(r) and "APP" not in json.dumps(r)
+    assert "bad token" in ep["error"]
+    assert r["moneda_demo"] is None
+
+
+async def test_rest_una_excepcion_de_red_no_lanza():
+    async def get(url, headers):
+        raise httpx.ConnectError("sin red hacia TOK")
+    r = await sondear_rest(token="TOK", app_id="APP", get=get)
+    ep = r["informe"]["/trading/v1/options/accounts"]
+    assert ep["ok"] is False and "ConnectError" in ep["error"] and "TOK" not in ep["error"]
+
+
+def test_enmascarar_no_deja_digitos():
+    assert enmascarar_id("DOT90004580") == "DOT********"
+    assert not re.search(r"\d", enmascarar_id("CR1234VRTC99"))
+
+
+def test_veredicto_umbral_solo_mira_btc_y_velas_alineadas():
+    ws = {"active_symbols": {"btc": ["cryBTCUSD"]}, "profundidad": [
+        {"simbolo": "cryBTCUSD", "total_alineadas": UMBRAL_ADMIN_VELAS_BTC},
+        {"simbolo": "frxXAUUSD", "total_alineadas": 5000}]}
+    assert veredicto_umbral(ws) == {"cryBTCUSD": {
+        "total_alineadas": UMBRAL_ADMIN_VELAS_BTC, "umbral": UMBRAL_ADMIN_VELAS_BTC,
+        "alcanza": True}}
+    ws["profundidad"][0]["total_alineadas"] -= 1
+    assert veredicto_umbral(ws)["cryBTCUSD"]["alcanza"] is False
+
+
+def test_el_umbral_es_el_de_h3_con_la_rejilla_completa():
+    """1.076 = 320 + 756: historia_requerida(320) de core/preregistro_h3.py
+    (PR #33, todavía no en esta rama). Si H3 cambia, esto se revisa."""
+    assert UMBRAL_ADMIN_VELAS_BTC == 320 + 756

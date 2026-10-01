@@ -58,3 +58,6 @@ class DerivFalso:
     # ── ayudas ───────────────────────────────────────────────────────────
     def de_tipo(self, nombre: str) -> list[dict]:
         return [p for p in self.enviados if next(iter(p)) == nombre]
+
+    def enviados_sin_req_id(self) -> list[dict]:
+        return [{k: v for k, v in p.items() if k != "req_id"} for p in self.enviados]

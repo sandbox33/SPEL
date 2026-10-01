@@ -55,6 +55,11 @@ jobs:
       # Brief final v3 §0.A) lo necesita para la URL del endpoint legacy. No
       # es un token: no autoriza ninguna cuenta. El informe lo enmascara.
       DERIV_APP_ID: ${{ secrets.DERIV_APP_ID }}
+      # La sonda §0.A-2 (tests/test_deriv_sonda2_live.py) lo manda como
+      # Bearer a dos GET de solo lectura de la API REST nueva (/accounts y
+      # /legacy/migration-status), para saber si autentica. No emite OTP ni
+      # hace ningún POST. El informe no lo incluye: el test falla si aparece.
+      DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
       # Le dice al guardián de tests/test_sources.py que en ESTE entorno la
       # ausencia de credenciales no es lo esperado, sino una falla de
       # plomería. Sin esto el guardián se saltea y un secreto mal escrito
