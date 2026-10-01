@@ -1,6 +1,6 @@
 {
   "schema_version": "1.1.0",
-  "actualizado": "2026-09-22",
+  "actualizado": "2026-10-01",
   "constantes": [
     {
       "nombre": "EPSILON_BREAKEVEN",
@@ -115,6 +115,293 @@
         "core.monte_carlo.run_monte_carlo_validation"
       ],
       "notas": "Citado pero sin backtest. Ver core/monte_carlo.py:34."
+    },
+    {
+      "nombre": "APALANCAMIENTO_MAXIMO_POR_ACTIVO",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [
+        "core.preregistro_h3.nocional_activo"
+      ],
+      "notas": "",
+      "valor": 2.0
+    },
+    {
+      "nombre": "CAPITAL_DIAGNOSTICO_USD",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [],
+      "notas": "Reporte de diagnóstico: no es compuerta y no suma al N. Sin consumidor hasta que corra H3.",
+      "valor": 1500.0
+    },
+    {
+      "nombre": "CAPITAL_REFERENCIA_USD",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [],
+      "notas": "DG-2. Sin consumidor hasta que corra H3.",
+      "valor": 100.0
+    },
+    {
+      "nombre": "COMISION_KID_CRIPTO_FRACCION",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief final v3 (25-sep-2026), citando el KID oficial de Deriv para Multiplicadores: cripto, actualizado al 27-ago-2026. No se pudo leer desde el sandbox.",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta que corra H3.",
+      "valor": 0.001
+    },
+    {
+      "nombre": "COMISION_KID_FOREX_EURUSD_FRACCION",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief final v3 (25-sep-2026), citando el KID oficial de Deriv para Multiplicadores: forex, actualizado al 27-jul-2026 (ejemplo EURUSD). No se pudo leer desde el sandbox.",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta que corra H3.",
+      "valor": 0.000199
+    },
+    {
+      "nombre": "COMISION_PISO_USD",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief final v3 (25-sep-2026), citando el KID oficial de Deriv para Multiplicadores: cripto, mínimo de 0,10. No se pudo leer desde el sandbox. El brief lo extiende como piso a todos los mercados.",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta que corra H3.",
+      "valor": 0.1
+    },
+    {
+      "nombre": "DIAS_MINIMOS_DEMO",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [],
+      "notas": "DG-3 b), duplicada de governance/paso_a_real.py (PR #32). Sin consumidor hasta que corra H3.",
+      "valor": 30
+    },
+    {
+      "nombre": "DSR_MINIMO",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta que corra H3.",
+      "valor": 0.9
+    },
+    {
+      "nombre": "ENSAYOS_PREVIOS_FALLIDOS",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [
+        "core.preregistro_h3.N_INGENUO"
+      ],
+      "notas": "Máscara Gödel, proxy de transfer entropy, EMA 20/63.",
+      "valor": 3
+    },
+    {
+      "nombre": "FRACCION_MAXIMA_SALTADA",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [
+        "core.preregistro_h3.lookback_ejecutable"
+      ],
+      "notas": "",
+      "valor": 0.5
+    },
+    {
+      "nombre": "FRACCION_VOL_CARTERA",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [
+        "core.preregistro_h3.escala_cartera",
+        "core.preregistro_h3.fraccion_vol_por_activo"
+      ],
+      "notas": "Se reparte 0,25 / √K entre los K activos, y el escalador s = min(1 ; 0,25 / σ̂_cartera) corrige por correlación (decisión del Admin del 29-sep-2026, sección 6).",
+      "valor": 0.25
+    },
+    {
+      "nombre": "HISTORIA_POSTERIOR_AL_CALENTAMIENTO_BARRAS",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [
+        "core.preregistro_h3.historia_requerida"
+      ],
+      "notas": "",
+      "valor": 756
+    },
+    {
+      "nombre": "MESES_MAXIMOS_ZONA_GRIS",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [],
+      "notas": "DG-3, tope de la zona gris; reemplaza a MESES_FORWARD_DEMO. Duplicada de governance/paso_a_real.py (PR #32). Sin consumidor hasta que corra H3.",
+      "valor": 6
+    },
+    {
+      "nombre": "N_INGENUO",
+      "modulo": "core.preregistro_h3",
+      "categoria": "derivada",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [],
+      "notas": "Vale 11: la cota pesimista del DSR de H3.",
+      "expresion": "len(REJILLA_H3) + 1 + ENSAYOS_PREVIOS_FALLIDOS + VARIANTES_H3"
+    },
+    {
+      "nombre": "OPERACIONES_CERRADAS_MINIMAS_DEMO",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [],
+      "notas": "DG-3 b), duplicada de governance/paso_a_real.py (PR #32). Sin consumidor hasta que corra H3.",
+      "valor": 20
+    },
+    {
+      "nombre": "PSR_MINIMO",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta que corra H3.",
+      "valor": 0.9
+    },
+    {
+      "nombre": "RAZON_MAXIMA_COSTO_OBSERVADO_MODELADO",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [],
+      "notas": "DG-3 c), duplicada de governance/paso_a_real.py (PR #32). Sin consumidor hasta que corra H3.",
+      "valor": 1.25
+    },
+    {
+      "nombre": "RAZON_STOPOUT_SALIDA",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [],
+      "notas": "La regla de H1 con que se decide si un lookback es ejecutable en H3. Sin consumidor hasta que corra H3.",
+      "valor": 1.5
+    },
+    {
+      "nombre": "REJILLA_H3",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [
+        "core.preregistro_h3.rejilla_soportada",
+        "core.preregistro_h3.N_INGENUO"
+      ],
+      "notas": "Los mismos lookbacks que H1, duplicados a propósito: cada pre-registro está fijado por su propio documento.",
+      "valor": [
+        10,
+        20,
+        40,
+        80,
+        160,
+        320
+      ]
+    },
+    {
+      "nombre": "SHARPE_DETENER",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [],
+      "notas": "Sharpe neto < 0,3 -> H2. Sin consumidor hasta que corra H3.",
+      "valor": 0.3
+    },
+    {
+      "nombre": "SHARPE_MINIMO_AVANZAR",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta que corra H3.",
+      "valor": 0.5
+    },
+    {
+      "nombre": "VARIANTES_H3",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [
+        "core.preregistro_h3.N_INGENUO"
+      ],
+      "notas": "",
+      "valor": 1
+    },
+    {
+      "nombre": "VENTANA_VOL_BARRAS",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta que corra H3.",
+      "valor": 20
+    },
+    {
+      "nombre": "VENTANA_VOL_CARTERA_DIAS",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [],
+      "notas": "Días de calendario de retornos de cartera para σ̂_cartera, la volatilidad del escalador s (decisión del Admin del 29-sep-2026). Sin consumidor hasta que corra H3.",
+      "valor": 60
     },
     {
       "nombre": "CORE_COUNTRY_FILTERS",
