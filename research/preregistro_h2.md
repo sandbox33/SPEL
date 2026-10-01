@@ -1,6 +1,7 @@
 # Pre-registro H2 — la entropía GDELT como predictor de volatilidad
 
-**Escrito el 29-sep-2026, en el PR-H2 del Brief final v3.** El código de evaluación va en
+**Escrito el 29-sep-2026, en el PR-H2 del Brief final v3. Revisado el 01-oct-2026, todavía
+sin fusionar,** con la decisión del Admin del 29-sep sobre el rezago (sección 3). El código de evaluación va en
 otro PR, después de este. Para escribirlo no se calculó ninguna relación entre entropía y
 volatilidad: de la serie GDELT solo se miraron sus **fechas**, al verificar la siembra el
 29-sep (decision-log).
@@ -12,14 +13,15 @@ experimento nuevo: `preregistro_h2_v2.md`, sin borrar este.
 
 Las marcas **[INTERPRETACIÓN]** señalan una lectura del brief que el Admin aprueba al
 fusionar. Las marcas **[PENDIENTE DEL ADMIN]** señalan algo que el brief no fija o que
-choca con los datos, y que se completa **antes** de fusionar, en este mismo PR.
+choca con los datos, y que se completa **antes** de fusionar, en este mismo PR. La única
+que hubo, el rezago de la sección 3, la resolvió el Admin el 29-sep.
 
 ---
 
 ## 1. Pregunta
 
-¿La entropía de `t−1` mejora la predicción de `|r_t|` respecto de un HAR-RV con los mismos
-datos? **Primero BTC; después XAU, como réplica.**
+¿La entropía de `t−2` (días de calendario) mejora la predicción de `|r_t|` respecto de un
+HAR-RV con los mismos datos? **Primero BTC; después XAU, como réplica.**
 
 Viene de la medición del 4-sep-2026: dentro del régimen de entropía alta, la volatilidad
 de BTC fue **1,246** veces la de afuera. Esa medición fue contemporánea —entropía y
@@ -43,26 +45,28 @@ PR #31). Este documento fija cómo se hace esa prueba.
   huecos heredados de la serie GDELT —el mayor es un tramo de 18 días, del 14-jun al
   1-jul-2025— y los días con `insufficient_events`. No se rellena nada.
 
-## 3. Cuándo se conoce la entropía de `t−1`
+## 3. Qué entropía usa cada retorno
 
-**[PENDIENTE DEL ADMIN]** El brief pide la entropía de `t−1`. Choca con cómo publica GDELT:
-el archivo del día `t−1` sale **durante** el día `t`, no a su comienzo.
-`ingestion/run_gdelt.py` lo fija en `DIAS_DE_RETRASO_DE_PUBLICACION = 1`, y la
-reconciliación de 404 existe porque a las 06:30 UTC a veces todavía no está. Las velas
-diarias de Deriv van de 00:00 a 00:00 UTC, así que **al abrir el día `t` la entropía de
-`t−1` no se conoce**.
+**Decisión del Admin del 29-sep-2026: la entropía con fecha `d` se usa solo para retornos
+de días `≥ d + 2`, en días de calendario.** Para el retorno del día `t`, la entropía es la
+de la fecha `t − 2` días, unida por fecha (*as-of* sobre `fecha − 2 días`), **no** por un
+corrimiento de barras: en XAU, el lunes usa la entropía del **sábado**, no la del jueves
+que daría correr dos velas hábiles.
 
-Hay dos lecturas y el Admin elige una antes de fusionar:
+Por qué 2 y no 1: el archivo del día `t−1` sale **durante** el día `t`, no
+a su comienzo. `ingestion/run_gdelt.py` lo fija en `DIAS_DE_RETRASO_DE_PUBLICACION = 1`, y
+la reconciliación de 404 existe porque a las 06:30 UTC a veces todavía no está. Las velas
+diarias de Deriv van de 00:00 a 00:00 UTC, así que al abrir el día `t` la entropía de
+`t−1` no se conoce y la de `t−2` sí. Con esto la prueba responde si la entropía sirve con
+la información disponible a la hora de decidir. La lectura de rezago 1 queda descartada.
 
-- **Rezago 1, como dice el brief:** la pregunta es de **contenido predictivo** —si la
-  entropía de `t−1` lleva información sobre `|r_t|` que HAR-RV no tiene—, no de si se
-  puede operar con ella al abrir el día. Si pasa, falta todavía mostrar que sirve con la
-  información disponible a la hora de decidir.
-- **Rezago 2:** la entropía de `t−2`, que sí está publicada al abrir el día `t`. Es la
-  prueba que responde si sirve para dimensionar una posición abierta a las 00:00 UTC.
+`REZAGO_ENTROPIA_DIAS_CALENDARIO = 2` en el módulo.
 
-Este documento y su módulo llevan hoy el rezago del brief (`REZAGO_ENTROPIA_BARRAS = 1`).
-Si el Admin elige 2, se cambian los dos y el sha256 en este PR.
+**[INTERPRETACIÓN] Tolerancia cero** (`TOLERANCIA_ASOF_DIAS = 0`): si la fecha `t − 2` no
+tiene entropía —un hueco de la serie o un día con `insufficient_events`—, el retorno de
+`t` **se excluye**; no se toma una entropía más vieja. Un *as-of* hacia atrás sin
+tolerancia arrastraría la entropía del 13-jun-2025 a lo largo de todo el tramo de 18 días
+sin datos, y la sección 2 fija que no se rellena nada.
 
 ## 4. Modelos
 
@@ -84,8 +88,8 @@ mismas velas. Sus componentes, en barras del calendario del activo:
   `ln v_t = a + b_d · ln v_(d) + b_w · ln v_(w) + b_m · ln v_(m) + día_de_la_semana + ε`,
   donde cada `v_(·)` es el promedio de `v` en las barras de esa ventana que terminan en
   `t−1`.
-- **Modelo B (HAR-RV + entropía):** el modelo A más `c · e_(t−k)`, con `k` el rezago de la
-  sección 3 y `e` la entropía **desestacionalizada**: su valor menos el promedio de su
+- **Modelo B (HAR-RV + entropía):** el modelo A más `c · e_(t−2)`, con `t−2` la fecha de
+  la sección 3 y `e` la entropía **desestacionalizada**: su valor menos el promedio de su
   mismo día de la semana en la ventana de estimación.
 
 **Estimación:** mínimos cuadrados, ventana **expansiva** que arranca con **504** barras y se
