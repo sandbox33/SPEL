@@ -75,6 +75,7 @@ from websockets.http11 import Response
 from ingestion.adapters import DERIV_MAX_COUNT, DERIV_WS_ENDPOINT, DerivAdapter
 from ingestion.deriv_ws import TIMEOUT_RESPUESTA_S, nombre_del_mensaje
 from ingestion.sonda_instrumentos import codigo, es_sintetico
+from ingestion.source_registry import EndpointState, load_registry
 from tests.deriv_falso import DerivFalso
 
 ENDPOINT_PUBLICO_NUEVO = "wss://api.derivws.com/trading/v1/options/ws/public"
@@ -187,6 +188,14 @@ def respondio_a_todo(informe: dict) -> bool:
     return all(informe["mensajes"].get(m, {}).get("ok") for m in esperados)
 
 
+def estado_medido(informe: dict) -> str:
+    """El estado de endpoint (EndpointState) que dice el informe: disponible
+    si respondió a los cuatro mensajes, no disponible en cualquier otro caso.
+    Un endpoint que responde a medias no sirve para la ingesta."""
+    return (EndpointState.DISPONIBLE if respondio_a_todo(informe)
+            else EndpointState.NO_DISPONIBLE)
+
+
 def _publicar(capsys, informe: dict) -> None:
     """Al log del job SIEMPRE, no solo si el test falla: pytest captura la
     salida de los que pasan, y el informe es el entregable en los dos casos."""
@@ -206,15 +215,26 @@ _SOLO_EN_LIVE_TESTS = pytest.mark.skipif(
 @pytest.mark.live
 @_SOLO_EN_LIVE_TESTS
 async def test_live_endpoint_legacy(capsys):
+    """REGISTRA el estado de la legacy, ya no exige que responda: desde el
+    2026-10-01 devuelve HTTP 520 (decision-log), y un test que falla todas
+    las corridas por un hecho ya registrado deja el job rojo para siempre,
+    con lo que el rojo deja de significar algo. Se publica el estado medido
+    junto al del registro; si difieren, hay que actualizar el registro, pero
+    eso lo decide quien lee el informe, no este test.
+
+    Se retira con la migración de `deriv_ws.py` a ws/public: con ningún
+    código abriendo la legacy, no queda nada que medir."""
     app_id = os.environ.get("DERIV_APP_ID")
     assert app_id, ("SPEL_EXPECT_SECRETS=1 pero DERIV_APP_ID no llegó al job: "
                     "revisar el env: de live-tests.yml y el nombre del secret.")
-    informe = await sondear_endpoint(DERIV_WS_ENDPOINT.format(app_id=app_id),
-                                     abrir=DerivAdapter._default_connector,
+    url = DERIV_WS_ENDPOINT.format(app_id=app_id)
+    informe = await sondear_endpoint(url, abrir=DerivAdapter._default_connector,
                                      secretos=(app_id,))
+    informe["estado_medido"] = estado_medido(informe)
+    informe["estado_registrado"] = load_registry().estado_de_endpoint(
+        "deriv", url.split("?")[0])
     _publicar(capsys, informe)
     assert app_id not in json.dumps(informe)
-    assert respondio_a_todo(informe), "la legacy NO respondió a todo: ver el informe"
 
 
 @pytest.mark.live
@@ -317,3 +337,33 @@ def test_la_sonda_solo_manda_mensajes_de_la_lista_blanca():
     asyncio.run(sondear_endpoint("wss://x", abrir=d.connector))
     assert {next(iter(p)) for p in d.enviados} == {
         "time", "active_symbols", "ticks_history", "contracts_for"}
+
+
+async def test_el_estado_medido_sale_del_informe():
+    ok = await sondear_endpoint("wss://x", abrir=_deriv_que_responde().connector)
+    assert estado_medido(ok) == EndpointState.DISPONIBLE
+
+    def rechaza(url):
+        raise websockets.exceptions.InvalidStatus(
+            Response(520, "Origin Error", Headers(), b""))
+    muerto = await sondear_endpoint("wss://x", abrir=rechaza)
+    assert estado_medido(muerto) == EndpointState.NO_DISPONIBLE
+
+    a_medias = await sondear_endpoint("wss://x", abrir=_deriv_que_responde(
+        contracts_for=lambda p: {"error": {"code": "X", "message": "x"}}).connector)
+    assert estado_medido(a_medias) == EndpointState.NO_DISPONIBLE
+
+
+def test_la_sonda_de_la_legacy_no_exige_que_responda():
+    """Ítem f del addendum del 29-sep: el job live tiene que poder salir
+    verde con la legacy muerta. Se mira el código del test, porque fuera de
+    live-tests.yml no corre."""
+    import ast
+    import inspect
+    fuente = inspect.getsource(test_live_endpoint_legacy)
+    llamadas = {n.func.id for n in ast.walk(ast.parse(fuente))
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
+    asserts = [ast.unparse(n.test) for n in ast.walk(ast.parse(fuente))
+               if isinstance(n, ast.Assert)]
+    assert "estado_medido" in llamadas
+    assert not any("respondio_a_todo" in a or "estado_medido" in a for a in asserts), asserts
