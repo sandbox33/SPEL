@@ -23,7 +23,19 @@
       "auth": "ticks_history NO requiere token, solo app_id (VERIFICADO en el sondeo)",
       "notas": [
         "Los dos hechos de arriba se midieron contra la API real. Lo que el sondeo NO dejó registrado es el conteo de filas ni el rango de fechas por activo, y por eso las entradas por activo quedan en NO_VERIFICADO en vez de afirmar una cobertura que no se anotó."
-      ]
+      ],
+      "endpoints": {
+        "wss://ws.derivws.com/websockets/v3": {
+          "estado": "NO_DISPONIBLE",
+          "verificado_el": "2026-10-01",
+          "evidencia": "Handshake HTTP 520 (InvalidStatus). Sonda §0.A, run 36894412401 de SPEL Live Tests sobre 18c8c0b. Ver decision-log 2026-10-01."
+        },
+        "wss://api.derivws.com/trading/v1/options/ws/public": {
+          "estado": "DISPONIBLE",
+          "verificado_el": "2026-10-01",
+          "evidencia": "Handshake 101; time, active_symbols (89), ticks_history y contracts_for respondieron. Misma corrida. La profundidad y la alineación de BTC y del oro se miden en la sonda §0.A-2."
+        }
+      }
     },
     "tiingo": {
       "cuota_documentada": "plan gratuito: 50 símbolos/hora, 1000 peticiones/día",
@@ -346,7 +358,8 @@
       "verificado_el": "2026-08-30",
       "verificado_como": "Del sondeo se verificaron dos hechos de PROVEEDOR (tope de 5.000 velas por petición; ticks_history solo necesita app_id), pero no quedó registrado el conteo de filas ni el rango por activo.",
       "advertencias": [
-        "NO_VERIFICADO a propósito: afirmar cobertura por activo sin el conteo ni el rango sería inventar. Los dos hechos que sí se midieron están en el bloque de proveedor."
+        "NO_VERIFICADO a propósito: afirmar cobertura por activo sin el conteo ni el rango sería inventar. Los dos hechos que sí se midieron están en el bloque de proveedor.",
+        "El endpoint de esta medición (wss://ws.derivws.com) NO está disponible desde el 2026-10-01: el handshake devuelve HTTP 520. La cobertura por la API nueva se mide en la sonda §0.A-2. Ver proveedores.deriv.endpoints."
       ]
     },
     {
@@ -366,7 +379,7 @@
       "cuota_documentada": "WebSocket; 5.000 velas por petición (VERIFICADO). Profundidad histórica total no publicada por Deriv.",
       "verificado_el": "2026-08-30",
       "verificado_como": "Ídem EURUSD: hechos de proveedor verificados, cobertura por activo no registrada.",
-      "advertencias": ["NO_VERIFICADO a propósito. Ver la entrada de EURUSD."]
+      "advertencias": ["NO_VERIFICADO a propósito. Ver la entrada de EURUSD.", "El endpoint de esta medición (wss://ws.derivws.com) NO está disponible desde el 2026-10-01: el handshake devuelve HTTP 520. La cobertura por la API nueva se mide en la sonda §0.A-2. Ver proveedores.deriv.endpoints."]
     },
     {
       "activo": "USDJPY",
@@ -385,7 +398,7 @@
       "cuota_documentada": "WebSocket; 5.000 velas por petición (VERIFICADO). Profundidad histórica total no publicada por Deriv.",
       "verificado_el": "2026-08-30",
       "verificado_como": "Ídem EURUSD: hechos de proveedor verificados, cobertura por activo no registrada.",
-      "advertencias": ["NO_VERIFICADO a propósito. Ver la entrada de EURUSD."]
+      "advertencias": ["NO_VERIFICADO a propósito. Ver la entrada de EURUSD.", "El endpoint de esta medición (wss://ws.derivws.com) NO está disponible desde el 2026-10-01: el handshake devuelve HTTP 520. La cobertura por la API nueva se mide en la sonda §0.A-2. Ver proveedores.deriv.endpoints."]
     },
 
     {

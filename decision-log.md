@@ -1397,3 +1397,55 @@ costos** que pase las compuertas del pre-registro.
 **Condición de reversión:** H1-B pasa las compuertas (Sharpe neto fuera de muestra ≥ 0,5,
 PSR(0) ≥ 0,90 y DSR ≥ 0,90), y un brief propio amplía la lista blanca con su decision-log.
 `execution/` sigue congelado hasta Fase 4 y esto no lo toca.
+
+---
+
+## 2026-10-01 — La API legacy de Deriv está muerta; el WS público nuevo responde
+
+**Fuente:** sonda de endpoints §0.A (`tests/test_deriv_endpoints_live.py`), corrida por el Admin
+en *SPEL Live Tests* sobre la rama del PR #31: run `36894412401`, job `110477682413`, commit
+`18c8c0b`, 01-oct-2026 16:45–16:46 UTC. El informe está en el log del job; lo que sigue
+se copió de ahí, no se reconstruyó.
+
+**Legacy, `wss://ws.derivws.com/websockets/v3?app_id=…`: NO DISPONIBLE.** El handshake
+devuelve **HTTP 520** (`InvalidStatus: server rejected WebSocket connection: HTTP 520`).
+Ningún mensaje llegó a enviarse. Coincide con lo que reportaba la fuente secundaria.
+
+**WS público nuevo, `wss://api.derivws.com/trading/v1/options/ws/public`: responde.**
+Handshake 101 y los cuatro mensajes, con estos sha256 de la respuesta cruda:
+
+| mensaje | resultado | sha256 |
+|---|---|---|
+| `time` | `1790873176` (2026-10-01 16:46:16 UTC) | `89de6289b94175e076f6d2e4b723bf60275bf540b00e56bb3caa669b52e5c3ca` |
+| `active_symbols` | **89** símbolos; el código viene como `underlying_symbol` | `d358da161475bbc35fb5243dc98b8f52e55623d1c74c15f8b878cad3da160827` |
+| `ticks_history` | 256 velas diarias de `OTC_AEX` | `29eb33559f8c178a0b253478f10022e8abcabf78d9178bdbdea4a0c7d46c795d` |
+| `contracts_for` | `OTC_AEX`: CALL, PUT y otros; **sin MULTUP** | `c17b226ce010faa492d56f4e38ae904f4808cf7676e28b7b1e8b06addf561551` |
+
+**Lo que el informe muestra además, y que la sonda 2 tiene que medir antes de migrar:**
+
+- **El símbolo elegido no fue BTC.** La sonda tomó el primer no sintético en orden
+  alfabético, `OTC_AEX` (mercado `indices`). Nada de esto dice todavía qué pasa con BTC y
+  con el oro.
+- **Una ventana de exactamente 365 días.** Con `count` 5000 y `end: latest` llegaron 256
+  velas. La primera tiene época `1759337176` (2025-10-01 16:46:16 UTC), justo **31.536.000 s
+  = 365 días** antes de la hora del servidor. Si ese es un tope por petición y la historia no
+  se puede paginar hacia atrás, la condición de parada de H1 y H3 (1.076 velas para la rejilla
+  completa) no se alcanza con datos de Deriv.
+- **Velas desalineadas.** Esa primera vela no es múltiplo de 86.400: es una vela de borde,
+  cortada en la hora de la corrida. La siguiente (`1759363200`, 2025-10-02 00:00) sí está
+  alineada. `ingestion/velas.py` rechaza toda vela desalineada, así que la migración tiene
+  que descartarlas.
+- La última vela (`1790812800`, 2026-10-01 00:00) era la del día en curso, todavía abierta.
+  `velas.py` ya la descarta por la hora del servidor.
+
+**Consecuencias:**
+
+- `ingestion/source_registry.json` marca el endpoint legacy como no disponible, con esta fecha
+  y esta evidencia.
+- `test_live_endpoint_legacy` deja de exigir éxito: registra el estado y se retira con la
+  migración. Si siguiera fallando, el job de live-tests quedaría rojo para siempre y su rojo
+  dejaría de significar algo.
+- **Antes de migrar** `ingestion/deriv_ws.py` corre una segunda sonda (§0.A-2) con la
+  profundidad paginada de BTC y del oro, la alineación por página, `contracts_for` de BTC, del
+  oro y del control, una `proposal` de cotización en el canal público, y la autenticación REST
+  de la cuenta. La migración se decide con su resultado.
