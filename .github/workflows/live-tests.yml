@@ -51,9 +51,11 @@ jobs:
     # procesos; una variable de entorno no.
     env:
       TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
-      # La sonda de endpoints de Deriv (tests/test_deriv_endpoints_live.py,
-      # Brief final v3 §0.A) lo necesita para la URL del endpoint legacy. No
-      # es un token: no autoriza ninguna cuenta. El informe lo enmascara.
+      # El App ID de la app PAT "SPEL TRADER" (registrada por el Admin el
+      # 01-oct; decision-log 2026-10-01). La sonda de la legacy lo pone en
+      # la URL; la sonda §0.A-2 lo manda en el header Deriv-App-ID, que el
+      # OpenAPI oficial exige en /accounts y en legacy/*. No autoriza ninguna
+      # cuenta por sí solo. El informe lo enmascara.
       DERIV_APP_ID: ${{ secrets.DERIV_APP_ID }}
       # La sonda §0.A-2 (tests/test_deriv_sonda2_live.py) lo manda como
       # Bearer a dos GET de solo lectura de la API REST nueva (/accounts y

@@ -188,6 +188,32 @@ def respondio_a_todo(informe: dict) -> bool:
     return all(informe["mensajes"].get(m, {}).get("ok") for m in esperados)
 
 
+#: Claves cuyo valor es un hash o una época: dígitos y hexadecimales que no
+#: salen de ningún secreto y en los que un App ID numérico corto podría
+#: aparecer por azar, poniendo el job en rojo sin fuga.
+_CLAVES_SIN_TEXTO = frozenset({"sha256", "end"})
+
+
+def texto_libre(x: Any) -> str:
+    """Los strings del informe donde podría filtrarse un secreto: todos,
+    salvo los valores de _CLAVES_SIN_TEXTO. Los números no entran: ningún
+    secreto llega al informe como número."""
+    partes: list[str] = []
+
+    def recorrer(v: Any, clave: Optional[str]) -> None:
+        if isinstance(v, dict):
+            for k, w in v.items():
+                partes.append(str(k))
+                recorrer(w, k)
+        elif isinstance(v, list):
+            for w in v:
+                recorrer(w, clave)
+        elif isinstance(v, str) and clave not in _CLAVES_SIN_TEXTO:
+            partes.append(v)
+    recorrer(x, None)
+    return "\n".join(partes)
+
+
 def estado_medido(informe: dict) -> str:
     """El estado de endpoint (EndpointState) que dice el informe: disponible
     si respondió a los cuatro mensajes, no disponible en cualquier otro caso.
@@ -234,7 +260,7 @@ async def test_live_endpoint_legacy(capsys):
     informe["estado_registrado"] = load_registry().estado_de_endpoint(
         "deriv", url.split("?")[0])
     _publicar(capsys, informe)
-    assert app_id not in json.dumps(informe)
+    assert app_id not in texto_libre(informe)
 
 
 @pytest.mark.live

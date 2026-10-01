@@ -27,7 +27,13 @@ nada en ningún lado.
   e) REST, solo GET: `/trading/v1/options/accounts` con DERIV_API_TOKEN
      como Bearer y `Deriv-App-ID`. ¿Autentica? Solo el `account_type` de
      cada cuenta, con el ID enmascarado. Y
-     `/trading/v1/options/legacy/migration-status`. Ningún OTP, ningún POST.
+     `/trading/v1/options/legacy/migration-status`. Ningún OTP, ningún POST,
+     y un solo pedido por ruta: sin reintentos. Con las credenciales del
+     01-oct (app PAT "SPEL TRADER", token con scope `trade`) se espera que
+     autentique. Si no, el informe trae el código HTTP y el cuerpo con los
+     IDs tapados; un 401 lleva la nota de posible vencimiento del token,
+     cuya fecha es DESCONOCIDA (decision-log 2026-10-01). Si Deriv expone
+     una fecha de vencimiento en un header o en el cuerpo, va al informe.
 
 ══ FUENTES ══
 
@@ -65,8 +71,10 @@ demo, la `proposal` no se manda, y el informe dice por qué.
 ══ CUÁNDO SE PONE ROJO ══
 
 Solo por plomería o por fuga: falta DERIV_APP_ID o DERIV_API_TOKEN en el
-job, aparece un secreto en el informe, o el handshake del WS público (que
-el registro da por DISPONIBLE) falla. Todo lo que Deriv conteste, incluido
+job, aparece un secreto en el informe (se buscan en los strings, no en los
+hashes ni en las épocas, donde un App ID numérico podría aparecer por
+azar), o el handshake del WS público (que el registro da por DISPONIBLE)
+falla. Todo lo que Deriv conteste, incluido
 un error, es el resultado de la sonda y va al informe sin poner el job en
 rojo. Si falta el token, la parte WS se corre igual y el job falla al final.
 """
@@ -91,6 +99,7 @@ from ingestion.sonda_instrumentos import (
     resumir_contratos,
     seleccionar,
 )
+from core.preregistro_h1 import REJILLA_H1, historia_requerida
 from ingestion.velas import GRANULARIDAD_DIARIA
 from tests.test_deriv_endpoints_live import (
     _EXTRACTO,
@@ -98,6 +107,7 @@ from tests.test_deriv_endpoints_live import (
     ENDPOINT_PUBLICO_NUEVO,
     _http_de,
     _publicar,
+    texto_libre,
 )
 
 #: [INTERPRETACIÓN] Ver el docstring: el host del ws/public verificado.
@@ -112,17 +122,60 @@ RUTAS_REST_PERMITIDAS: frozenset[str] = frozenset({
 #: El umbral del addendum, ítem 8: si la historia diaria de BTC no llega a
 #: esto ni paginando, se detiene todo y decide el Admin. Es
 #: `historia_requerida(320)` de H3 (320 + 756, core/preregistro_h3.py en el
-#: PR #33).
+#: PR #33, que todavía no está en esta rama).
 UMBRAL_ADMIN_VELAS_BTC = 1076
 
-#: GET async: (url, headers) -> (status HTTP, cuerpo).
-Getter = Callable[[str, dict], Awaitable[tuple[int, str]]]
+#: Los tres umbrales que el Admin aprobó el 01-oct para leer el informe. Los
+#: de H1 salen de su módulo, que sí está en esta rama.
+UMBRALES_VELAS_BTC: dict[str, int] = {
+    "H1 mínimo": historia_requerida(min(REJILLA_H1)),
+    "H3 completo (condición de parada, ítem 8)": UMBRAL_ADMIN_VELAS_BTC,
+    "H1 completo": historia_requerida(max(REJILLA_H1)),
+}
+
+#: Qué dice el informe ante un 401 en la parte autenticada. El token no
+#: tiene fecha de vencimiento conocida (decision-log 2026-10-01): un 401 se
+#: lee como posible vencimiento, no como un fallo del código.
+NOTA_401 = ("posible vencimiento del DERIV_API_TOKEN: su fecha de vencimiento es "
+            "DESCONOCIDA (decision-log 2026-10-01). No es un fallo de código.")
+
+#: GET async: (url, headers) -> (status HTTP, headers de la respuesta, cuerpo).
+Getter = Callable[[str, dict], Awaitable[tuple[int, dict, str]]]
 
 
 def enmascarar_id(cuenta: str) -> str:
     """Los dígitos de un account_id, tapados. Queda el prefijo de letras,
     que dice la clase de cuenta y no la cuenta."""
     return re.sub(r"\d", "*", str(cuenta))
+
+
+def enmascarar_ids(texto: str) -> str:
+    """Toda tira de 4 o más dígitos, tapada: así se ve un account_id o un
+    loginid dentro de un mensaje de error. Lo que queda (códigos, palabras)
+    dice por qué falló."""
+    return re.sub(r"\d{4,}", lambda m: "*" * len(m.group()), texto)
+
+
+def vencimiento_expuesto(headers: dict, datos: Any) -> dict:
+    """Todo header o clave JSON cuyo nombre mencione una expiración, con su
+    valor. El OpenAPI oficial (54e3538) no documenta ninguno para estas dos
+    rutas; si Deriv manda uno igual, el informe lo muestra."""
+    out: dict[str, Any] = {}
+    for nombre, valor in (headers or {}).items():
+        if "expir" in nombre.lower():
+            out[f"header:{nombre}"] = valor
+
+    def recorrer(x: Any, ruta: str) -> None:
+        if isinstance(x, dict):
+            for k, v in x.items():
+                if "expir" in str(k).lower():
+                    out[f"json:{ruta}{k}"] = v
+                recorrer(v, f"{ruta}{k}.")
+        elif isinstance(x, list):
+            for v in x:
+                recorrer(v, f"{ruta}[].")
+    recorrer(datos, "")
+    return out
 
 
 def _limpiador(secretos: tuple[str, ...]) -> Callable[[str], str]:
@@ -136,16 +189,17 @@ def _limpiador(secretos: tuple[str, ...]) -> Callable[[str], str]:
 
 # ═══ e) REST ══════════════════════════════════════════════════════════════
 
-async def _get_httpx(url: str, headers: dict) -> tuple[int, str]:
+async def _get_httpx(url: str, headers: dict) -> tuple[int, dict, str]:
     async with httpx.AsyncClient(timeout=TIMEOUT_RESPUESTA_S) as cliente:
         r = await cliente.get(url, headers=headers)
-        return r.status_code, r.text
+        return r.status_code, dict(r.headers), r.text
 
 
 async def sondear_rest(*, token: str, app_id: str, get: Getter = _get_httpx) -> dict:
-    """Las dos rutas de solo lectura. Nunca lanza. Devuelve el informe
-    publicable y, aparte, la moneda de la primera cuenta demo activa (no es
-    un secreto; la usa la `proposal` de d)."""
+    """Las dos rutas de solo lectura, UN pedido cada una: sin reintentos.
+    Nunca lanza. Devuelve el informe publicable y, aparte, la moneda de la
+    primera cuenta demo activa (no es un secreto; la usa la `proposal` de
+    d)."""
     limpiar = _limpiador((token, app_id))
     headers = {"Authorization": f"Bearer {token}", "Deriv-App-ID": app_id}
     informe: dict[str, Any] = {"base": BASE_REST}
@@ -156,7 +210,7 @@ async def sondear_rest(*, token: str, app_id: str, get: Getter = _get_httpx) -> 
         entrada: dict[str, Any] = {"ok": False}
         informe[ruta] = entrada
         try:
-            status, cuerpo = await get(BASE_REST + ruta, headers)
+            status, cabeceras, cuerpo = await get(BASE_REST + ruta, headers)
         except Exception as exc:   # noqa: BLE001 -- se reporta, no se oculta
             entrada["error"] = limpiar(f"{type(exc).__name__}: {exc}")
             return entrada, None
@@ -166,11 +220,14 @@ async def sondear_rest(*, token: str, app_id: str, get: Getter = _get_httpx) -> 
             datos = json.loads(cuerpo)
         except json.JSONDecodeError:
             datos = None
+        entrada["vencimiento_expuesto"] = vencimiento_expuesto(cabeceras, datos) or None
         if status != 200:
-            # El cuerpo de un rechazo sí va (recortado y limpio): es lo que
-            # dice POR QUÉ no autenticó. El de un 200 de /accounts no va
-            # nunca: trae IDs y saldos.
-            entrada["error"] = limpiar(cuerpo[:_EXTRACTO])
+            # El cuerpo de un rechazo sí va (recortado, limpio y con los IDs
+            # tapados): es lo que dice POR QUÉ no autenticó. El de un 200 de
+            # /accounts no va nunca: trae IDs y saldos.
+            entrada["error"] = enmascarar_ids(limpiar(cuerpo[:_EXTRACTO]))
+            if status == 401:
+                entrada["nota"] = NOTA_401
             return entrada, None
         entrada["ok"] = True
         return entrada, datos
@@ -194,6 +251,7 @@ async def sondear_rest(*, token: str, app_id: str, get: Getter = _get_httpx) -> 
     if datos is not None:
         entrada["status"] = datos.get("status") if isinstance(datos, dict) else None
 
+    informe["autentico"] = all(informe[r]["ok"] for r in sorted(RUTAS_REST_PERMITIDAS))
     return {"informe": informe, "moneda_demo": moneda_demo}
 
 
@@ -370,12 +428,15 @@ async def sondear_ws_publico(*, abrir: Callable[[str], Any],
 
 
 def veredicto_umbral(ws: dict) -> dict:
-    """Ítem 8: ¿la historia diaria de cada BTC llega al umbral? Se cuentan
-    las velas ALINEADAS: las desalineadas se descartan en la migración."""
+    """Ítem 8 y los tres umbrales aprobados: ¿la historia diaria de cada BTC
+    llega? Se cuentan las velas ALINEADAS: las desalineadas se descartan en
+    la migración. `detener` es la condición del ítem 8 (H3 completo)."""
     btc = set((ws.get("active_symbols") or {}).get("btc") or [])
-    return {p["simbolo"]: {"total_alineadas": p["total_alineadas"],
-                           "umbral": UMBRAL_ADMIN_VELAS_BTC,
-                           "alcanza": p["total_alineadas"] >= UMBRAL_ADMIN_VELAS_BTC}
+    return {p["simbolo"]: {
+                "total_alineadas": p["total_alineadas"],
+                "alcanza": {nombre: p["total_alineadas"] >= u
+                            for nombre, u in UMBRALES_VELAS_BTC.items()},
+                "detener": p["total_alineadas"] < UMBRAL_ADMIN_VELAS_BTC}
             for p in ws.get("profundidad") or [] if p["simbolo"] in btc}
 
 
@@ -394,8 +455,9 @@ async def test_live_sonda_2(capsys):
                                   moneda=rest["moneda_demo"])
     informe = {"sonda": "§0.A-2", "rest": rest["informe"],
                "moneda_usada": rest["moneda_demo"], "ws_publico": ws,
-               "umbral_btc": veredicto_umbral(ws)}
-    texto = json.dumps(informe, ensure_ascii=False)
+               "umbrales_btc": {**{k: v for k, v in UMBRALES_VELAS_BTC.items()},
+                                "por_simbolo": veredicto_umbral(ws)}}
+    texto = texto_libre(informe)
     for secreto in (token, app_id):
         if secreto:
             assert secreto not in texto, "un secreto llegó al informe: no se publica"
@@ -618,13 +680,15 @@ _CUENTAS = {"data": [
     "meta": {"endpoint": "/accounts", "method": "GET", "timing": 1}}
 
 
-def _getter(respuestas: dict[str, tuple[int, Any]]):
+def _getter(respuestas: dict[str, tuple]):
+    """respuestas[ruta] = (status, cuerpo) o (status, cuerpo, headers)."""
     vistos: list[tuple[str, dict]] = []
 
-    async def get(url: str, headers: dict) -> tuple[int, str]:
+    async def get(url: str, headers: dict) -> tuple[int, dict, str]:
         vistos.append((url, headers))
-        status, cuerpo = respuestas[url.removeprefix(BASE_REST)]
-        return status, cuerpo if isinstance(cuerpo, str) else json.dumps(cuerpo)
+        status, cuerpo, *cab = respuestas[url.removeprefix(BASE_REST)]
+        return (status, cab[0] if cab else {},
+                cuerpo if isinstance(cuerpo, str) else json.dumps(cuerpo))
     return get, vistos
 
 
@@ -661,12 +725,12 @@ async def test_rest_sin_cuenta_demo_no_da_moneda():
 
 
 async def test_rest_un_rechazo_registra_el_motivo_sin_secretos():
-    get, _ = _getter({"/trading/v1/options/accounts": (401, '{"error": "bad token TOK for APP"}'),
+    get, _ = _getter({"/trading/v1/options/accounts": (401, '{"error": "bad token q7Xk9 for 31337app"}'),
                       "/trading/v1/options/legacy/migration-status": (403, "forbidden")})
-    r = await sondear_rest(token="TOK", app_id="APP", get=get)
+    r = await sondear_rest(token="q7Xk9", app_id="31337app", get=get)
     ep = r["informe"]["/trading/v1/options/accounts"]
     assert ep["ok"] is False and ep["http"] == 401
-    assert "TOK" not in json.dumps(r) and "APP" not in json.dumps(r)
+    assert "q7Xk9" not in json.dumps(r) and "31337app" not in json.dumps(r)
     assert "bad token" in ep["error"]
     assert r["moneda_demo"] is None
 
@@ -684,15 +748,87 @@ def test_enmascarar_no_deja_digitos():
     assert not re.search(r"\d", enmascarar_id("CR1234VRTC99"))
 
 
-def test_veredicto_umbral_solo_mira_btc_y_velas_alineadas():
+def test_texto_libre_ve_los_strings_y_no_los_hashes_ni_las_epocas():
+    informe = {"endpoint": "wss://x?app_id=31337", "a": {"sha256": "ab31337cd"},
+               "paginas": [{"end": "1790031337", "start": 1790031337,
+                            "error": "falla 31337"}]}
+    t = texto_libre(informe)
+    assert "app_id=31337" in t and "falla 31337" in t
+    assert "ab31337cd" not in t and "1790031337" not in t
+
+
+def test_los_tres_umbrales_aprobados():
+    assert list(UMBRALES_VELAS_BTC.values()) == [1058, 1076, 2608]
+
+
+@pytest.mark.parametrize("alineadas, alcanza, detener", [
+    (2608, [True, True, True], False),
+    (2607, [True, True, False], False),
+    (1076, [True, True, False], False),
+    (1075, [True, False, False], True),
+    (1058, [True, False, False], True),
+    (1057, [False, False, False], True),
+])
+def test_veredicto_por_umbral_solo_mira_btc(alineadas, alcanza, detener):
     ws = {"active_symbols": {"btc": ["cryBTCUSD"]}, "profundidad": [
-        {"simbolo": "cryBTCUSD", "total_alineadas": UMBRAL_ADMIN_VELAS_BTC},
+        {"simbolo": "cryBTCUSD", "total_alineadas": alineadas},
         {"simbolo": "frxXAUUSD", "total_alineadas": 5000}]}
-    assert veredicto_umbral(ws) == {"cryBTCUSD": {
-        "total_alineadas": UMBRAL_ADMIN_VELAS_BTC, "umbral": UMBRAL_ADMIN_VELAS_BTC,
-        "alcanza": True}}
-    ws["profundidad"][0]["total_alineadas"] -= 1
-    assert veredicto_umbral(ws)["cryBTCUSD"]["alcanza"] is False
+    v = veredicto_umbral(ws)
+    assert list(v) == ["cryBTCUSD"]
+    assert list(v["cryBTCUSD"]["alcanza"].values()) == alcanza
+    assert v["cryBTCUSD"]["detener"] is detener
+    assert v["cryBTCUSD"]["total_alineadas"] == alineadas
+
+
+async def test_rest_un_401_se_reporta_como_posible_vencimiento_sin_reintentar():
+    cuerpo = '{"error": {"code": "InvalidToken", "message": "token for CR90004580 expired"}}'
+    get, vistos = _getter({"/trading/v1/options/accounts": (401, cuerpo),
+                           "/trading/v1/options/legacy/migration-status": (401, cuerpo)})
+    r = await sondear_rest(token="TOK", app_id="APP", get=get)
+    ep = r["informe"]["/trading/v1/options/accounts"]
+    assert ep["http"] == 401 and ep["nota"] == NOTA_401
+    assert "CR********" in ep["error"] and "90004580" not in json.dumps(r)
+    assert "InvalidToken" in ep["error"]
+    assert len(vistos) == 2, "un pedido por ruta: sin reintentos"
+    assert r["informe"]["autentico"] is False
+
+
+async def test_rest_un_403_no_lleva_la_nota_de_vencimiento():
+    get, _ = _getter({"/trading/v1/options/accounts": (403, "forbidden"),
+                      "/trading/v1/options/legacy/migration-status": (200, {"status": "complete"})})
+    r = await sondear_rest(token="TOK", app_id="APP", get=get)
+    assert "nota" not in r["informe"]["/trading/v1/options/accounts"]
+    assert r["informe"]["autentico"] is False
+
+
+async def test_rest_con_las_dos_rutas_en_200_autentico():
+    get, _ = _getter({"/trading/v1/options/accounts": (200, _CUENTAS),
+                      "/trading/v1/options/legacy/migration-status": (200, {"status": "complete"})})
+    r = await sondear_rest(token="TOK", app_id="APP", get=get)
+    assert r["informe"]["autentico"] is True
+    assert r["informe"]["/trading/v1/options/accounts"]["vencimiento_expuesto"] is None
+
+
+async def test_rest_reporta_un_vencimiento_si_deriv_lo_expone():
+    con_fecha = {**_CUENTAS, "meta": {**_CUENTAS["meta"], "token_expires_at": 1798761600}}
+    get, _ = _getter({
+        "/trading/v1/options/accounts": (200, con_fecha),
+        "/trading/v1/options/legacy/migration-status": (
+            200, {"status": "complete"}, {"X-Token-Expiry": "2027-01-01"})})
+    r = await sondear_rest(token="TOK", app_id="APP", get=get)
+    assert r["informe"]["/trading/v1/options/accounts"]["vencimiento_expuesto"] == {
+        "json:meta.token_expires_at": 1798761600}
+    assert r["informe"]["/trading/v1/options/legacy/migration-status"]["vencimiento_expuesto"] == {
+        "header:X-Token-Expiry": "2027-01-01"}
+
+
+def test_vencimiento_expuesto_recorre_listas_y_no_inventa():
+    assert vencimiento_expuesto({}, {"data": [{"a": 1}]}) == {}
+    assert vencimiento_expuesto({}, {"data": [{"expires": 5}]}) == {"json:data.[].expires": 5}
+
+
+def test_enmascarar_ids_tapa_tiras_largas_de_digitos():
+    assert enmascarar_ids("CR90004580 y 401 y VRTC1234") == "CR******** y 401 y VRTC****"
 
 
 def test_el_umbral_es_el_de_h3_con_la_rejilla_completa():
