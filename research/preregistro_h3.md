@@ -1,6 +1,8 @@
 # Pre-registro H3 — tendencia multiactivo
 
 **Escrito el 29-sep-2026, en el PR-H3 del Brief final v3, antes de que se fusione el PR #31.**
+**Revisado el 01-oct-2026, todavía sin fusionar,** con dos decisiones del Admin del 29-sep:
+el sizing (sección 6) y las condiciones del paso de demo a real (DG-3, sección 12).
 Al fusionar el #31 el cron empieza a escribir los precios diarios del universo en la rama
 `data`; este documento tiene que existir antes de que haya un precio que mirar. Para
 escribirlo no se leyó ninguna vela ni ningún retorno: solo reglas.
@@ -99,29 +101,38 @@ es fuera de muestra**. Cada activo entra a la cartera cuando completa sus primer
 
 ## 6. Sizing
 
-El **mismo presupuesto de riesgo por activo**, con un **target de volatilidad de cartera
-de 0,25** y un **tope de 2× por activo** sobre el capital.
+Un **target de volatilidad de cartera de 0,25**, repartido entre los K activos como
+`0,25 / √K`, con un **escalador de cartera `s`** y un **tope de 2× por activo** sobre el
+capital (decisión del Admin del 29-sep-2026):
 
 ```
-nocional_activo = capital × (0,25 / K) / vol_realizada_20d_anualizada_del_activo
+nocional_activo = capital × (0,25 / √K) × s / vol_realizada_20d_anualizada_del_activo
+s = min(1 ; 0,25 / σ̂_cartera)
 ```
 
 - `vol_realizada_20d` es el desvío estándar de los retornos logarítmicos de cierre de las
   **20** barras anteriores a la entrada.
 - `K` es la cantidad de activos de la cartera con el calentamiento completo ese día.
-- **[INTERPRETACIÓN] El reparto del target entre los K activos es `0,25 / K`**, y depende
-  solo de K, como pide el brief. Con esta regla la volatilidad de la cartera **no supera
-  0,25 cualquiera sea la correlación entre activos**, y la alcanza solo si todos se mueven
-  juntos. La alternativa, `0,25 / √K`, la alcanza si los activos son independientes pero la
-  supera si están correlacionados: con 20 activos y una correlación media de 0,3 la
-  llevaría a unos 0,65, casi el triple del target. Se elige la que no puede pasarse. **Su
-  costo:** con 100 USD, un nocional por activo de ese tamaño va a quedar muchas veces por
-  debajo del stake mínimo, y esos activos no se operan (sección 9).
+- `σ̂_cartera` es el desvío estándar anualizado de los últimos **60** días de retornos
+  diarios de la cartera, calculados con los pesos vigentes.
+- `0,25 / √K` alcanza el target si los activos son independientes y lo supera si están
+  correlacionados; `s` lo corrige con la correlación medida: si la cartera de los últimos
+  60 días habría tenido más de 0,25 de volatilidad, todo nocional nuevo se achica en esa
+  proporción. `s` nunca agranda: su tope es 1.
+- **`s` se aplica solo al abrir un contrato.** Una posición abierta no se reescala.
+- **[INTERPRETACIÓN] Los pesos vigentes** son los de la cartera tal como quedaría al abrir:
+  las posiciones abiertas, con el nocional que fijaron al abrir, más la que se abre con su
+  nocional antes de `s`, cada uno dividido por el capital. Con esos pesos fijos se
+  reconstruyen los 60 retornos diarios de la cartera.
+- **[INTERPRETACIÓN] Los 60 días son de calendario**, igual que la evaluación (sección 5):
+  un activo sin barra ese día aporta retorno cero. Se anualiza con el `√A` de la serie de
+  la cartera. Si `σ̂_cartera` es cero, `s = 1`.
 - En cada activo se usa el **multiplicador más bajo disponible** según la sonda.
 - Stake = nocional / multiplicador.
 - La posición se fija al abrir el contrato y no se rebalancea hasta la salida.
-- No hay tope de apalancamiento de la cartera además del de cada activo: el brief no lo
-  fija.
+- No hay tope de apalancamiento de la cartera además del de cada activo y de `s`. Con
+  100 USD, un nocional por activo de ese tamaño va a quedar muchas veces por debajo del
+  stake mínimo, y esos activos no se operan (sección 9).
 
 ## 7. Stop-out y reentrada
 
@@ -170,8 +181,9 @@ podría operar con más capital. **No es compuerta y no suma al N.**
 
 ## 10. Benchmark
 
-Una **cartera siempre-larga** con el mismo universo, el mismo sizing (`0,25 / K`, vol de
-20 barras, tope de 2× por activo), los mismos costos, el mismo capital y el multiplicador
+Una **cartera siempre-larga** con el mismo universo, el mismo sizing (`0,25 / √K` con el
+escalador `s` sobre sus propios 60 días, vol de 20 barras, tope de 2× por activo), los
+mismos costos, el mismo capital y el multiplicador
 más bajo disponible en cada activo. Si toca el stop-out, reentra en la apertura siguiente
 pagando comisión; si `max_contract_duration` es finita, cierra y reabre al vencer, pagando
 comisión.
@@ -210,12 +222,21 @@ y el ensemble de H1, los tres previos y la cartera de H3), como cota pesimista.
 
 - **Avanzar a forward:** Sharpe neto **≥ 0,5**, **PSR(0) ≥ 0,90** y **DSR ≥ 0,90**, **y** la
   cartera supera al benchmark en Sharpe neto **o** en Calmar (CAGR / MaxDD). "Avanzar"
-  significa **forward de 6 meses en demo** (DG-3), no capital real. El paso a real exige
-  las mismas compuertas sobre histórico + forward, con el mismo N.
+  significa **forward en demo** con las reglas congeladas, no capital real.
 - **Detener → H2:** Sharpe neto **< 0,3**. No se prueba ninguna variante de tendencia.
-- **Zona gris:** cualquier otro caso. Forward de 6 meses con las reglas congeladas, y al
-  cierre se recalculan las compuertas sobre histórico + forward con el mismo N. Si
-  aprueba, sigue según DG-3; si no, H2. Sin prórroga.
+- **Zona gris:** cualquier otro caso. También va a forward en demo con las reglas
+  congeladas, con la misma salida que el caso de avanzar.
+- **Paso de demo a real (DG-3, decision-log 29-sep-2026).** Exige **todas**:
+  a) **PSR ≥ 0,90** y **DSR ≥ 0,90** sobre retornos diarios de cartera, en la serie
+  combinada histórico + demo, con el mismo N (sección 11); b) **≥ 30 días** de demo y
+  **≥ 20 operaciones cerradas** en demo; c) costos observados en demo **≤ 1,25 ×** costos
+  modelados (sección 8); d) reconciliación demo sin discrepancias. El forward sigue hasta
+  cumplirlas, con un **máximo de 6 meses**; al vencer sin cumplirlas, H2. Sin prórroga.
+- **[INTERPRETACIÓN]** Además de a)–d), el paso a real exige que la serie combinada
+  histórico + demo apruebe también el resto de la compuerta de avanzar: Sharpe neto
+  ≥ 0,5 y superar al benchmark en Sharpe neto o en Calmar. Es la lectura más estricta: el
+  texto anterior de este pre-registro pedía "las mismas compuertas sobre histórico +
+  forward", y DG-3 no dice que se eliminen.
 
 ## 13. Revisión
 

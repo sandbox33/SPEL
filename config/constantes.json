@@ -1,6 +1,6 @@
 {
   "schema_version": "1.1.0",
-  "actualizado": "2026-09-22",
+  "actualizado": "2026-10-01",
   "constantes": [
     {
       "nombre": "EPSILON_BREAKEVEN",
@@ -123,8 +123,10 @@
       "evidencia": "provisional_sin_evidencia",
       "afecta_resultado": true,
       "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
-      "usado_en": [],
-      "notas": "Sin consumidor hasta que corra H3.",
+      "usado_en": [
+        "core.preregistro_h3.nocional_activo"
+      ],
+      "notas": "",
       "valor": 2.0
     },
     {
@@ -183,6 +185,17 @@
       "valor": 0.1
     },
     {
+      "nombre": "DIAS_MINIMOS_DEMO",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [],
+      "notas": "DG-3 b), duplicada de governance/paso_a_real.py (PR #32). Sin consumidor hasta que corra H3.",
+      "valor": 30
+    },
+    {
       "nombre": "DSR_MINIMO",
       "modulo": "core.preregistro_h3",
       "categoria": "parametro",
@@ -227,9 +240,10 @@
       "afecta_resultado": true,
       "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
       "usado_en": [
+        "core.preregistro_h3.escala_cartera",
         "core.preregistro_h3.fraccion_vol_por_activo"
       ],
-      "notas": "Se reparte 0,25 / K entre los K activos: [INTERPRETACIÓN] del documento, sección 6.",
+      "notas": "Se reparte 0,25 / √K entre los K activos, y el escalador s = min(1 ; 0,25 / σ̂_cartera) corrige por correlación (decisión del Admin del 29-sep-2026, sección 6).",
       "valor": 0.25
     },
     {
@@ -246,14 +260,14 @@
       "valor": 756
     },
     {
-      "nombre": "MESES_FORWARD_DEMO",
+      "nombre": "MESES_MAXIMOS_ZONA_GRIS",
       "modulo": "core.preregistro_h3",
       "categoria": "parametro",
       "evidencia": "provisional_sin_evidencia",
       "afecta_resultado": true,
       "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
       "usado_en": [],
-      "notas": "DG-3. Sin consumidor hasta que corra H3.",
+      "notas": "DG-3, tope de la zona gris; reemplaza a MESES_FORWARD_DEMO. Duplicada de governance/paso_a_real.py (PR #32). Sin consumidor hasta que corra H3.",
       "valor": 6
     },
     {
@@ -268,6 +282,17 @@
       "expresion": "len(REJILLA_H3) + 1 + ENSAYOS_PREVIOS_FALLIDOS + VARIANTES_H3"
     },
     {
+      "nombre": "OPERACIONES_CERRADAS_MINIMAS_DEMO",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [],
+      "notas": "DG-3 b), duplicada de governance/paso_a_real.py (PR #32). Sin consumidor hasta que corra H3.",
+      "valor": 20
+    },
+    {
       "nombre": "PSR_MINIMO",
       "modulo": "core.preregistro_h3",
       "categoria": "parametro",
@@ -277,6 +302,17 @@
       "usado_en": [],
       "notas": "Sin consumidor hasta que corra H3.",
       "valor": 0.9
+    },
+    {
+      "nombre": "RAZON_MAXIMA_COSTO_OBSERVADO_MODELADO",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [],
+      "notas": "DG-3 c), duplicada de governance/paso_a_real.py (PR #32). Sin consumidor hasta que corra H3.",
+      "valor": 1.25
     },
     {
       "nombre": "RAZON_STOPOUT_SALIDA",
@@ -355,6 +391,17 @@
       "usado_en": [],
       "notas": "Sin consumidor hasta que corra H3.",
       "valor": 20
+    },
+    {
+      "nombre": "VENTANA_VOL_CARTERA_DIAS",
+      "modulo": "core.preregistro_h3",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
+      "usado_en": [],
+      "notas": "Días de calendario de retornos de cartera para σ̂_cartera, la volatilidad del escalador s (decisión del Admin del 29-sep-2026). Sin consumidor hasta que corra H3.",
+      "valor": 60
     },
     {
       "nombre": "CORE_COUNTRY_FILTERS",
