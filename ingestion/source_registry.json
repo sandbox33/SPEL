@@ -28,7 +28,7 @@
         "wss://ws.derivws.com/websockets/v3": {
           "estado": "NO_DISPONIBLE",
           "verificado_el": "2026-10-01",
-          "evidencia": "Handshake HTTP 520 (InvalidStatus). Sonda §0.A, run 36894412401 de SPEL Live Tests sobre 18c8c0b. Ver decision-log 2026-10-01."
+          "evidencia": "Handshake HTTP 520 (InvalidStatus). Sonda §0.A, run 36894412401 de SPEL Live Tests sobre 18c8c0b, medida con un App ID inválido: el secret DERIV_APP_ID tenía el nombre del token. El estado se sostiene por la documentación oficial de Deriv (legacy retirada, App IDs heredados no válidos, según el Admin) y por el reporte de terceros con HTTP 520, no por esta medición. Ver decision-log 2026-10-01."
         },
         "wss://api.derivws.com/trading/v1/options/ws/public": {
           "estado": "DISPONIBLE",

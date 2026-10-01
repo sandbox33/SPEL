@@ -452,6 +452,10 @@ def test_la_legacy_de_deriv_figura_como_no_disponible(registro):
     assert ep["verificado_el"] == "2026-10-01"
     assert "520" in ep["evidencia"]
     assert "36894412401" in ep["evidencia"]
+    # La medición usó un App ID inválido: el estado no puede descansar solo
+    # en ella, y la evidencia lo dice (decision-log 2026-10-01).
+    assert "App ID inválido" in ep["evidencia"]
+    assert "documentación oficial" in ep["evidencia"]
 
 
 def test_el_ws_publico_nuevo_figura_como_disponible(registro):
