@@ -1305,3 +1305,213 @@ evalúa —solo mira desde la marca de inicio `metrics/ingesta_automatica.json`,
 día que escribió CI— y la reconciliación de 404 tampoco las reintenta. Rellenarlas sería
 un backfill con `--since`, que reescribe, y es trabajo aparte con su propio brief si
 alguna vez hace falta.
+
+---
+
+## 2026-09-25 — Deriv: la API legacy no separa demo y real; la nueva sí
+
+**Fuente:** esquemas oficiales de `deriv-com/deriv-api-docs` (`config/v3/*/send.json` y
+`receive.json`, leídos el 25-sep-2026); búsqueda sobre `developers.deriv.com/docs/options/websocket/`
+(el sitio está bloqueado desde el sandbox: lo que sigue de la API nueva sale del extracto del
+buscador, no de la página leída); `ingestion/adapters.py`; `ingestion/deriv_ws.py`.
+
+**La API legacy** —`wss://ws.derivws.com/websockets/v3?app_id=…`, la de `DERIV_WS_ENDPOINT`—
+tiene **un endpoint único**, y **el token decide la cuenta**. Nada en la URL dice si la
+conexión es demo o real.
+
+**La API nueva de opciones separa las cuentas por ruta:**
+`wss://api.derivws.com/trading/v1/options/ws/demo` y `…/ws/real`, autenticadas con un OTP de
+un solo uso que se pide por REST por cuenta (válido 120 segundos, según el extracto).
+
+**El adapter está en la legacy, y Deriv está migrando.** Lo segundo lo reportó el Admin; el
+calendario de la migración no se pudo leer desde acá.
+
+**Consecuencia en el código:** `ingestion/deriv_ws.py` exige `entorno: "demo" | "real"` sin
+default en todo punto de entrada, y `real` exige además `SPEL_DERIV_PERMITIR_REAL=1`,
+comprobado **antes** de abrir la conexión. Como en la legacy el entorno no se puede verificar
+por la URL, se verifica contra la cuenta: con token, se llama a `authorize` y se compara
+`authorize.is_virtual` ("1 or 0, indicating whether the account is a virtual-money account",
+según el esquema) con el entorno pedido. Un token de cuenta real con `entorno="demo"` corta la
+sesión. Migrar a la API nueva haría esa verificación estructural en vez de por respuesta.
+
+---
+
+## 2026-09-25 — La demo valida integración, no ejecución
+
+**Fuente:** decisión del Admin (Brief H1-A).
+
+Una cuenta demo **no es evidencia suficiente de deslizamiento ni de rechazos**: el
+precio de llenado y la probabilidad de rechazo de una cuenta virtual no tienen por qué
+parecerse a los de una real, y no hay forma de saber cuánto difieren sin operar en real.
+
+Para lo que **sí** sirve: validar **integración** (que los mensajes sean los que la API
+acepta), **idempotencia** (que una corrida repetida no duplique nada) y **reconciliación**
+(que lo que el sistema cree que pasó coincida con lo que la cuenta dice que pasó).
+
+Cualquier número de costo de ejecución que salga de la demo se reporta como tal, y no
+reemplaza a la comisión del pre-registro (`research/preregistro_h1.md`, sección 8).
+
+---
+
+## 2026-09-25 — El 1,246× en BTC no es operativo todavía
+
+**Fuente:** entrada del 2026-09-04 ("Magnitud — sí discrimina, y solo en BTC"); decisión del
+Admin (Brief H1-A).
+
+La razón de volatilidad de **1,246** (Mann-Whitney, p = 3,4×10⁻⁹) dentro vs. fuera del
+régimen de entropía se midió **contemporáneamente**: la entropía del día `t` contra la
+magnitud del retorno del día `t`. Para usarla en el dimensionamiento hace falta que prediga,
+no que acompañe.
+
+**Queda como no operativa hasta superar dos pruebas:**
+
+1. **El rezago a `t−1`:** la entropía de `t−1` tiene que discriminar la magnitud de `t`.
+2. **La comparación contra HAR-RV:** tiene que aportar algo sobre un modelo HAR de volatilidad
+   realizada, que ya predice volatilidad con la propia historia de precios. Si la entropía no
+   mejora lo que HAR-RV ya hace, es una forma cara de medir lo mismo.
+
+Ninguna de las dos se corrió. El sizing del pre-registro H1 usa volatilidad realizada de 20
+días, **no** la entropía.
+
+---
+
+## 2026-09-25 — Nada de órdenes automáticas, ni en demo, hasta que H1-B dé ventaja neta
+
+**Fuente:** decisión del Admin (Brief H1-A); `ingestion/deriv_ws.py`; `tests/test_deriv_ws.py`.
+
+Ninguna orden automática, **tampoco en demo**, hasta que H1-B produzca una ventaja **neta de
+costos** que pase las compuertas del pre-registro.
+
+**Cómo se sostiene, y no solo se promete:**
+
+- `ingestion/deriv_ws.py` solo envía siete mensajes (`active_symbols`, `contracts_for`,
+  `proposal`, `ticks_history`, `time`, `authorize`, `ping`). Cualquier otro se rechaza antes
+  de tocar el socket.
+- `proposal` sale sin `subscribe`: es una cotización, no un stream. El brief pedía
+  `subscribe: 0`, pero el esquema oficial solo admite el valor 1, y omitir el campo es lo
+  equivalente sin arriesgar un error de validación.
+- `tests/test_deriv_ws.py` recorre por AST `core/`, `ingestion/`, `orchestration/`,
+  `governance/`, `execution/`, `tools/` y `research/`, y falla si aparece como literal el
+  nombre de un mensaje de orden.
+
+**Condición de reversión:** H1-B pasa las compuertas (Sharpe neto fuera de muestra ≥ 0,5,
+PSR(0) ≥ 0,90 y DSR ≥ 0,90), y un brief propio amplía la lista blanca con su decision-log.
+`execution/` sigue congelado hasta Fase 4 y esto no lo toca.
+
+---
+
+## 2026-10-01 — La API legacy de Deriv está muerta; el WS público nuevo responde
+
+**Fuente:** sonda de endpoints §0.A (`tests/test_deriv_endpoints_live.py`), corrida por el Admin
+en *SPEL Live Tests* sobre la rama del PR #31: run `36894412401`, job `110477682413`, commit
+`18c8c0b`, 01-oct-2026 16:45–16:46 UTC. El informe está en el log del job; lo que sigue
+se copió de ahí, no se reconstruyó.
+
+**Legacy, `wss://ws.derivws.com/websockets/v3?app_id=…`: NO DISPONIBLE.** El handshake
+devuelve **HTTP 520** (`InvalidStatus: server rejected WebSocket connection: HTTP 520`).
+Ningún mensaje llegó a enviarse. Coincide con lo que reportaba la fuente secundaria.
+
+> **Corrección del mismo día (ver la entrada siguiente):** esta medición usó un App ID
+> inválido. El 520 no prueba por sí solo que la legacy esté muerta; la decisión de migrar se
+> sostiene por la documentación oficial y por el reporte de terceros.
+
+**WS público nuevo, `wss://api.derivws.com/trading/v1/options/ws/public`: responde.**
+Handshake 101 y los cuatro mensajes, con estos sha256 de la respuesta cruda:
+
+| mensaje | resultado | sha256 |
+|---|---|---|
+| `time` | `1790873176` (2026-10-01 16:46:16 UTC) | `89de6289b94175e076f6d2e4b723bf60275bf540b00e56bb3caa669b52e5c3ca` |
+| `active_symbols` | **89** símbolos; el código viene como `underlying_symbol` | `d358da161475bbc35fb5243dc98b8f52e55623d1c74c15f8b878cad3da160827` |
+| `ticks_history` | 256 velas diarias de `OTC_AEX` | `29eb33559f8c178a0b253478f10022e8abcabf78d9178bdbdea4a0c7d46c795d` |
+| `contracts_for` | `OTC_AEX`: CALL, PUT y otros; **sin MULTUP** | `c17b226ce010faa492d56f4e38ae904f4808cf7676e28b7b1e8b06addf561551` |
+
+**Lo que el informe muestra además, y que la sonda 2 tiene que medir antes de migrar:**
+
+- **El símbolo elegido no fue BTC.** La sonda tomó el primer no sintético en orden
+  alfabético, `OTC_AEX` (mercado `indices`). Nada de esto dice todavía qué pasa con BTC y
+  con el oro.
+- **Una ventana de exactamente 365 días.** Con `count` 5000 y `end: latest` llegaron 256
+  velas. La primera tiene época `1759337176` (2025-10-01 16:46:16 UTC), justo **31.536.000 s
+  = 365 días** antes de la hora del servidor. Si ese es un tope por petición y la historia no
+  se puede paginar hacia atrás, la condición de parada no se alcanza con datos de Deriv: 1.076
+  velas para la rejilla completa de H3, 1.058 para la mínima de H1 y 2.608 para la completa
+  de H1.
+- **Velas desalineadas.** Esa primera vela no es múltiplo de 86.400: es una vela de borde,
+  cortada en la hora de la corrida. La siguiente (`1759363200`, 2025-10-02 00:00) sí está
+  alineada. `ingestion/velas.py` rechaza toda vela desalineada, así que la migración tiene
+  que descartarlas.
+- La última vela (`1790812800`, 2026-10-01 00:00) era la del día en curso, todavía abierta.
+  `velas.py` ya la descarta por la hora del servidor.
+
+**Consecuencias:**
+
+- `ingestion/source_registry.json` marca el endpoint legacy como no disponible, con esta fecha
+  y esta evidencia.
+- `test_live_endpoint_legacy` deja de exigir éxito: registra el estado y se retira con la
+  migración. Si siguiera fallando, el job de live-tests quedaría rojo para siempre y su rojo
+  dejaría de significar algo.
+- **Antes de migrar** `ingestion/deriv_ws.py` corre una segunda sonda (§0.A-2) con la
+  profundidad paginada de BTC y del oro, la alineación por página, `contracts_for` de BTC, del
+  oro y del control, una `proposal` de cotización en el canal público, y la autenticación REST
+  de la cuenta. La migración se decide con su resultado.
+
+---
+
+## 2026-10-01 — Credenciales de Deriv: el App ID era inválido, un solo token, y su vencimiento no se conoce
+
+**Fuente:** respuesta del Admin al reporte del 01-oct, verificada por el Admin en
+developers.deriv.com y en el OpenAPI oficial (`deriv-com/deriv-api-schemas`). Lo que dice el
+OpenAPI se volvió a leer acá, en el commit `54e3538` (release `production_v20260901_0`);
+developers.deriv.com no se pudo leer desde el sandbox.
+
+**La sonda del 01-oct midió la legacy con un App ID inválido.** El secret `DERIV_APP_ID` tenía
+el nombre del token, no un App ID. El HTTP 520 de la entrada anterior no prueba por sí solo que
+la legacy esté muerta para un App ID válido. **La decisión de migrar se sostiene** por la
+documentación oficial de Deriv —la API legacy está retirada y los App IDs heredados ya no son
+válidos— y por el reporte de terceros con HTTP 520 (`nuchukwuma/trading-bot#4`). Lo medido en
+el WS público no depende del App ID: el OpenAPI no lo pide en `ws/public`.
+
+**Credenciales nuevas.** El Admin registró una app tipo PAT, "SPEL TRADER", con recargo 0 %, y
+actualizó `DERIV_APP_ID` y `DERIV_API_TOKEN`. El token tiene solo el scope `trade`: la API
+nueva no tiene un scope de lectura, y el OpenAPI exige `trade` en `GET /accounts`. Según el
+OpenAPI, el header `Deriv-App-ID` es obligatorio en `/accounts`, `/accounts/{accountId}/otp`,
+`bulk-purchase/demo`, `bulk-purchase/real` y `legacy/*`; ninguna de las tres rutas `ws/*` lo
+declara.
+
+**Un solo token.** Se elimina `DERIV_DEMO_TRADE_TOKEN` del plan de PR-D: los PAT son por
+usuario, así que un segundo token no aísla la demo de la real. Queda solo `DERIV_API_TOKEN`.
+Lo que aísla es la guarda siguiente.
+
+**Guarda nueva, a construir en la migración de `deriv_ws.py` y en PR-D:**
+
+- un test por AST que falla si `"ws/real"` o `"bulk-purchase/real"` aparecen en el código fuera
+  de `tests/`;
+- OTP solo para un `accountId` cuyo `account_type` sea `demo` según `GET /accounts`.
+
+Reemplaza a la guarda vieja de `authorize.is_virtual`, que la API nueva no tiene.
+
+**Límite conocido: el vencimiento del token es DESCONOCIDO.** La interfaz de Deriv no mostró
+una fecha al crearlo. El OpenAPI tampoco documenta un campo ni un header con el vencimiento en
+`/accounts` ni en `/legacy/migration-status`; el único `expires_at` del archivo es el del
+código de verificación de los agentes de pago. La sonda §0.A-2 informa cualquier header o
+campo con "expir" en el nombre, por si Deriv manda uno igual. La alarma de frescura, con aviso
+14 días antes, se configura cuando haya fecha. Hasta entonces, **un 401 en la parte
+autenticada se reporta como posible vencimiento del token, no como un fallo de código.**
+
+**Lo que se espera de la parte e) de la sonda §0.A-2:** con estas credenciales, `GET /accounts`
+y `GET /legacy/migration-status` tienen que autenticar. Si fallan, el informe trae el código
+HTTP y el cuerpo con los IDs tapados, sin reintentos: un pedido por ruta.
+
+**Interpretaciones de la sonda §0.A-2 y de los pre-registros, aprobadas por el Admin:**
+
+- La moneda de la `proposal` sale de la cuenta demo de `/accounts`.
+- La paginación usa `start = end − 5000 × 86400`, y el host REST es `api.derivws.com`.
+- Los umbrales de historia diaria de BTC: **1.058** (H1, rejilla mínima), **1.076** (H3,
+  rejilla completa, la condición de parada del addendum) y **2.608** (H1, rejilla completa).
+  El informe compara contra los tres, con velas alineadas.
+- PR #34: `TOLERANCIA_ASOF_DIAS = 0`.
+- PR #33: los pesos vigentes son las posiciones abiertas más la nueva, antes de `s`, con 60
+  días de calendario. Para pasar a real, la lectura estricta: Sharpe ≥ 0,5 y benchmark sobre
+  la serie combinada.
+- PR #32: los 6 meses son de calendario desde el primer día de demo, y el día del vencimiento
+  cuenta.

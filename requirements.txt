@@ -19,8 +19,16 @@
 # exacta que obligue a actualizarla a mano cada mes.
 # numpy, httpx, websockets y pytest NO se pinean: nada del contrato depende
 # de su versión, y pinear de más obliga a mantener números sin motivo.
+#
+# polars ENTRA con el Brief H1-A (25-sep-2026): ingestion/velas.py::leer_velas()
+# devuelve un pl.DataFrame, porque el lector del experimento lo usa. La
+# decisión de arriba (no usarlo para el parseo de GDELT) sigue en pie: es otra
+# pieza. Se pinea a la major 1 porque el contrato de leer_velas() se escribió y
+# se midió contra 1.44.2 -- en particular, que `strict=True` convierte tipos en
+# silencio y por eso los tipos se validan antes, fila por fila.
 numpy
 pandas>=2.2,<4
+polars>=1.0,<2
 websockets
 httpx
 pytest

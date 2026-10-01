@@ -96,6 +96,10 @@ def normalizar(v):
                 for f in dataclasses.fields(v)}
     if isinstance(v, pathlib.PurePath):
         return v.as_posix()
+    if type(v).__module__.startswith("polars") or getattr(v, "__module__", "").startswith("polars"):
+        # `ingestion.velas.ESQUEMA_VELAS` mapea columnas a tipos de polars
+        # (pl.Int64 es una clase, no una instancia). Su nombre es su forma.
+        return str(v)
     if isinstance(v, (frozenset, set)):
         return sorted(normalizar(x) for x in v)
     if isinstance(v, (tuple, list)):
