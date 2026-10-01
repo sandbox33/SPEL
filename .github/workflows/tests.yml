@@ -35,7 +35,12 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      # Historia completa, no superficial: tests/test_estado_al_dia.py (DG-6)
+      # cuenta los merges desde el commit de referencia de ESTADO.md, y con un
+      # clon superficial falla a propósito en vez de saltearse.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:

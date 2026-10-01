@@ -39,7 +39,7 @@ la que el proyecto no llegaba de principio a fin. Se archivó, no se perdió
 ## Objetivo — sin ambigüedad
 
 Generar ingresos reales, de forma sistemática y automatizada, empezando con
-$10 en Deriv, escalando cuando el sistema demuestre que funciona con
+100 USD en Deriv (DG-2, decision-log 25-sep-2026), escalando cuando el sistema demuestre que funciona con
 capital chico antes de arriesgar más. No es "algún día" — es el criterio
 de éxito de cada fase de abajo.
 
@@ -225,6 +225,24 @@ Sigue en pie lo que ya decía esta fase: **sin `torch` en `requirements.txt`**
 (Decisión #7, sin ML en F1) y sin código de modelos hasta que el
 diagnóstico tenga causa identificada con evidencia.
 
+## Serie H: estrategias pre-registradas
+
+La investigación sigue por hipótesis pre-registradas: el criterio de aceptación se escribe
+y se fusiona antes de ver un resultado, y cada variante probada cuenta en el N del
+Deflated Sharpe.
+
+| | Hipótesis | Pre-registro |
+|---|---|---|
+| **H1** | BTC | `research/preregistro_h1.md` (PR #31) |
+| **H2** | Entropía como predictor de volatilidad | — |
+| **H3** | Tendencia multiactivo | — |
+
+**La compuerta de la Fase 4** es un modelo de Fase 2 o una hipótesis H que apruebe sus
+compuertas pre-registradas, más DG-3: PSR y DSR ≥ 0,90 sobre histórico + demo con el
+mismo N, ≥ 30 días y ≥ 20 operaciones cerradas en demo, costos observados ≤ 1,25 ×
+modelados y reconciliación sin discrepancias; máximo 6 meses de forward, y al vencer
+pasa a H2 (`governance/paso_a_real.py`; decision-log 29-sep-2026).
+
 ## Fase 3 — Visualización (después de Fase 1 y 2, no antes)
 
 Grafo con un nodo por fuente de dato, score de confianza visible (0-100).
@@ -235,12 +253,11 @@ no primero, aunque sea lo más visible.
 **Criterio de terminado**: abrir el grafo y saber, sin leer código, cuáles
 de las fuentes activas están sanas hoy.
 
-## Fase 4 — Ejecución real, $10 en Deriv (después de que Fase 2 tenga un
-modelo que de verdad aprenda algo — no antes, sin excepción)
+## Fase 4 — Ejecución real, 100 USD en Deriv (DG-2) (después de que un modelo de Fase 2 o una hipótesis H apruebe sus compuertas pre-registradas, más DG-3 — no antes, sin excepción)
 
 Esto es construcción nueva, no migración — nunca existió código de
 ejecución automática real en el proyecto anterior. Incluye: conexión de
-órdenes Deriv vía WebSocket oficial, el patrón de dual accounting ($10 real
+órdenes Deriv vía WebSocket oficial, el patrón de dual accounting (100 USD real, DG-2
 / $100k canónico para métricas válidas, ya probado en Alpaca, se porta el
 patrón) y el gate de paper trading — la duración se decide una vez, se
 escribe en `governance/PRINCIPLES.md`, no se renegocia bajo presión de
