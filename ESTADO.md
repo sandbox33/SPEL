@@ -14,7 +14,7 @@
 
 **Commit de referencia:** `2832af8` (merge del PR #30).
 
-**Tests:** **953** recolectados en `tests/`, en 31 archivos, medido con
+**Tests:** **974** recolectados en `tests/`, en 32 archivos, medido con
 `pytest --collect-only -q tests/` sobre este PR. Más 74 en `research/tests/`, que no
 bloquean.
 
@@ -58,8 +58,8 @@ Eso no reabre Fase 1 ni cambia su resultado; ordena el código para que coincida
 
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-**953 recolectados en `tests/`, en 31 archivos**, contados con `pytest --collect-only -q`
-el 29-sep-2026, no copiados de ningún documento. Sin credenciales se saltan 2: el test
+**974 recolectados en `tests/`, en 32 archivos**, contados con `pytest --collect-only -q`
+el 01-oct-2026, no copiados de ningún documento. Sin credenciales se saltan 2: el test
 `live` de TwelveData y el guardián de secretos de `tests/test_sources.py`, los dos por su
 propio `skipif`.
 
@@ -92,7 +92,8 @@ corridas seguidas sin intermitencia.
 | `execution/circuit_breaker.py` + `execution_guard.py` | Guardrails duros — congelados hasta F4 | 14 + 17 | ✅ |
 | `governance/persistence.py` + `secrets.py` | 5 streams (TRADE_LEDGER desde el PR #25), SecretKey único | 19 + 10 | ✅ |
 | `governance/estado.py` + `tests/test_estado_al_dia.py` | Control anti-desfase de este archivo (DG-6) | 16 | ✅ |
-| `config/constantes.json` | Registro de las 102 constantes de módulo, verificado contra el código en las dos direcciones | 30 | ✅ |
+| `governance/paso_a_real.py` | DG-3: las cuatro condiciones del paso de demo a real y la zona gris de 6 meses (decision-log 29-sep) | 21 | ✅ |
+| `config/constantes.json` | Registro de las 108 constantes de módulo, verificado contra el código en las dos direcciones | 30 | ✅ |
 | `tests/test_registro_linguistico*.py` | Español neutro: sin voseo en `.py` y en `.md` | 84 + 5 | ✅ |
 | `tools/heartbeat.py` + `.github/workflows/heartbeat.yml` | Trigger `schedule:` real — **desactivado a propósito**, ver Fase 6 | 19 | ✅ código, 🔴 apagado |
 

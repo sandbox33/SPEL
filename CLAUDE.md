@@ -39,7 +39,10 @@ estándar de ingeniería: hazlas. Tu escrutinio va al código y a los datos:
 - Deriv es el único bróker para capital real. Alpaca: solo paper.
 - Capital de referencia: 100 USD (DG-2).
 - Órdenes reales: prohibidas hasta que una hipótesis H apruebe sus
-  compuertas, complete 6 meses de forward en demo (DG-3) y llegue la Fase 4.
+  compuertas, cumpla DG-3 en demo (`governance/paso_a_real.py`: PSR y DSR
+  ≥ 0,90 sobre histórico + demo, ≥ 30 días y ≥ 20 operaciones cerradas,
+  costos ≤ 1,25 × modelados, reconciliación limpia; máximo 6 meses) y
+  llegue la Fase 4.
 - Órdenes demo: solo desde `integracion_demo/`, con `entorno="demo"` y
   `authorize.is_virtual == 1`. Fuera de ahí, el acceso a Deriv es de solo lectura.
 

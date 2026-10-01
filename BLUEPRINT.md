@@ -238,8 +238,10 @@ Deflated Sharpe.
 | **H3** | Tendencia multiactivo | — |
 
 **La compuerta de la Fase 4** es un modelo de Fase 2 o una hipótesis H que apruebe sus
-compuertas pre-registradas, más DG-3 (6 meses de forward en demo; decision-log
-25-sep-2026).
+compuertas pre-registradas, más DG-3: PSR y DSR ≥ 0,90 sobre histórico + demo con el
+mismo N, ≥ 30 días y ≥ 20 operaciones cerradas en demo, costos observados ≤ 1,25 ×
+modelados y reconciliación sin discrepancias; máximo 6 meses de forward, y al vencer
+pasa a H2 (`governance/paso_a_real.py`; decision-log 29-sep-2026).
 
 ## Fase 3 — Visualización (después de Fase 1 y 2, no antes)
 
