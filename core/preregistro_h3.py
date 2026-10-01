@@ -8,10 +8,11 @@ que el cron escribiera un solo precio del universo, y no se modifica.
 `tests/test_preregistro_h3.py` verifica que cada constante de acá esté
 escrita en el documento, que el documento no cambie y que no tenga voseo.
 
-No hay backtest acá. Hay cuatro funciones que el pre-registro obliga a fijar
-antes de mirar un precio, y que dependen solo de longitudes, conteos o de
-K: la condición de historia, el recorte de la rejilla, el voto por activo y
-el reparto del target entre los K activos.
+No hay backtest acá. Hay funciones que el pre-registro obliga a fijar
+antes de mirar un precio, y que dependen solo de longitudes, conteos, de K
+o de una volatilidad ya medida: la condición de historia, el recorte de la
+rejilla, el voto por activo, el reparto del target entre los K activos y
+el escalador de cartera del sizing.
 
 DUPLICA A PROPÓSITO LOS NÚMEROS QUE COMPARTE CON H1 (la rejilla, la ventana
 de volatilidad, las compuertas). Cada pre-registro está fijado por su propio
@@ -23,6 +24,8 @@ módulo se fusiona, el de H1 todavía no está en `main`.
 
 from __future__ import annotations
 
+import math
+
 #: Lookbacks de la rejilla, en barras diarias. Los mismos que H1.
 REJILLA_H3: tuple[int, ...] = (10, 20, 40, 80, 160, 320)
 
@@ -31,6 +34,10 @@ HISTORIA_POSTERIOR_AL_CALENTAMIENTO_BARRAS = 756
 
 #: Target de volatilidad de la cartera, repartido entre los K activos.
 FRACCION_VOL_CARTERA = 0.25
+
+#: Días de retornos de la cartera con que se mide σ̂_cartera, la
+#: volatilidad del escalador `s` del sizing.
+VENTANA_VOL_CARTERA_DIAS = 60
 
 #: Tope de nocional por activo, en veces el capital.
 APALANCAMIENTO_MAXIMO_POR_ACTIVO = 2.0
@@ -64,8 +71,13 @@ PSR_MINIMO = 0.90
 DSR_MINIMO = 0.90
 SHARPE_DETENER = 0.3
 
-#: Duración del forward en demo (DG-3).
-MESES_FORWARD_DEMO = 6
+#: Paso de demo a real (DG-3, decisión del Admin del 29-sep-2026). Se
+#: duplican de governance/paso_a_real.py (PR #32) por la misma razón que el
+#: resto: el pre-registro se fija con su propio documento.
+DIAS_MINIMOS_DEMO = 30
+OPERACIONES_CERRADAS_MINIMAS_DEMO = 20
+RAZON_MAXIMA_COSTO_OBSERVADO_MODELADO = 1.25
+MESES_MAXIMOS_ZONA_GRIS = 6
 
 #: Ensayos previos sobre BTC, fallidos y documentados.
 ENSAYOS_PREVIOS_FALLIDOS = 3
@@ -108,8 +120,27 @@ def lookback_ejecutable(fraccion_saltada: float) -> bool:
 
 
 def fraccion_vol_por_activo(k_activos: int) -> float:
-    """El reparto del target de cartera entre K activos: 0,25 / K. Depende
-    solo de K. Ver la sección 6 del documento para por qué no 0,25 / √K."""
+    """El reparto del target de cartera entre K activos: 0,25 / √K. Depende
+    solo de K; la corrección por correlación la hace `escala_cartera`."""
     if k_activos <= 0:
         raise ValueError(f"K tiene que ser positivo, recibido {k_activos}")
-    return FRACCION_VOL_CARTERA / k_activos
+    return FRACCION_VOL_CARTERA / math.sqrt(k_activos)
+
+
+def escala_cartera(sigma_cartera: float) -> float:
+    """s = min(1 ; 0,25 / σ̂_cartera). Nunca agranda. Con σ̂ = 0, s = 1."""
+    if sigma_cartera < 0:
+        raise ValueError(f"σ̂_cartera negativa: {sigma_cartera}")
+    if sigma_cartera == 0:
+        return 1.0
+    return min(1.0, FRACCION_VOL_CARTERA / sigma_cartera)
+
+
+def nocional_activo(capital: float, k_activos: int, s: float, vol_activo: float) -> float:
+    """capital × (0,25 / √K) × s / vol_20d, con el tope de 2× el capital."""
+    if vol_activo <= 0:
+        raise ValueError(f"vol del activo tiene que ser positiva: {vol_activo}")
+    if not 0 < s <= 1:
+        raise ValueError(f"s fuera de (0, 1]: {s}")
+    bruto = capital * fraccion_vol_por_activo(k_activos) * s / vol_activo
+    return min(bruto, APALANCAMIENTO_MAXIMO_POR_ACTIVO * capital)

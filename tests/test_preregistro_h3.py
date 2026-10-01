@@ -30,7 +30,7 @@ DOC = RAIZ / "research" / "preregistro_h3.md"
 
 #: Si cambia, el documento cambió. Después de fusionado, eso es un
 #: experimento nuevo: preregistro_h3_v2.md, no una edición de este.
-SHA256_PREREGISTRO = "2904729bd57c981f42e072565eec2559b15d2f05986fea54e205a4112de4ab53"
+SHA256_PREREGISTRO = "71826ed211272a583fb71091e1d120fead7e38bb33146d6008323c39ab1572d3"
 
 
 def _texto() -> str:
@@ -55,7 +55,8 @@ def test_el_documento_no_usa_voseo():
 
 @pytest.mark.parametrize("valor, fragmento, escrito", [
     (pre.HISTORIA_POSTERIOR_AL_CALENTAMIENTO_BARRAS, "**historia_usable ≥ lookback_max + 756**", "756"),
-    (pre.FRACCION_VOL_CARTERA, "**target de volatilidad de cartera\nde 0,25**", "0,25"),
+    (pre.FRACCION_VOL_CARTERA, "**target de volatilidad de cartera de 0,25**", "0,25"),
+    (pre.VENTANA_VOL_CARTERA_DIAS, "últimos **60** días de retornos", "60"),
     (pre.APALANCAMIENTO_MAXIMO_POR_ACTIVO, "**tope de 2× por activo**", "2"),
     (pre.VENTANA_VOL_BARRAS, "**20** barras anteriores a la entrada", "20"),
     (pre.FRACCION_MAXIMA_SALTADA, "**más del 50 %**", "50 %"),
@@ -69,7 +70,10 @@ def test_el_documento_no_usa_voseo():
     (pre.PSR_MINIMO, "**PSR(0) ≥ 0,90**", "0,90"),
     (pre.DSR_MINIMO, "**DSR ≥ 0,90**", "0,90"),
     (pre.SHARPE_DETENER, "Sharpe neto **< 0,3**", "0,3"),
-    (pre.MESES_FORWARD_DEMO, "**forward de 6 meses en demo**", "6"),
+    (pre.DIAS_MINIMOS_DEMO, "**≥ 30 días** de demo", "30"),
+    (pre.OPERACIONES_CERRADAS_MINIMAS_DEMO, "**≥ 20 operaciones cerradas**", "20"),
+    (pre.RAZON_MAXIMA_COSTO_OBSERVADO_MODELADO, "**≤ 1,25 ×**", "1,25"),
+    (pre.MESES_MAXIMOS_ZONA_GRIS, "**máximo de 6 meses**", "6"),
     (pre.ENSAYOS_PREVIOS_FALLIDOS, "más los **3** ensayos previos", "3"),
     (pre.N_INGENUO, "**N = 11**", "11"),
 ])
@@ -127,9 +131,46 @@ def test_un_lookback_que_salta_mas_de_la_mitad_no_vota(fraccion, ejecutable):
     assert pre.lookback_ejecutable(fraccion) is ejecutable
 
 
-@pytest.mark.parametrize("k, fraccion", [(1, 0.25), (4, 0.0625), (20, 0.0125)])
-def test_el_reparto_del_target_es_025_sobre_k(k, fraccion):
+@pytest.mark.parametrize("k, fraccion", [(1, 0.25), (4, 0.125), (25, 0.05)])
+def test_el_reparto_del_target_es_025_sobre_raiz_de_k(k, fraccion):
     assert pre.fraccion_vol_por_activo(k) == pytest.approx(fraccion)
+    assert "`0,25 / √K`" in _texto()
+
+
+@pytest.mark.parametrize("sigma, s", [
+    (0.10, 1.0), (0.25, 1.0), (0.50, 0.5), (1.0, 0.25), (0.0, 1.0),
+])
+def test_el_escalador_achica_y_nunca_agranda(sigma, s):
+    assert pre.escala_cartera(sigma) == pytest.approx(s)
+    assert "s = min(1 ; 0,25 / σ̂_cartera)" in _texto()
+
+
+def test_el_escalador_no_admite_sigma_negativa():
+    with pytest.raises(ValueError):
+        pre.escala_cartera(-0.1)
+
+
+def test_el_nocional_es_la_formula_del_documento():
+    # 100 × (0,25 / √4) × 0,5 / 0,5 = 12,5
+    assert pre.nocional_activo(100.0, 4, 0.5, 0.5) == pytest.approx(12.5)
+    assert "capital × (0,25 / √K) × s / vol_realizada_20d" in _texto()
+
+
+def test_el_nocional_se_topa_en_2x_el_capital():
+    # 100 × 0,25 × 1 / 0,01 = 2.500 sin tope
+    assert pre.nocional_activo(100.0, 1, 1.0, 0.01) == pytest.approx(200.0)
+
+
+@pytest.mark.parametrize("s, vol", [(0.0, 0.5), (1.01, 0.5), (0.5, 0.0), (0.5, -1.0)])
+def test_el_nocional_rechaza_s_o_vol_imposibles(s, vol):
+    with pytest.raises(ValueError):
+        pre.nocional_activo(100.0, 4, s, vol)
+
+
+def test_el_benchmark_usa_el_mismo_sizing():
+    texto = " ".join(_texto().split())
+    i = texto.index("## 10. Benchmark")
+    assert "`0,25 / √K` con el escalador `s`" in texto[i:i + 400]
 
 
 def test_el_reparto_no_admite_k_cero():
@@ -137,18 +178,22 @@ def test_el_reparto_no_admite_k_cero():
         pre.fraccion_vol_por_activo(0)
 
 
-def test_las_reglas_dependen_solo_de_longitudes_conteos_y_k():
+def test_las_reglas_dependen_solo_de_longitudes_conteos_k_y_volatilidades():
     """Ninguna recibe precios ni retornos: la forma más simple de cumplir
-    'por reglas, nunca por precios'."""
+    'por reglas, nunca por precios'. El sizing recibe volatilidades ya
+    medidas, no la serie de la que salen."""
     firmas = {f.__name__: list(inspect.signature(f).parameters) for f in (
         pre.rejilla_soportada, pre.largo_por_voto, pre.lookback_ejecutable,
-        pre.fraccion_vol_por_activo, pre.historia_requerida)}
+        pre.fraccion_vol_por_activo, pre.historia_requerida,
+        pre.escala_cartera, pre.nocional_activo)}
     assert firmas == {
         "rejilla_soportada": ["historia_usable"],
         "largo_por_voto": ["largos", "votantes"],
         "lookback_ejecutable": ["fraccion_saltada"],
         "fraccion_vol_por_activo": ["k_activos"],
         "historia_requerida": ["lookback_max"],
+        "escala_cartera": ["sigma_cartera"],
+        "nocional_activo": ["capital", "k_activos", "s", "vol_activo"],
     }
 
 
@@ -156,4 +201,4 @@ def test_el_modulo_no_importa_nada_que_haga_un_backtest():
     arbol = ast.parse((RAIZ / "core" / "preregistro_h3.py").read_text(encoding="utf-8"))
     importados = {a.name for n in ast.walk(arbol) if isinstance(n, ast.Import) for a in n.names}
     importados |= {n.module for n in ast.walk(arbol) if isinstance(n, ast.ImportFrom)}
-    assert importados <= {"__future__"}, importados
+    assert importados <= {"__future__", "math"}, importados
