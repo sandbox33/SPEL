@@ -1317,7 +1317,7 @@ de gobernanza (PR-G), antes que cualquier otro PR del brief.
 |---|---|
 | DG-1 | El **repositorio es la única fuente canónica**. `SPEL_MANUAL_OPERACION.md` (Drive, 7-sep-2026) deja de ser canónico: se regenera desde el repo o se archiva, y lo hace el Admin en Drive. Se elimina la regla "gana el manual sin verificar fecha". |
 | DG-2 | El capital de referencia es de **100 USD** y reemplaza los "$10" de `BLUEPRINT.md`. |
-| DG-3 | `governance/PRINCIPLES.md` #6: **6 meses de forward en demo** antes de cualquier capital real. El paso a real exige que la hipótesis apruebe sus compuertas del pre-registro **sobre histórico + forward**, con el mismo N. |
+| DG-3 | `governance/PRINCIPLES.md` #6: **6 meses de forward en demo** antes de cualquier capital real. El paso a real exige que la hipótesis apruebe sus compuertas del pre-registro **sobre histórico + forward**, con el mismo N. **Reemplazada el 29-sep-2026**: ver la entrada de esa fecha. |
 | DG-4 | H3 usa **un contrato por activo**: largo si al menos la mitad de los lookbacks soportados están largos, fuera en caso contrario. |
 | DG-5 | **H1 se mantiene** sin cambios de diseño, salvo los del cierre de H1-A (PR-0). H3 es la ruta principal. |
 | DG-6 | El test anti-desfase de `ESTADO.md` falla si hay **más de 3 PRs fusionados** desde su commit de referencia. |
@@ -1335,7 +1335,8 @@ completa es de 10 × 0,25 / 0,60 = 4,17 USD, y 0,10 USD es el **2,40 %**. Por su
 del ensemble (1/6) sería el **14,4 %**. Con 100 USD: 0,24 % y 1,4 %.
 
 **DG-3** queda escrito en `governance/PRINCIPLES.md` #6, que decía que la duración "se
-decide una vez y se escribe acá": esta es esa vez.
+decide una vez y se escribe acá": esta es esa vez. (El 29-sep el Admin la reemplazó por
+condiciones medibles; ver esa entrada.)
 
 **DG-4 y DG-5** van a `research/preregistro_h3.md` (PR-H3), que se fusiona **antes** que el
 PR #31: al fusionar el #31 el cron empieza a escribir los precios del universo, y el
@@ -1383,6 +1384,44 @@ completaba):
 
 **El hallazgo es el tramo de 2025:** 18 días de calendario seguidos sin fila en los dos
 activos. No es ruido suelto; es un corte de la serie. Cualquier análisis que use la
-entropía de esos meses —H2 en particular, que compara la entropía de `t−1` contra la
-volatilidad de `t`— tiene que declarar antes de mirar qué hace con él. Sigue sin
+entropía de esos meses —H2 en particular, que usa la entropía rezagada para pronosticar
+la volatilidad— tiene que declarar antes de mirar qué hace con él. Sigue sin
 rellenarse, como decidió la entrada del 21-sep.
+
+---
+
+## 2026-09-29 — DG-3 reemplazada: el paso de demo a real se mide, no se espera
+
+**Fuente:** decisión del Admin del 29-sep-2026 (addendum al Brief final v3, ítem 1).
+Reemplaza el texto de DG-3 del 25-sep ("6 meses de forward en demo").
+
+El paso de demo a capital real exige **todas**:
+
+| | condición | constante en `governance/paso_a_real.py` |
+|---|---|---|
+| a) | PSR ≥ 0,90 y DSR ≥ 0,90 sobre retornos diarios de cartera, en la serie combinada histórico + demo, con el mismo N | `PSR_MINIMO`, `DSR_MINIMO` |
+| b) | ≥ 30 días de demo y ≥ 20 operaciones cerradas en demo | `DIAS_MINIMOS_DEMO`, `OPERACIONES_CERRADAS_MINIMAS_DEMO` |
+| c) | costos observados en demo ≤ 1,25 × costos modelados | `RAZON_MAXIMA_COSTO_OBSERVADO_MODELADO` |
+| d) | reconciliación demo sin discrepancias | — |
+
+**Zona gris:** mientras falte alguna, el forward sigue, con un máximo de 6 meses
+(`MESES_MAXIMOS_ZONA_GRIS`). Al vencer sin cumplirlas, el trabajo pasa a H2.
+
+**Qué cambia.** La duración deja de ser un piso y pasa a ser un tope: con las cuatro
+cumplidas, el paso puede darse desde el día 30 de demo; sin ellas, tampoco a los 6 meses.
+Dos de las condiciones miden lo que solo la demo puede mostrar: los costos reales contra
+los modelados (c) y lo operado contra lo registrado (d).
+
+**Dos lecturas que no dicta el texto**, declaradas como [INTERPRETACIÓN] en el módulo:
+los 6 meses se cuentan desde el primer día de demo, en meses de calendario, y el día del
+vencimiento es el último en que todavía se puede cumplir; los días de demo son de
+calendario.
+
+**Dónde se aplica:** `governance/PRINCIPLES.md` #6 (con la cláusula "se decide una vez y
+se escribe acá — no se negocia por sesión bajo presión de tiempo", que el texto del 25-sep
+había perdido), `CLAUDE.md`, `BLUEPRINT.md`, las compuertas de `research/preregistro_h3.md`
+(PR #33) y la §10 del pre-registro de H1 (rama del PR #31). Las constantes, en
+`config/constantes.json`.
+
+APTO no autoriza ninguna orden: la compuerta de la Fase 4 y la decisión del Admin siguen
+haciendo falta.
