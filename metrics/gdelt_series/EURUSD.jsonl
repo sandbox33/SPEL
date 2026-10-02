@@ -16,3 +16,4 @@
 {"day": "2026-09-28", "asset": "EURUSD", "entropy_shannon": null, "zipf_concentration": null, "goldstein_mean": null, "tone_variance": null, "n_events": 0, "insufficient_events": true}
 {"day": "2026-09-29", "asset": "EURUSD", "entropy_shannon": null, "zipf_concentration": null, "goldstein_mean": null, "tone_variance": null, "n_events": 0, "insufficient_events": true}
 {"day": "2026-09-30", "asset": "EURUSD", "entropy_shannon": null, "zipf_concentration": null, "goldstein_mean": null, "tone_variance": null, "n_events": 0, "insufficient_events": true}
+{"day": "2026-10-01", "asset": "EURUSD", "entropy_shannon": null, "zipf_concentration": null, "goldstein_mean": null, "tone_variance": null, "n_events": 0, "insufficient_events": true}
