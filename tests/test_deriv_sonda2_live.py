@@ -303,12 +303,16 @@ def desalineadas(epochs: list[int], granularidad: int) -> int:
 
 
 async def profundidad(canal: _Canal, simbolo: str, granularidad: int, *,
-                      max_paginas: Optional[int] = None) -> dict:
+                      max_paginas: Optional[int] = None,
+                      guardar_velas: Optional[dict[int, dict]] = None) -> dict:
     """a) y b). Pagina hacia atrás hasta vacía, error, o una página que no
     retrocede (la API repitiendo la misma ventana: sin este corte, el bucle
     no termina). No corta por página corta, a diferencia de
     `velas.descargar()`: con 256 velas por página, ese corte habría parado
     en la primera, y es justo lo que se quiere medir.
+
+    `guardar_velas`, si se pasa, se llena con las velas alineadas, por época: lo
+    usa la sonda §0.A-3b, que necesita los precios y no solo los conteos.
 
     `respeta_end` por página: si la última vela cae en o antes del `end`
     pedido. La sonda 2 mostró que en diario no lo respeta. `max_paginas` es
@@ -349,6 +353,9 @@ async def profundidad(canal: _Canal, simbolo: str, granularidad: int, *,
         paginas.append(pagina)
         previa = paginas[-2].get("primera_epoch") if len(paginas) > 1 else None
         epochs.update(ep)
+        if guardar_velas is not None:
+            guardar_velas.update({int(c["epoch"]): c for c in datos["candles"]
+                          if int(c["epoch"]) % granularidad == 0})
         if previa is not None and primera >= previa:
             corte = "la página no retrocedió"
             break
@@ -546,6 +553,16 @@ async def test_informa_si_cada_pagina_respeta_el_end():
     p = await _profundidad(_deriv(ticks_history=_historia(0, ignora_end=True)))
     assert p["paginas"][1]["respeta_end"] is False
     assert p["ultima_epoch"] == _AHORA - _AHORA % _DIA
+
+
+async def test_profundidad_puede_devolver_las_velas_alineadas():
+    velas: dict = {}
+    d = _deriv()
+    async with d.connector("wss://x") as ws:
+        p = await profundidad(_Canal(ws), "cryBTCUSD", _DIA, guardar_velas=velas)
+    assert len(velas) == p["total_alineadas"]
+    assert all(e % _DIA == 0 for e in velas)
+    assert velas[p["ultima_epoch"]]["epoch"] == p["ultima_epoch"]
 
 
 async def test_el_tope_de_paginas_corta_y_lo_dice():

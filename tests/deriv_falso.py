@@ -22,6 +22,7 @@ class DerivFalso:
         self.manejadores = manejadores
         self.enviados: list[dict] = []
         self.conexiones = 0
+        self.cierres = 0
         self._pendientes: list[str] = []
 
     # ── lo que ve el código bajo prueba ──────────────────────────────────
@@ -35,6 +36,7 @@ class DerivFalso:
                 return falso
 
             async def __aexit__(self, *exc):
+                falso.cierres += 1
                 return False
 
         return _CM()
