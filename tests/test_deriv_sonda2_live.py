@@ -305,18 +305,27 @@ def desalineadas(epochs: list[int], granularidad: int) -> int:
     return sum(1 for e in epochs if e % granularidad != 0)
 
 
-async def profundidad(canal: _Canal, simbolo: str, granularidad: int) -> dict:
+async def profundidad(canal: _Canal, simbolo: str, granularidad: int, *,
+                      max_paginas: Optional[int] = None) -> dict:
     """a) y b). Pagina hacia atrás hasta vacía, error, o una página que no
     retrocede (la API repitiendo la misma ventana: sin este corte, el bucle
     no termina). No corta por página corta, a diferencia de
     `velas.descargar()`: con 256 velas por página, ese corte habría parado
-    en la primera, y es justo lo que se quiere medir."""
+    en la primera, y es justo lo que se quiere medir.
+
+    `respeta_end` por página: si la última vela cae en o antes del `end`
+    pedido. La sonda 2 mostró que en diario no lo respeta. `max_paginas` es
+    un tope de seguridad para granularidades finas; tocarlo se informa como
+    corte, no como fondo."""
     paginas: list[dict] = []
     fin: Any = "latest"
     inicio: Optional[int] = None
     epochs: set[int] = set()
     corte = ""
     while True:
+        if max_paginas is not None and len(paginas) >= max_paginas:
+            corte = f"tope de {max_paginas} páginas: la historia puede seguir"
+            break
         payload: dict[str, Any] = {"ticks_history": simbolo, "end": str(fin),
                                    "count": DERIV_MAX_COUNT, "style": "candles",
                                    "granularity": granularidad}
@@ -338,6 +347,7 @@ async def profundidad(canal: _Canal, simbolo: str, granularidad: int) -> dict:
         ep = [int(c["epoch"]) for c in velas]
         primera = min(ep)
         pagina.update(primera_epoch=primera, ultima_epoch=max(ep),
+                      respeta_end=None if fin == "latest" else max(ep) <= int(fin),
                       desalineadas=desalineadas(ep, granularidad))
         paginas.append(pagina)
         previa = paginas[-2].get("primera_epoch") if len(paginas) > 1 else None
@@ -358,6 +368,7 @@ async def profundidad(canal: _Canal, simbolo: str, granularidad: int) -> dict:
         "total": len(epochs),
         "total_alineadas": len(epochs) - desalineadas(sorted(epochs), granularidad),
         "primera_epoch": min(epochs) if epochs else None,
+        "ultima_epoch": max(epochs) if epochs else None,
     }
 
 
@@ -549,6 +560,23 @@ async def test_pagina_hacia_atras_hasta_la_respuesta_vacia():
     assert p["velas_por_pagina"][-1] == 0
     assert len(p["paginas"]) == 5, "el piso cierra la cuarta ventana; la quinta, vacía"
     assert p["primera_epoch"] == _AHORA - 4 * _VENTANA
+
+
+async def test_informa_si_cada_pagina_respeta_el_end():
+    p = await _profundidad(_deriv())
+    assert p["paginas"][0]["respeta_end"] is None, "latest no es un end que respetar"
+    assert all(pg["respeta_end"] is True for pg in p["paginas"][1:-1])
+    p = await _profundidad(_deriv(ticks_history=_historia(0, ignora_end=True)))
+    assert p["paginas"][1]["respeta_end"] is False
+    assert p["ultima_epoch"] == _AHORA - _AHORA % _DIA
+
+
+async def test_el_tope_de_paginas_corta_y_lo_dice():
+    d = _deriv()
+    async with d.connector("wss://x") as ws:
+        p = await profundidad(_Canal(ws), "cryBTCUSD", _DIA, max_paginas=2)
+    assert len(p["paginas"]) == 2 and len(d.de_tipo("ticks_history")) == 2
+    assert p["corte"].startswith("tope de 2 páginas")
 
 
 async def test_no_corta_por_pagina_corta():
