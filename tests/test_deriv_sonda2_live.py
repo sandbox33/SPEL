@@ -156,12 +156,21 @@ def enmascarar_ids(texto: str) -> str:
     return re.sub(r"\d{4,}", lambda m: "*" * len(m.group()), texto)
 
 
+#: Headers con "expir" en el nombre que NO hablan del token. `Expires` es la
+#: cabecera HTTP de caché (RFC 9111 §5.3): en la sonda 2 vino con una fecha
+#: de 2016, que es la forma de decir "no cachear" (decision-log 2026-10-05).
+CABECERAS_HTTP_DE_CACHE: frozenset[str] = frozenset({"expires"})
+
+
 def vencimiento_expuesto(headers: dict, datos: Any) -> dict:
     """Todo header o clave JSON cuyo nombre mencione una expiración, con su
-    valor. El OpenAPI oficial (54e3538) no documenta ninguno para estas dos
-    rutas; si Deriv manda uno igual, el informe lo muestra."""
+    valor, salvo las cabeceras de caché. El OpenAPI oficial (54e3538) no
+    documenta ninguno para estas dos rutas; si Deriv manda uno igual, el
+    informe lo muestra."""
     out: dict[str, Any] = {}
     for nombre, valor in (headers or {}).items():
+        if nombre.lower() in CABECERAS_HTTP_DE_CACHE:
+            continue
         if "expir" in nombre.lower():
             out[f"header:{nombre}"] = valor
 
@@ -819,6 +828,16 @@ async def test_rest_reporta_un_vencimiento_si_deriv_lo_expone():
     assert r["informe"]["/trading/v1/options/accounts"]["vencimiento_expuesto"] == {
         "json:meta.token_expires_at": 1798761600}
     assert r["informe"]["/trading/v1/options/legacy/migration-status"]["vencimiento_expuesto"] == {
+        "header:X-Token-Expiry": "2027-01-01"}
+
+
+@pytest.mark.parametrize("nombre", ["expires", "Expires", "EXPIRES"])
+def test_la_cabecera_http_expires_no_es_el_vencimiento_del_token(nombre):
+    """Lo que la sonda 2 reportó como `header:expires` era la cabecera de
+    caché, con fecha de 2016."""
+    assert vencimiento_expuesto({nombre: "Mon, 03 Oct 2016 19:33:52 GMT",
+                                 "Cache-Control": "no-store"}, {}) == {}
+    assert vencimiento_expuesto({nombre: "x", "X-Token-Expiry": "2027-01-01"}, {}) == {
         "header:X-Token-Expiry": "2027-01-01"}
 
 

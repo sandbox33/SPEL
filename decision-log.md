@@ -1515,3 +1515,70 @@ HTTP y el cuerpo con los IDs tapados, sin reintentos: un pedido por ruta.
   la serie combinada.
 - PR #32: los 6 meses son de calendario desde el primer día de demo, y el día del vencimiento
   cuenta.
+
+---
+
+## 2026-10-05 — Sonda §0.A-2: la REST autentica, y la historia diaria de Deriv es de 365 días
+
+**Fuente:** sonda §0.A-2 (`tests/test_deriv_sonda2_live.py`), corrida por el Admin en
+*SPEL Live Tests* sobre la rama del PR #31: run `36915129174`, job `110547122004`, commit
+`e5ca13e`, 01-oct-2026 19:33–19:34 UTC, con las credenciales nuevas (app PAT "SPEL TRADER").
+Los cinco tests `live` pasaron. Lo que sigue se copió del log del job.
+
+**REST, `https://api.derivws.com`: autentica.**
+
+| ruta | resultado | sha256 del cuerpo |
+|---|---|---|
+| `GET /trading/v1/options/accounts` | HTTP 200; dos cuentas: `DOT********` **demo** y `ROT********` **real** | `8a57245d401aa4fec4e52ace68c8c8150bb5eb6496ab02b189e8afd1b3098c00` |
+| `GET /trading/v1/options/legacy/migration-status` | HTTP 200; `status: not_applicable` | `8d3e483568f67bed6eea9c2e194f6402b30b9b6019eb2f686acab230ba1cf5f5` |
+
+**El `header:expires` del informe no es el vencimiento del token.** La sonda informó
+`expires: Mon, 03 Oct 2016 19:33:52 GMT` en `/accounts`: es la cabecera HTTP de caché
+(RFC 9111 §5.3), y una fecha pasada es la forma de decir "no cachear". Se eliminó de la
+detección (`CABECERAS_HTTP_DE_CACHE`). **El vencimiento del token sigue DESCONOCIDO.**
+
+**WS público: los símbolos se resolvieron por mercado, sin literal.** `active_symbols`: 89
+símbolos en cinco mercados (`commodities`, `cryptocurrency`, `forex`, `indices`,
+`synthetic_index`), sha256 `c8aadca843934a5ef29ca26d565e47c9bced76eecfd02a52943dc68b6b671cf8`.
+BTC = **`cryBTCUSD`** (el único candidato con BTC en `cryptocurrency`), oro =
+**`frxXAUUSD`** (el único con XAU en `commodities`), y el control `frxEURUSD` presente.
+
+**Profundidad diaria: 365 días, y `end` se ignora.**
+
+| símbolo | página | `end` pedido | velas | primera época | última época | desalineadas | sha256 |
+|---|---|---|---|---|---|---|---|
+| `cryBTCUSD` | 1 | `latest` | 366 | `1759347233` | `1790812800` | 1 | `ed70ce0c1fad9c19acbdd9ccf58b89a08cdcf3e43b5222193d5eac72f24d879d` |
+| `cryBTCUSD` | 2 | `1759347232` | 366 | `1759347233` | `1790812800` | 1 | `8f6d021ceb340756ead8c2d4726dfbbaf0038f6be0b4891f9bf238b7e7c2a12f` |
+| `frxXAUUSD` | 1 | `latest` | 259 | `1759347233` | `1790812800` | 1 | `b5de0c3d7f3653332f10a7a96f19f2ba0ec4eb46b746ac22dd83f903684b7154` |
+| `frxXAUUSD` | 2 | `1759347232` | 259 | `1759347233` | `1790812800` | 1 | `f3fdd8df31f1de5e3d98656ec31e30d163dc06ee32e25a551c5011dbc4d13998` |
+
+La página 2 pidió `end` = primera época − 1 y devolvió la misma ventana: **Deriv ignora
+`end`** y la sonda cortó por "la página no retrocedió". La primera época es la hora de la
+corrida menos 31.536.000 s (365 días), desalineada; el resto está en múltiplos de 86.400. En
+total: **365 velas alineadas de BTC y 258 del oro.**
+
+**Umbrales: BTC no llega a ninguno.** 365 < 1.058 (H1, rejilla mínima) < 1.076 (H3, rejilla
+completa) < 2.608 (H1, rejilla completa). La sonda marcó `detener: true`. Por el ítem 8 del
+addendum del 29-sep, la condición de parada de H1 y H3 es inalcanzable con datos diarios de
+Deriv y la decide el Admin. El brief del 02-oct abre la sonda §0.A-3 sobre una candidata
+intradía; no dice nada de H1 ni de H3, y este registro tampoco.
+
+**Contratos: MULTUP y MULTDOWN en los tres símbolos**, con `multiplier_range`
+**{100, 200, 300, 500, 800}**, `default_stake` 2 y `cancellation_range` vacío.
+
+| símbolo | sha256 de `contracts_for` | `proposal` MULTUP ×100, stake 2 USD: `commission` | sha256 de la `proposal` |
+|---|---|---|---|
+| `cryBTCUSD` | `bc75c06431b423aa967c5c9313a65da274e7659c798b1fe3ee92dc76662eb7e9` | 0,14 | `322069e5932841bcfcbdb3efabc94c9536577ecebec0fa1775a1384361f3ecff` |
+| `frxXAUUSD` | `27577a30cf9d013270af050b1638e1d7eae30b48b7242a32dba6d74d1179991f` | 0,04 | `252561f27716779bfcb2f4a829b7802b0ce578c6558ab5d18d2cf054f528d3d1` |
+| `frxEURUSD` | `c8a47a164233c46d7bac22869499fcf5ae2142f16e373fd726312ef6ba344b08` | 0,05 | `d2bd3d25167ff7c3fc8a771624f3c1f6a376156dedf0aafa81c3fb3069f319bf` |
+
+La `proposal` respondió en `ws/public` con `underlying_symbol` y la moneda de la cuenta demo
+(USD). `validation_params.stake`: mínimo 1,00 y máximo 500,00 USD en los tres.
+
+**La unidad de `commission` no está resuelta.** El esquema la describe como "Commission
+changed in percentage (%)". Si fuera un monto, 0,14 USD sobre un nocional de 200 USD es
+0,07 %; si fuera un porcentaje, serían 0,28 USD. La sonda §0.A-3 cotiza a tres stakes y dos
+multiplicadores para separar las dos lecturas.
+
+**La legacy, con el App ID nuevo:** HTTP 520 en el handshake otra vez.
+
