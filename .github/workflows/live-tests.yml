@@ -62,15 +62,6 @@ jobs:
       # /legacy/migration-status), para saber si autentica. No emite OTP ni
       # hace ningún POST. El informe no lo incluye: el test falla si aparece.
       DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
-      # Sonda §0.A-3, punto 6 (tests/test_fuentes_sonda3_live.py). Si el
-      # secret no existe llega vacío, y la sonda lo reporta como "no aplica".
-      ALPHAVANTAGE_API_KEY: ${{ secrets.ALPHAVANTAGE_API_KEY }}
-      # Sonda §0.A-3, punto C: solo si los tres secrets de cTrader EXISTEN.
-      # Pasan como "true"/"false" calculados en GitHub: los valores no
-      # entran al job, porque la sonda no los usa.
-      SPEL_CTRADER_CLIENT_ID_PRESENTE: ${{ secrets.CTRADER_CLIENT_ID != '' }}
-      SPEL_CTRADER_CLIENT_SECRET_PRESENTE: ${{ secrets.CTRADER_CLIENT_SECRET != '' }}
-      SPEL_CTRADER_ACCESS_TOKEN_PRESENTE: ${{ secrets.CTRADER_ACCESS_TOKEN != '' }}
       # Le dice al guardián de tests/test_sources.py que en ESTE entorno la
       # ausencia de credenciales no es lo esperado, sino una falla de
       # plomería. Sin esto el guardián se saltea y un secreto mal escrito

@@ -90,8 +90,7 @@ from typing import Any, Awaitable, Callable, Optional
 import httpx
 import pytest
 
-from governance.secrets import SecretKey, load_secret
-from ingestion.adapters import DERIV_MAX_COUNT, DerivAdapter
+from ingestion.adapters import DERIV_MAX_COUNT
 from ingestion.deriv_ws import TIMEOUT_RESPUESTA_S, nombre_del_mensaje
 from ingestion.sonda_instrumentos import (
     CONTROL_POSITIVO,
@@ -103,10 +102,8 @@ from core.preregistro_h1 import REJILLA_H1, historia_requerida
 from ingestion.velas import GRANULARIDAD_DIARIA
 from tests.test_deriv_endpoints_live import (
     _EXTRACTO,
-    _SOLO_EN_LIVE_TESTS,
     ENDPOINT_PUBLICO_NUEVO,
     _http_de,
-    _publicar,
     texto_libre,
 )
 
@@ -460,32 +457,12 @@ def veredicto_umbral(ws: dict) -> dict:
             for p in ws.get("profundidad") or [] if p["simbolo"] in btc}
 
 
-# ═══ La sonda real ════════════════════════════════════════════════════════
-
-@pytest.mark.live
-@_SOLO_EN_LIVE_TESTS
-async def test_live_sonda_2(capsys):
-    app_id = load_secret(SecretKey.DERIV_APP_ID, required=False)
-    token = load_secret(SecretKey.DERIV_API_TOKEN, required=False)
-    rest: dict[str, Any] = {"informe": {"omitido": "falta DERIV_API_TOKEN o DERIV_APP_ID"},
-                            "moneda_demo": None}
-    if token and app_id:
-        rest = await sondear_rest(token=token, app_id=app_id)
-    ws = await sondear_ws_publico(abrir=DerivAdapter._default_connector,
-                                  moneda=rest["moneda_demo"])
-    informe = {"sonda": "§0.A-2", "rest": rest["informe"],
-               "moneda_usada": rest["moneda_demo"], "ws_publico": ws,
-               "umbrales_btc": {**{k: v for k, v in UMBRALES_VELAS_BTC.items()},
-                                "por_simbolo": veredicto_umbral(ws)}}
-    texto = texto_libre(informe)
-    for secreto in (token, app_id):
-        if secreto:
-            assert secreto not in texto, "un secreto llegó al informe: no se publica"
-    _publicar(capsys, informe)
-    assert app_id, "SPEL_EXPECT_SECRETS=1 pero DERIV_APP_ID no llegó al job"
-    assert token, ("SPEL_EXPECT_SECRETS=1 pero DERIV_API_TOKEN no llegó al job: "
-                   "revisar el env: de live-tests.yml y el secret del repo")
-    assert ws["handshake"]["ok"], "el WS público, registrado DISPONIBLE, no abrió"
+# ═══ La sonda real: retirada ═════════════════════════════════════════════
+#
+# Corrió el 01-oct (run 36915129174) y sus resultados están en el
+# decision-log del 05-oct. La entrada `live` se retiró para que el job no
+# repita pedidos ya registrados; las funciones quedan porque la sonda §0.A-3
+# y la §0.A-3b las reutilizan.
 
 
 # ═══ La sonda misma, offline ══════════════════════════════════════════════

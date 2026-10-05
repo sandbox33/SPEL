@@ -2,8 +2,17 @@
 tests/test_fuentes_sonda3_live.py
 ===================================
 Sonda §0.A-3 v2, partes B y C (brief del Admin del 02-oct-2026): fuentes
-externas de precios para la candidata intradía. SOLO MIDE. Corre en
-live-tests.yml, publica un informe por fuente y no escribe nada.
+externas de precios para la candidata intradía. SOLO MIDE.
+
+══ RETIRADA DEL JOB LIVE EL 05-OCT ══
+
+La sonda corrió el 05-oct (run 37318228891) y sus resultados están en el
+decision-log de esa fecha. Las entradas `live` se retiraron: volver a
+correrlas gastaría créditos de TwelveData que la sonda §0.A-3b necesita. Las
+funciones y sus tests offline quedan, porque la 3b las reutiliza. La parte
+de cTrader se retiró del todo (decisión del Admin del 05-oct). Desde el
+05-oct, toda llamada a TwelveData lleva `timezone=UTC`: el intradía de
+XAU/USD llegó sin ella con unas 11 horas de corrimiento.
 
 ══ LO QUE CONTESTA ══
 
@@ -16,19 +25,13 @@ live-tests.yml, publica un informe por fuente y no escribe nada.
      DIGITAL_CURRENCY_DAILY (BTC) y una a GOLD_SILVER_HISTORY (daily).
      Campos (¿OHLC o solo cierre?) y primera fecha. Sin el secret
      ALPHAVANTAGE_API_KEY, "no aplica".
-  C. cTrader Open API: solo se mira si existen CTRADER_CLIENT_ID,
-     CTRADER_CLIENT_SECRET y CTRADER_ACCESS_TOKEN. Sin ellos, "pendiente
-     de registro". Con ellos tampoco se conecta: el brief no dice qué
-     medir, y el informe lo pide.
 
 ══ CREDENCIALES ══
 
 La key de TwelveData va en el header `Authorization: apikey …`, como en
 `TwelveDataAdapter` (ingestion/adapters.py), nunca en la URL. Alpha Vantage
 solo la acepta como parámetro `apikey`, así que todo texto que llegue al
-informe pasa por el limpiador. De cTrader no se lee ningún valor: el
-workflow pasa tres booleanos de presencia, calculados en GitHub, y los
-secrets mismos no entran al job.
+informe pasa por el limpiador.
 
 [INTERPRETACIÓN] Lo que el brief no fija:
   · Cada llamada a TwelveData cuesta 1 crédito. El informe trae además
@@ -38,12 +41,6 @@ secrets mismos no entran al job.
   · Entre llamadas a Alpha Vantage se esperan PAUSA_ALPHAVANTAGE_S
     segundos: tres llamadas, separadas de sobra para cualquier límite por
     minuto del plan gratuito, que acá no se verificó.
-
-══ CUÁNDO SE PONE ROJO ══
-
-Si falta TWELVEDATA_API_KEY (es plomería: el workflow lo declara) o si una
-key aparece en el informe. Lo que no aplica, o lo que la API rechaza, se
-reporta y sale verde.
 """
 
 from __future__ import annotations
@@ -51,7 +48,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import os
 import time
 from datetime import date, timedelta
 from typing import Any, Awaitable, Callable, Optional
@@ -59,9 +55,9 @@ from typing import Any, Awaitable, Callable, Optional
 import httpx
 import pytest
 
-from governance.secrets import SecretKey, load_secret
+from tests.test_deriv_endpoints_live import texto_libre
+
 from ingestion.adapters import TWELVEDATA_ENDPOINT
-from tests.test_deriv_endpoints_live import _SOLO_EN_LIVE_TESTS, texto_libre
 from tests.test_deriv_sonda2_live import _limpiador
 
 #: 5. Símbolos e intervalos de TwelveData.
@@ -71,6 +67,9 @@ OUTPUTSIZE_TWELVEDATA = 5000
 LLAMADAS_POR_MINUTO_TWELVEDATA = 8
 TOPE_CREDITOS_TWELVEDATA = 60
 BASE_TWELVEDATA = TWELVEDATA_ENDPOINT.rsplit("/", 1)[0]
+
+#: Toda llamada a TwelveData desde el 05-oct (decision-log 2026-10-05, g).
+TIMEZONE_TWELVEDATA = "UTC"
 
 #: 6. Alpha Vantage: las tres llamadas del brief.
 ENDPOINT_ALPHAVANTAGE = "https://www.alphavantage.co/query"
@@ -84,13 +83,6 @@ LLAMADAS_ALPHAVANTAGE: dict[str, dict[str, str]] = {
 }
 #: [INTERPRETACIÓN] Ver el docstring.
 PAUSA_ALPHAVANTAGE_S = 15.0
-
-#: C. Las variables de presencia que pone el workflow, por secret.
-PRESENCIA_CTRADER: dict[str, str] = {
-    "CTRADER_CLIENT_ID": "SPEL_CTRADER_CLIENT_ID_PRESENTE",
-    "CTRADER_CLIENT_SECRET": "SPEL_CTRADER_CLIENT_SECRET_PRESENTE",
-    "CTRADER_ACCESS_TOKEN": "SPEL_CTRADER_ACCESS_TOKEN_PRESENTE",
-}
 
 _EXTRACTO = 400
 
@@ -183,7 +175,7 @@ async def serie_twelvedata(simbolo: str, intervalo: str, *, key: str,
     corte = ""
     while True:
         params = {"symbol": simbolo, "interval": intervalo,
-                  "outputsize": OUTPUTSIZE_TWELVEDATA}
+                  "outputsize": OUTPUTSIZE_TWELVEDATA, "timezone": TIMEZONE_TWELVEDATA}
         if end_date:
             params["end_date"] = end_date
         entrada, datos = await pedir_twelvedata("time_series", params, key=key,
@@ -223,7 +215,8 @@ async def sondear_twelvedata(*, key: str, get: GetHttp = _get_httpx,
     out: dict[str, Any] = {"base": BASE_TWELVEDATA, "earliest_timestamp": {}, "series": []}
     for s in SIMBOLOS_TWELVEDATA:
         entrada, datos = await pedir_twelvedata(
-            "earliest_timestamp", {"symbol": s, "interval": "1day"}, key=key,
+            "earliest_timestamp", {"symbol": s, "interval": "1day",
+                                   "timezone": TIMEZONE_TWELVEDATA}, key=key,
             limitador=lim, get=get)
         if datos is not None:
             entrada.update(datetime=datos.get("datetime"), unix_time=datos.get("unix_time"))
@@ -288,56 +281,12 @@ async def sondear_alphavantage(*, key: Optional[str], get: GetHttp = _get_httpx,
     return out
 
 
-# ═══ C. cTrader ═══════════════════════════════════════════════════════════
-
-def estado_ctrader(entorno: Optional[dict] = None) -> dict:
-    env = os.environ if entorno is None else entorno
-    presentes = {s: env.get(v) == "true" for s, v in PRESENCIA_CTRADER.items()}
-    if not all(presentes.values()):
-        return {"estado": "pendiente de registro", "secrets_presentes": presentes}
-    return {"estado": "secrets presentes, sin conectar",
-            "secrets_presentes": presentes,
-            "motivo": "el brief del 02-oct no fija qué medir en cTrader Open API: hace "
-                      "falta una instrucción del Admin antes de conectarse"}
-
-
 def _publicar(capsys, informe: dict) -> None:
     """Al log del job siempre, como las sondas de Deriv, con su propio
     encabezado."""
     with capsys.disabled():
         print("\n=== SONDA §0.A-3: FUENTE EXTERNA ===")
         print(json.dumps(informe, indent=2, ensure_ascii=False))
-
-
-# ═══ Las sondas reales ════════════════════════════════════════════════════
-
-@pytest.mark.live
-@_SOLO_EN_LIVE_TESTS
-async def test_live_sonda_3_twelvedata(capsys):
-    key = load_secret(SecretKey.TWELVEDATA_API_KEY, required=False)
-    assert key, "SPEL_EXPECT_SECRETS=1 pero TWELVEDATA_API_KEY no llegó al job"
-    informe = {"sonda": "§0.A-3 v2, punto 5 (TwelveData)",
-               **(await sondear_twelvedata(key=key))}
-    assert key not in texto_libre(informe), "la key llegó al informe: no se publica"
-    _publicar(capsys, informe)
-
-
-@pytest.mark.live
-@_SOLO_EN_LIVE_TESTS
-async def test_live_sonda_3_alphavantage(capsys):
-    key = load_secret(SecretKey.ALPHAVANTAGE_API_KEY, required=False)
-    informe = {"sonda": "§0.A-3 v2, punto 6 (Alpha Vantage)",
-               **(await sondear_alphavantage(key=key))}
-    if key:
-        assert key not in texto_libre(informe), "la key llegó al informe: no se publica"
-    _publicar(capsys, informe)
-
-
-@pytest.mark.live
-@_SOLO_EN_LIVE_TESTS
-def test_live_sonda_3_ctrader(capsys):
-    _publicar(capsys, {"sonda": "§0.A-3 v2, punto C (cTrader Open API)",
-                       **estado_ctrader()})
 
 
 # ═══ Offline ══════════════════════════════════════════════════════════════
@@ -559,31 +508,23 @@ def test_alphavantage_cuerpo_que_no_es_objeto():
     assert resumir_alphavantage([1, 2])["ok"] is False
 
 
-# ── cTrader ──────────────────────────────────────────────────────────────
-
-def test_ctrader_pendiente_si_falta_alguno():
-    env = {"SPEL_CTRADER_CLIENT_ID_PRESENTE": "true",
-           "SPEL_CTRADER_CLIENT_SECRET_PRESENTE": "false",
-           "SPEL_CTRADER_ACCESS_TOKEN_PRESENTE": "true"}
-    r = estado_ctrader(env)
-    assert r["estado"] == "pendiente de registro"
-    assert r["secrets_presentes"]["CTRADER_CLIENT_SECRET"] is False
-    assert estado_ctrader({})["estado"] == "pendiente de registro"
+def test_toda_llamada_a_twelvedata_lleva_timezone_utc():
+    async def correr():
+        get, vistos = _twelvedata()
+        lim, _ = _lim()
+        await sondear_twelvedata(key="K", get=get, limitador=lim)
+        return vistos
+    vistos = asyncio.run(correr())
+    assert vistos and all(p.get("timezone") == "UTC" for _, p, _ in vistos)
 
 
-def test_ctrader_con_los_tres_no_conecta_y_lo_dice():
-    env = {v: "true" for v in PRESENCIA_CTRADER.values()}
-    r = estado_ctrader(env)
-    assert r["estado"] == "secrets presentes, sin conectar" and "Admin" in r["motivo"]
-
-
-def test_el_workflow_pasa_la_presencia_de_ctrader_y_no_los_valores():
+def test_el_workflow_ya_no_pasa_ctrader_ni_alphavantage():
+    """cTrader se retiró (decisión del Admin del 05-oct) y la sonda de Alpha
+    Vantage ya no corre: sus secrets no tienen por qué entrar al job."""
     import yaml
     from pathlib import Path
     wf = yaml.safe_load((Path(__file__).resolve().parent.parent / ".github" / "workflows"
                          / "live-tests.yml").read_text(encoding="utf-8"))
     env = wf["jobs"]["live"]["env"]
-    for secreto, variable in PRESENCIA_CTRADER.items():
-        assert env[variable] == f"${{{{ secrets.{secreto} != '' }}}}"
-        assert secreto not in env
-    assert env["ALPHAVANTAGE_API_KEY"] == "${{ secrets.ALPHAVANTAGE_API_KEY }}"
+    assert not any("CTRADER" in k or "CTRADER" in str(v) for k, v in env.items())
+    assert "ALPHAVANTAGE_API_KEY" not in env

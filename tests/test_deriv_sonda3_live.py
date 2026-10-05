@@ -91,15 +91,11 @@ from urllib.parse import parse_qs, urlsplit
 import httpx
 import pytest
 
-from governance.secrets import SecretKey, load_secret
-from ingestion.adapters import DerivAdapter
 from ingestion.deriv_ws import TIMEOUT_RESPUESTA_S
 from ingestion.sonda_instrumentos import CONTROL_POSITIVO, codigo, es_sintetico, seleccionar
 from tests.test_deriv_endpoints_live import (
-    _SOLO_EN_LIVE_TESTS,
     ENDPOINT_PUBLICO_NUEVO,
     _http_de,
-    _publicar,
     texto_libre,
 )
 from tests.test_deriv_sonda2_live import (
@@ -490,6 +486,13 @@ def motivo_para_no_conectar(url: str) -> Optional[str]:
 
 # ═══ Diferencias entre ws/public y ws/demo ════════════════════════════════
 
+#: Campos de `contracts_for` que cambian con el spot: en la sonda del 05-oct
+#: fueron toda la diferencia de contratos entre los canales.
+CAMPOS_QUE_SIGUEN_AL_SPOT: frozenset[str] = frozenset({
+    "barrier", "high_barrier", "low_barrier", "barrier_choices",
+    "available_barriers", "expired_barriers"})
+
+
 def _error_code(e: Any) -> Any:
     return e.get("code") if isinstance(e, dict) else e
 
@@ -501,7 +504,10 @@ def huella(canal: dict) -> dict[str, Any]:
     for s in contratos.get("simbolos") or []:
         h[f"escaneo:{s['simbolo']}"] = s.get("tipos") or _error_code(s.get("error"))
     for sim, d in (contratos.get("detalle_foco") or {}).items():
-        h[f"contratos:{sim}"] = sorted(json.dumps(c, sort_keys=True) for c in d["contratos"])
+        h[f"contratos:{sim}"] = sorted(
+            json.dumps({k: v for k, v in c.items() if k not in CAMPOS_QUE_SIGUEN_AL_SPOT},
+                       sort_keys=True)
+            for c in d["contratos"])
     for sim, c in (canal.get("cotizaciones") or {}).items():
         if not isinstance(c, dict) or "multup" not in c:
             continue
@@ -578,21 +584,9 @@ async def sondear(*, token: str, app_id: str, abrir: Callable[[str], Any],
     return informe, tuple(secretos)
 
 
-@pytest.mark.live
-@_SOLO_EN_LIVE_TESTS
-async def test_live_sonda_3_deriv(capsys):
-    app_id = load_secret(SecretKey.DERIV_APP_ID, required=False)
-    token = load_secret(SecretKey.DERIV_API_TOKEN, required=False)
-    assert app_id, "SPEL_EXPECT_SECRETS=1 pero DERIV_APP_ID no llegó al job"
-    assert token, "SPEL_EXPECT_SECRETS=1 pero DERIV_API_TOKEN no llegó al job"
-    informe, secretos = await sondear(token=token, app_id=app_id,
-                                      abrir=DerivAdapter._default_connector)
-    texto = texto_libre(informe)
-    for secreto in secretos:
-        if secreto:
-            assert secreto not in texto, "un secreto llegó al informe: no se publica"
-    _publicar(capsys, informe)
-    assert informe["ws_publico"]["handshake"]["ok"], "el WS público, registrado DISPONIBLE, no abrió"
+# La entrada `live` se retiró el 05-oct: la sonda corrió ese día (run
+# 37318228891) y sus resultados están en el decision-log. Volver a correrla
+# pediría un segundo OTP demo en el mismo job que la sonda §0.A-3b.
 
 
 # ═══ La sonda misma, offline ══════════════════════════════════════════════
@@ -962,6 +956,15 @@ async def test_las_diferencias_entre_public_y_demo():
     claves = {d["clave"] for d in informe["diferencias_publico_demo"]}
     assert "escaneo:cryBTCUSD" in claves and "contratos:cryBTCUSD" in claves
     assert not any(k.startswith("escaneo:frxXAUUSD") for k in claves)
+
+
+def test_las_barreras_que_siguen_al_spot_no_son_diferencias():
+    c = {"contract_type": "CALL", "barrier": "4185.90", "min_contract_duration": "1d"}
+    pub = {"contratos": {"detalle_foco": {"X": {"contratos": [c]}}}}
+    dem = {"contratos": {"detalle_foco": {"X": {"contratos": [{**c, "barrier": "4182.91"}]}}}}
+    assert diferencias(pub, dem) == []
+    dem["contratos"]["detalle_foco"]["X"]["contratos"][0]["min_contract_duration"] = "5m"
+    assert [d["clave"] for d in diferencias(pub, dem)] == ["contratos:X"]
 
 
 def test_las_diferencias_ignoran_el_spot_y_ven_la_comision():
