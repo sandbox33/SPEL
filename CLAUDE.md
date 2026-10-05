@@ -43,8 +43,12 @@ estándar de ingeniería: hazlas. Tu escrutinio va al código y a los datos:
   ≥ 0,90 sobre histórico + demo, ≥ 30 días y ≥ 20 operaciones cerradas,
   costos ≤ 1,25 × modelados, reconciliación limpia; máximo 6 meses) y
   llegue la Fase 4.
-- Órdenes demo: solo desde `integracion_demo/`, con `entorno="demo"` y
-  `authorize.is_virtual == 1`. Fuera de ahí, el acceso a Deriv es de solo lectura.
+- Órdenes demo: solo desde `integracion_demo/`, con OTP emitido para una
+  cuenta cuyo `account_type` sea `demo` según `GET /accounts`, y conexión solo
+  a `/ws/demo`. Fuera de ahí, el acceso a Deriv es de solo lectura.
+- Las sondas en `tests/` pueden pedir OTP y cotizar (nunca comprar) solo con
+  autorización explícita del Admin en un brief fechado, registrada en el
+  decision-log.
 
 ## Congelados (no tocar sin brief explícito)
 - `execution/circuit_breaker.py`, `execution/execution_guard.py`: hasta Fase 4.
