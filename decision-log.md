@@ -1582,3 +1582,174 @@ multiplicadores para separar las dos lecturas.
 
 **La legacy, con el App ID nuevo:** HTTP 520 en el handshake otra vez.
 
+---
+
+## 2026-10-05 — Sonda §0.A-3 v2: sin pata convexa, costos proporcionales, y TwelveData no siempre en UTC
+
+**Fuente:** sonda §0.A-3 v2 (`tests/test_deriv_sonda3_live.py` y
+`tests/test_fuentes_sonda3_live.py`), corrida por el Admin en *SPEL Live Tests* sobre la rama
+del PR #31: run `37318228891`, job `111790308511`, commit `c85ea5e`, 05-oct-2026 13:37–13:45
+UTC. Pasaron los 9 tests `live`.
+
+**Qué parte del log se pudo leer.** El log del job tiene 12.624 líneas. Desde el sandbox se
+leyeron las últimas 5.000, que es lo que devuelve la herramienta de GitHub; el archivo
+completo está en un host que el proxy del sandbox bloquea. Quedaron legibles el canal
+**demo** entero, las **diferencias** público-demo, el final del intradía público (oro M15),
+TwelveData, Alpha Vantage y cTrader. Quedaron fuera la sonda de la legacy, las cuentas y el
+canal **público** (escaneo, cotizaciones y la mayor parte del intradía). Las cifras de esa
+parte se marcan como **lectura del Admin** y no llevan sha256. La sonda §0.A-3b publica cada
+informe en una sola línea, para que entre entero en lo legible.
+
+**a) Vanillas y turbos solo existen en 13 índices sintéticos.** En el canal demo
+(`active_symbols` con 89 símbolos, sha256
+`2ffc9b9d30a6bf3755b1fe107877a8430069219d1ddbddf6abe9f73209912270`), VANILLALONGCALL/PUT y
+TURBOSLONG/SHORT aparecen en `1HZ100V`, `1HZ10V`, `1HZ15V`, `1HZ25V`, `1HZ30V`, `1HZ50V`,
+`1HZ75V`, `1HZ90V`, `R_10`, `R_100`, `R_25`, `R_50` y `R_75`, todos sintéticos, y en
+**ningún** símbolo no sintético. El escaneo del canal público no difiere del demo: la lista
+de diferencias no tiene ninguna clave `escaneo:`. **La pata convexa queda descartada**
+(decisión del Admin). Multiplicadores no sintéticos: `cryBTCUSD`, `cryETHUSD`, 14 pares
+`frx…`, `frxXAGUSD` y `frxXAUUSD`.
+
+**b) Los multiplicadores de BTC, oro y EUR/USD aceptan `limit_order.stop_loss`.** Las 18
+cotizaciones demo con stop-loss (tres símbolos × tres stakes × 0,3 % y 0,6 % del nocional)
+fueron aceptadas, y en el canal público también: ninguna de sus claves está entre las
+diferencias de aceptación.
+
+| símbolo | stake | stop-loss | devuelto | sha256 |
+|---|---|---|---|---|
+| `cryBTCUSD` | 1 | 0.30 | `-0.30` | `b77a46a30ed3104990dad11fe06895141166f5c6586c5acaaf8fc405d9acdca2` |
+| `cryBTCUSD` | 1 | 0.60 | `-0.60` | `32e6a45771a52754ffdb81d343c134c242e29c5fbff4f346774c6cb04f5ec65d` |
+| `cryBTCUSD` | 1.5 | 0.45 | `-0.45` | `8b171b6218ab0e61619f4b16a514b87a175a11cdbbc7d4d9a79fe801f18233a4` |
+| `cryBTCUSD` | 1.5 | 0.90 | `-0.90` | `510fea9e895fc609ec73539cee564ba15a547520149445efc420f209738e66b7` |
+| `cryBTCUSD` | 2 | 0.60 | `-0.60` | `c04b1d8cc4959e71ee7f501e7e5853f68547cdcb8d52014dd4a095f1b5055ff8` |
+| `cryBTCUSD` | 2 | 1.20 | `-1.20` | `43b7f3dd487b39b836cf95d47854ebc2b72584bef882283b104a0322375d0d49` |
+| `frxXAUUSD` | 1 | 0.30 | `-0.30` | `e70462b60f8fff5c64d5a5262c22c6802d8db054f7bf010d4b58c918bd57e98a` |
+| `frxXAUUSD` | 1 | 0.60 | `-0.60` | `66aec2669bd625049682bb99b54aecc93b0e81a927a059d97af098c76e6675db` |
+| `frxXAUUSD` | 1.5 | 0.45 | `-0.45` | `06c9b4bbfbc9fa422591bde5d3bb1f342d030290d4f5f65ace220381275b7ef8` |
+| `frxXAUUSD` | 1.5 | 0.90 | `-0.90` | `01695abf538b636f3da0f307dadeb7b7864b1a33613e877cef52d3d92054a9ea` |
+| `frxXAUUSD` | 2 | 0.60 | `-0.60` | `fe20bad3f1aaf4b4eec7ebf5398a8fb96d545efb6052c9c6fd6df694604121a4` |
+| `frxXAUUSD` | 2 | 1.20 | `-1.20` | `485a587aacf3603e2ff9a1e424ba7bc5b5cf50de9a668e3be3f482329a4df0fe` |
+| `frxEURUSD` | 1 | 0.30 | `-0.30` | `7e57fe196ad1809bc722675bb6d9bae6107c9fa2aab7b0297fc6f1f4a718a093` |
+| `frxEURUSD` | 1 | 0.60 | `-0.60` | `8b70cea3372b0bae3f24f4f100b001175041896e430c6fae023c36a403e04aaa` |
+| `frxEURUSD` | 1.5 | 0.45 | `-0.45` | `31dbb8956df4bf991ce270db7c91b3a2d428b825c4baba09616ccab04fa7231c` |
+| `frxEURUSD` | 1.5 | 0.90 | `-0.90` | `8c81554867f9fa73e262d9f0d2a0ac02c5fa3f0ea486f7b060953703385c354d` |
+| `frxEURUSD` | 2 | 0.60 | `-0.60` | `9990a08aa859ba392614bc14f1e0df367f12bc4792df368f3e87c2df34b14851` |
+| `frxEURUSD` | 2 | 1.20 | `-1.20` | `29bcacc1258248d48eae76341f3f81914723e6ed0ba37e4965dc59dfda1051f2` |
+
+*El monto del stop incluye la comisión.* Con el spot que implica el stop-out de la misma
+corrida (×100, stake 1), la distancia al precio del stop de 0,30 USD es 0,2842 % en el oro y
+0,2805 % en EUR/USD: coincide con (0,30 − 0,02) / 100 = 0,28 % y no con 0,30 %. Lo mismo a
+0,60 USD (0,5848 % y 0,5807 % contra 0,58 %). En BTC el cálculo no es concluyente: el spot
+se movió entre las cotizaciones.
+
+*El mínimo.* `validation_params.stop_loss.min` fue **0,10 USD** en todas las cotizaciones
+demo salvo BTC ×200: **0,12 = comisión 0,11 + 0,01**. El Admin lo leyó como "mínimo 0,10 USD
+(en BTC, comisión + 0,01)". En lo legible, ninguna cotización de BTC tiene un mínimo de 0,10
+igual a la comisión + 0,01: lo que muestra es un mínimo de max(0,10; comisión + 0,01).
+
+**c) La comisión es proporcional al nocional, sin mínimo fijo.** Demo, con el stop-out de
+d):
+
+| símbolo | mult. | stake | comisión | % del nocional | mínimo del stop-loss | error del stop-out | sha256 |
+|---|---|---|---|---|---|---|---|
+| `cryBTCUSD` | ×100 | 1 | 0.03 | 0.0300 % | 0.10 | 0.20 % | `3ebf5013effa340645bece7d1b0bc73dd8b744c821da3c3fae3e777e540c701a` |
+| `cryBTCUSD` | ×100 | 1.5 | 0.04 | 0.0267 % | 0.10 | 0.14 % | `09f59e906ad15696895af297a32f5eff5deaa3ba6a369c105f31cc8adb804eba` |
+| `cryBTCUSD` | ×100 | 2 | 0.06 | 0.0300 % | 0.10 | 0.20 % | `c143dc79e96336e36d7ff9d6dd29d123c9cbe39605d58e05bf5be9c7d0a57268` |
+| `cryBTCUSD` | ×200 | 2 | 0.11 | 0.0275 % | 0.12 | 0.11 % | `b88bb77388a82a14a7bfa82ca34c7630af002ce415217b98b6a3e520a89ce780` |
+| `frxXAUUSD` | ×100 | 1 | 0.02 | 0.0200 % | 0.10 | 0.08 % | `d8e4c729d6129f4ca6277a626d02e9b4bec142a00a6ecdb50d7ab859481affd0` |
+| `frxXAUUSD` | ×100 | 1.5 | 0.03 | 0.0200 % | 0.10 | 0.08 % | `bffaa528ba3c39278ad4f11ceefb727e334a1cab844c4fb53efb236aab908cb8` |
+| `frxXAUUSD` | ×100 | 2 | 0.04 | 0.0200 % | 0.10 | 0.08 % | `f38482550c84db11273e377787f643e66faaa1ffbc841a7fef9d39a2507c04ad` |
+| `frxXAUUSD` | ×200 | 2 | 0.08 | 0.0200 % | 0.10 | 0.19 % | `1f232835bb3340b917d5892af23e9ecf6bbf3c808dc8c99509557500a403209a` |
+| `frxEURUSD` | ×100 | 1 | 0.02 | 0.0200 % | 0.10 | 0.01 % | `f08d72b809346f1174bc1709562ab9672dd82c59ae411b333b52ab4f2665995a` |
+| `frxEURUSD` | ×100 | 1.5 | 0.03 | 0.0200 % | 0.10 | 0.10 % | `7ed2d2e601bee7355cac2e908a8d606c330bf9e6549a2bb0a56dabbf96b8d766` |
+| `frxEURUSD` | ×100 | 2 | 0.04 | 0.0200 % | 0.10 | 0.10 % | `dc16416788e0d30db6ab17b85beba6f5bc3d9ce91a57f6289566e6fc044ca9f3` |
+| `frxEURUSD` | ×200 | 2 | 0.08 | 0.0200 % | 0.10 | 0.14 % | `8133ef166b56588c3ba12eff69297d626b9165a65a37ca2288eeac5643fb87bc` |
+
+Canal público, tomado de las diferencias público-demo (cotizaciones de la misma corrida, no
+del mismo instante):
+
+- BTC: 0,08 / 100 = **0,080 %**; 0,11 / 150 = **0,073 %**; 0,15 / 200 = **0,075 %**;
+  0,31 / 400 = **0,078 %**. El Admin lo resumió como 0,075–0,08 %; el valor de 150 USD queda
+  en 0,073 % por el redondeo a centavos.
+- Oro: 0,03 / 100 = **0,030 %**; 0,05 / 150 = **0,033 %**; 0,06 / 200 = **0,030 %**.
+- EUR/USD: igual al demo, **0,02 %**.
+
+Demo: BTC **0,027–0,030 %**, oro **0,02 %**, EUR/USD **0,02 %**.
+
+**El canal público rechaza ×200 en el oro y en EUR/USD** con `ContractBuyValidationError`; el
+mensaje literal ("Accepts 50,100,150,250,500") es lectura del Admin. El demo lo acepta, y su
+`validation_params.stake.max` es **2.000 USD** en todas las cotizaciones (el público decía
+500 en la sonda 2). Nota: `contracts_for` publica `multiplier_range` {100, 200, 300, 500,
+800} en los dos canales, así que el rango que acepta la `proposal` pública no es el que
+publica `contracts_for`.
+
+**d) Stop-out verificado: distancia = 1/m − comisión/nocional.** En las 12 cotizaciones
+demo, la lectura más cercana fue la de la comisión como **monto**, con un error relativo de
+entre 0,01 % y 0,20 %. Las tres de stake 1 a ×100 son ambiguas por construcción (nocional
+100). La unidad de `commission` queda resuelta: es un monto en la moneda de la cuenta, no un
+porcentaje, aunque el esquema diga "percentage".
+
+**e) Las velas intradía de Deriv tienen el mismo tope de 365 días.** En lo legible, oro M15:
+23.152 velas, **23.123 alineadas**, de `1759708800` (2025-10-06 00:00 UTC) a `1791207000`, y
+las 12 páginas legibles respetan `end`. BTC M5 con **105.037** alineadas y oro M5 con **69.352** son
+lectura del Admin.
+
+**f) TwelveData, plan Basic, diario:**
+
+| símbolo | `earliest_timestamp` | sha256 | filas | páginas (sha256) |
+|---|---|---|---|---|
+| BTC/USD | 2017-08-28 | `ab43cf45ca799f89ea8e1ef1e816f30c0af42556732b4cf34d900aadb141f131` | **3.326**, OHLC | `58b1f13e58469495487bcb0a8dd4f7af64b3dddd0c1e9c8a8fe72100c4063e0d`; fin: 404 "Data not found" `5043c1af5d2100923002ba840ce0522cb9298e8402022bf1bd0a6ea906b026f2` |
+| XAU/USD | 1979-12-26 | `a756fdc4ff44d4e1b1203e958418b70bbfbeb9fef3c79154d58f8de5ece135bf` | **12.288**, OHLC | `6f11f6430a1379425480f01ca37af7f1131ead252f13fd88c8593589fae9967f`, `7932ba5d332d9792ed696b220ec6ae6024c65b625c73e5beb73ce9ade6d39c08`, `57f6859f320b5930400516f22b45d0cf4ac58840b62766bd6c04817c51e4a9ca`; fin: 404 `ec8e83467a8f38fb4ee1fab0aa2d6badc2b1921f39661354b7c0d5fc4c4f7fd4` |
+
+Sin columna de volumen en ninguno. La página que pasa el fondo devuelve **404 "Data not
+found"**, no una respuesta vacía. Los headers muestran el límite por minuto: `api-credits-left`
+bajó de 7 a 0 y volvió a 7. Se usaron 12 créditos.
+
+**g) Las velas intradía de XAU/USD de TwelveData NO vienen en UTC.** En una corrida del 05-oct
+de 13:37 a 13:45 UTC, la última vela de 15min fue `2026-10-06 00:30:00` (sha256
+`f739368a2df6ebc915151cefabcad3ec1c7a94d4404ba017619d545730a21456`) y la de 5min
+`2026-10-06 00:40:00` (`166ad4f4b838dde2ad7014f3dcfbfb29d2102144e265bfde1f5f0dcc02edce5b`): unas
+11 horas en el futuro. BTC/USD sí cerró en la hora de la corrida (13:30 y 13:40). **Toda
+llamada futura a TwelveData lleva `timezone=UTC`** (decisión del Admin).
+
+**h) Alpha Vantage está operativo; el oro solo trae un precio.**
+
+| llamada | filas | primera fecha | campos | sha256 |
+|---|---|---|---|---|
+| FX_DAILY EUR/USD, full | 5.000 | 2007-08-03 | open, high, low, close | `55f6e8792074878ed4ff18cd25df0a6fac54c6ff990b10861462206ba5fbda5a` |
+| DIGITAL_CURRENCY_DAILY BTC | 5.925 | 2010-07-17 | open, high, low, close, volume | `616b9ccc3e188ebf9402af186b830236f3df70b1a35e079f0d736a9ce2261911` |
+| GOLD_SILVER_HISTORY GOLD, daily | 5.415 | 2011-06-01 | `date`, `price` | `39eaf4de509bb99b346ab59d77dbc302476274a2dbf2bd0cd0ead6f7db124913` |
+
+**La legacy sigue muerta con un App ID válido**: lectura del Admin para esta corrida, y ya
+medido en la del 01-oct (run `36915129174`, HTTP 520 con la app PAT).
+
+**cTrader:** los tres secrets ausentes, "pendiente de registro".
+
+**Un defecto de la sonda, corregido para la 3b.** Las diferencias de `contracts_for` de oro y
+EUR/USD entre canales son solo barreras de contratos diarios (por ejemplo `4185.90` contra
+`4182.91`), que siguen al spot: la huella de comparación no excluía las barreras.
+
+---
+
+## 2026-10-05 — Respuesta del Admin a la sonda §0.A-3 v2: κ, cTrader y la cotización real
+
+**Fuente:** brief del Admin del 05-oct-2026.
+
+- **Interpretaciones 1 a 7 de la sonda §0.A-3 v2: aprobadas tal como están.**
+- **Modelo de costos (κ).** κ por activo = el **máximo medido en la cuenta real** (sonda
+  §0.A-3b, punto 5d). Si esa medición falla, el máximo entre público y demo. Va en
+  `config/constantes.json` con su procedencia (run y sha256). **Pendiente:** se registra
+  cuando corra la 3b.
+- **cTrader queda fuera del alcance** por ahora y se retira de las sondas.
+- **DG-7 y DG-8** se registran en el PR de gobernanza contra `main`.
+- **Autorización de un solo uso, para la sonda §0.A-3b:** UN OTP para la cuenta cuyo
+  `account_type` sea `real` según `GET /accounts`, y una conexión a `/ws/real` **solo para
+  cotizar**, entre el 05-oct-2026 00:00 y el 09-oct-2026 23:59 UTC. Reglas, sin excepciones:
+  exactamente una cuenta real en `GET /accounts`; saldo 0 antes del OTP, o, si `/accounts`
+  no lo expone, `balance` como primer mensaje y cierre sin enviar nada más si es mayor que 0;
+  esquema `wss`, host `api.derivws.com` y ruta `/trading/v1/options/ws/real` verificados antes
+  de conectar; lista blanca de `time`, `balance`, `contracts_for` y `proposal` sin
+  `subscribe`, que lanza antes de enviar cualquier otro tipo; una sola conexión, máximo 40
+  mensajes, cierre al terminar; la URL con el OTP nunca va al informe. Es la autorización
+  explícita que pide la regla nueva de CLAUDE.md para que una sonda en `tests/` pida un OTP.
+
