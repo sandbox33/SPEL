@@ -1425,3 +1425,34 @@ había perdido), `CLAUDE.md`, `BLUEPRINT.md`, las compuertas de `research/prereg
 
 APTO no autoriza ninguna orden: la compuerta de la Fase 4 y la decisión del Admin siguen
 haciendo falta.
+
+---
+
+## 2026-10-05 — DG-7 y DG-8: autonomía asimétrica y la batería fuera de execution/
+
+**Fuente:** decisiones del Admin del 05-oct-2026 (brief de respuesta a la sonda §0.A-3 v2,
+puntos 3c, 3d y 4).
+
+| ID | Decisión |
+|---|---|
+| DG-7 | **Autonomía asimétrica.** El sistema puede reducir riesgo sin intervención humana: pausar una estrategia, bajar el stake, cerrar posiciones o activar el circuit breaker. Aumentar riesgo, cambiar un parámetro, reactivar una estrategia pausada o reasignar capital solo ocurre ejecutando una regla fijada antes en un pre-registro sellado con sha256. Cada regla nueva suma a N y consume presupuesto de α. **Ningún parámetro sube en ejecución.** |
+| DG-8 | **Arquitectura.** La batería multi-estrategia se construye fuera de `execution/`, en paquetes nuevos (`strategies/` y un orquestador). Usa `execution/circuit_breaker.py` y `execution/execution_guard.py` sin modificarlos; su congelamiento hasta la Fase 4 se mantiene. |
+
+**DG-7, en la práctica.** Las cuatro acciones que reducen riesgo pueden estar en el
+código de ejecución sin otra condición. Las cuatro que lo aumentan solo pueden estar como
+regla de un pre-registro ya sellado, y esa regla cuenta en el N del Deflated Sharpe como
+cualquier otro ensayo.
+
+**DG-8, lo que no cambia.** El congelamiento de `execution/circuit_breaker.py` y
+`execution/execution_guard.py` (CLAUDE.md, "Congelados") sigue igual: la batería los llama,
+no los edita. `git diff --name-only origin/main...HEAD -- execution/` sigue teniendo que estar
+vacío.
+
+**La regla de órdenes demo de CLAUDE.md, reescrita.** Citaba `authorize.is_virtual == 1`,
+que pertenece a la API legacy, retirada (decision-log 2026-10-01). La API nueva no tiene
+`authorize`: la cuenta se elige al pedir el OTP. La regla nueva: órdenes demo solo desde
+`integracion_demo/`, con OTP emitido para una cuenta cuyo `account_type` sea `demo` según
+`GET /accounts`, y conexión solo a `/ws/demo`. Las sondas en `tests/` pueden pedir OTP y
+cotizar, nunca comprar, solo con autorización explícita del Admin en un brief fechado,
+registrada en este decision-log.
+
