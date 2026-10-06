@@ -10,19 +10,18 @@
 > Este archivo se lee primero en cada chat nuevo. Frente a un chat que lo contradiga sin
 > evidencia, gana el archivo; frente al código, gana el código.
 
-**Última actualización:** 29 sep 2026 — gobernanza (PR-G: DG-1 a DG-6).
+**Última actualización:** 05 oct 2026 — gobernanza: órdenes demo por OTP, DG-7 y DG-8.
 
-**Commit de referencia:** `2832af8` (merge del PR #30).
+**Commit de referencia:** `465d199` (merge del PR #32).
 
-**Tests:** **974** recolectados en `tests/`, en 32 archivos, medido con
+**Tests:** **977** recolectados en `tests/`, en 33 archivos, medido con
 `pytest --collect-only -q tests/` sobre este PR. Más 74 en `research/tests/`, que no
 bloquean.
 
-Desfase que este PR cierra: **cinco PRs** (#25, #27, #28, #29 y #30) desde `dd9ea63`, y
-trece días desde la actualización anterior (16-sep). Los desfases que este archivo
-registró antes fueron de 17, 16 y 7 días, todos con el diagnóstico ya escrito; este es el
-primero que frena un control: `tests/test_estado_al_dia.py` falla si hay **más de 3 PRs
-fusionados** desde el commit de referencia de arriba (DG-6). Cerró la Incógnita #11.
+Desfase: **ninguno**. El único merge desde la actualización anterior es el del PR #32 (PR-G),
+que es el que la escribió. Los PRs #31, #33 y #34 siguen abiertos; el #31, en pausa con
+las sondas de Deriv. `tests/test_estado_al_dia.py` falla si hay **más de 3 PRs
+fusionados** desde el commit de referencia de arriba (DG-6).
 
 
 **Ver también:** `FASE2_NOTAS_ARQUITECTURA_MODELO.md` (raíz del repo) — glosario y
@@ -58,8 +57,8 @@ Eso no reabre Fase 1 ni cambia su resultado; ordena el código para que coincida
 
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-**974 recolectados en `tests/`, en 32 archivos**, contados con `pytest --collect-only -q`
-el 01-oct-2026, no copiados de ningún documento. Sin credenciales se saltan 2: el test
+**977 recolectados en `tests/`, en 33 archivos**, contados con `pytest --collect-only -q`
+el 05-oct-2026, no copiados de ningún documento. Sin credenciales se saltan 2: el test
 `live` de TwelveData y el guardián de secretos de `tests/test_sources.py`, los dos por su
 propio `skipif`.
 
@@ -92,6 +91,7 @@ corridas seguidas sin intermitencia.
 | `execution/circuit_breaker.py` + `execution_guard.py` | Guardrails duros — congelados hasta F4 | 14 + 17 | ✅ |
 | `governance/persistence.py` + `secrets.py` | 5 streams (TRADE_LEDGER desde el PR #25), SecretKey único | 19 + 10 | ✅ |
 | `governance/estado.py` + `tests/test_estado_al_dia.py` | Control anti-desfase de este archivo (DG-6) | 16 | ✅ |
+| `tests/test_reglas_ordenes_demo.py` | La regla de órdenes demo de CLAUDE.md (OTP para una cuenta demo según `GET /accounts`, solo `/ws/demo`) y DG-7/DG-8 en el decision-log | 3 | ✅ |
 | `governance/paso_a_real.py` | DG-3: las cuatro condiciones del paso de demo a real y la zona gris de 6 meses (decision-log 29-sep) | 21 | ✅ |
 | `config/constantes.json` | Registro de las 108 constantes de módulo, verificado contra el código en las dos direcciones | 30 | ✅ |
 | `tests/test_registro_linguistico*.py` | Español neutro: sin voseo en `.py` y en `.md` | 84 + 5 | ✅ |
@@ -382,6 +382,14 @@ Queda en Drive, fuera del repo: archivar `SPEL_PERSISTENCE_STATE.md` y
 `SPEL_PERSISTENCIA_v2.md`, que ya quedaban por debajo del manual y ahora quedan por debajo
 del repo.
 
+**05-oct: DG-7 y DG-8** (decision-log 2026-10-05). DG-7: el sistema puede reducir riesgo
+solo; aumentarlo, cambiar un parámetro, reactivar una estrategia o reasignar capital solo
+ocurre por una regla de un pre-registro sellado, que suma a N. DG-8: la batería
+multi-estrategia va fuera de `execution/` (`strategies/` y un orquestador) y usa el circuit
+breaker y el guard sin modificarlos. La regla de órdenes demo de CLAUDE.md dejó de citar
+`authorize.is_virtual`, de la API retirada: ahora es OTP para una cuenta demo según
+`GET /accounts` y conexión solo a `/ws/demo`.
+
 ---
 
 ## ❓ INCÓGNITAS REALES — sin resolver, no inventadas para llenar espacio
@@ -491,16 +499,14 @@ salvedad que hay que resolver **antes** de revertir.
 
 ## ▶️ PRÓXIMO PASO CONCRETO
 
-**Correr la sonda de endpoints de Deriv: Actions → SPEL Live Tests → Run workflow, sobre la
-rama del PR #31.**
+**Correr la sonda §0.A-3b sobre la rama del PR #31: Actions → SPEL Live Tests → Run
+workflow, entre el 05 y el 09-oct-2026 (UTC).**
 
-Todo el PR #31 —velas, sonda de instrumentos, sesión de solo lectura— habla con el
-endpoint legacy `ws.derivws.com/websockets/v3`, y hay dos señales de que puede estar
-retirado: la documentación actual de Deriv dice que las rutas legacy "solo sirven
-historial", y un PR público de terceros reporta HTTP 520 en cada handshake. La sonda
-(`tests/test_deriv_endpoints_live.py`, Brief final v3 §0.A) prueba la legacy y el WS
-público nuevo, y su informe decide si el PR #31 sigue como está o si primero hay que
-migrar. Es una acción del Admin y es la única que hoy bloquea el camino crítico.
+La legacy de Deriv está muerta (decision-log 2026-10-01) y el PR #31 sigue en pausa hasta
+migrar al WS nuevo. Las sondas §0.A-2 y §0.A-3 ya midieron profundidad, contratos y costos
+en los canales público y demo. La §0.A-3b compara los tres canales —público, demo y real,
+este último solo para cotizar, con autorización de un solo uso— y de ella sale el κ de
+costos por activo que entra en `config/constantes.json`. Es una acción del Admin.
 
 *(Lo que estaba acá —"decidir qué mide el éxito de Fase 2"— lo contestan los
 pre-registros de la Serie H —Sharpe neto fuera de muestra, PSR, DSR y la comparación contra
