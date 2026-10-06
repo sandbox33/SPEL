@@ -57,9 +57,11 @@ activo y canal.
     El informe trae los segundos entre la primera y la última cotización de
     cada combinación.
   · La moneda de cada canal es la de su cuenta; el público usa la de demo.
-  · κ por la regla del Admin (3a): el máximo medido en real; si no hay
-    medición real, el máximo entre público y demo. Para 5c, "el mayor medido
-    en 5d para ese activo": el máximo de los tres canales.
+  · κ por la regla del Admin (decision-log 2026-10-06): el máximo medido en
+    real; si no hay medición real, el máximo entre público y demo, marcado
+    como respaldo. 5c usa ESE κ. Hasta el 06-oct usaba "el mayor medido en
+    5d" (el máximo de los tres canales), que resultó el del canal público:
+    la regla nueva lo reemplaza.
   · 5c usa las velas M5 del canal público del último año.
 """
 
@@ -380,8 +382,8 @@ async def comparar_canales(canales: dict[str, Any], monedas: dict[str, str],
 
 
 def tabla_kappa(filas: list[dict]) -> dict:
-    """κ = comisión / nocional, máximo por activo y canal; y el κ de la
-    regla del Admin (3a) y el de 5c."""
+    """κ = comisión / nocional, máximo por activo y canal, y el κ de la
+    regla del Admin, que es también el de 5c."""
     tabla: dict[str, dict[str, Optional[float]]] = {}
     for f in filas:
         for canal, c in f["canales"].items():
@@ -398,9 +400,8 @@ def tabla_kappa(filas: list[dict]) -> dict:
             regla, fuente = medidos["real"], "real"
         else:
             resto = [medidos[c] for c in ("publico", "demo") if c in medidos]
-            regla, fuente = (max(resto), "max(publico, demo)") if resto else (None, None)
-        out[sim] = {"por_canal": por_canal, "kappa_regla_3a": regla, "fuente_regla_3a": fuente,
-                    "kappa_5c": max(medidos.values()) if medidos else None}
+            regla, fuente = (max(resto), "respaldo") if resto else (None, None)
+        out[sim] = {"por_canal": por_canal, "kappa": regla, "origen": fuente}
     return out
 
 
@@ -501,7 +502,7 @@ async def sondear(*, token: str, app_id: str, abrir: Callable[[str], Any],
             informe["5c"][clave] = {"simbolo": sims[0], "ancla": f"{h:02d}:{m:02d} {zona}",
                                     "velas_m5": len(velas), "corte": prof["corte"],
                                     "dias_sin_las_tres_velas": faltan,
-                                    **mecanica_rango(dias, (kappa.get(sims[0]) or {}).get("kappa_5c"))}
+                                    **mecanica_rango(dias, (kappa.get(sims[0]) or {}).get("kappa"))}
     return informe, tuple(secretos)
 
 
@@ -859,9 +860,9 @@ def test_tabla_kappa_y_la_regla_del_admin():
              fila("B", publico=0.0003, demo=0.0002, real=None)]
     t = tabla_kappa(filas)
     assert t["A"]["por_canal"] == {"publico": 0.0008, "demo": 0.0003, "real": 0.0006}
-    assert t["A"]["kappa_regla_3a"] == 0.0006 and t["A"]["fuente_regla_3a"] == "real"
-    assert t["A"]["kappa_5c"] == 0.0008
-    assert t["B"]["kappa_regla_3a"] == 0.0003 and t["B"]["fuente_regla_3a"] == "max(publico, demo)"
+    assert t["A"]["kappa"] == 0.0006 and t["A"]["origen"] == "real", \
+        "el máximo en real, aunque el público mida más (0,0008)"
+    assert t["B"]["kappa"] == 0.0003 and t["B"]["origen"] == "respaldo"
     assert t["B"]["por_canal"]["real"] is None
 
 
@@ -894,10 +895,10 @@ async def test_la_sonda_entera_con_los_tres_canales():
         "demo y real se cierran apenas termina 5d, antes de bajar las velas de 5c"
     assert {next(iter(m)) for m in demo.enviados} == {"proposal"}
     k = informe["kappa"]["frxXAUUSD"]
-    assert k["fuente_regla_3a"] == "real" and k["kappa_regla_3a"] == pytest.approx(0.0005, abs=1e-4)
-    assert k["kappa_5c"] == pytest.approx(0.0008, abs=1e-4)
+    assert k["origen"] == "real" and k["kappa"] == pytest.approx(0.0005, abs=1e-4)
     c = informe["5c"]["oro"]
-    assert c["simbolo"] == "frxXAUUSD" and c["kappa"] == k["kappa_5c"] and c["dias"] > 0
+    assert c["simbolo"] == "frxXAUUSD" and c["kappa"] == k["kappa"] and c["dias"] > 0, \
+        "5c usa el κ de la regla: el real, no el máximo de los tres canales"
     assert informe["5c"]["btc"]["ancla"] == "09:30 America/New_York"
     texto = texto_libre(informe)
     for s in (_OTP_DEMO, _OTP_REAL, "TOKq7", "APP31"):
@@ -925,7 +926,7 @@ async def test_saldo_positivo_en_el_canal_real_cierra_sin_enviar_mas():
     assert real.al_cerrar == [], "se cerró en el acto, antes de cualquier cotización de 5d"
     assert "detenida" in informe["real"]
     assert all("real" not in f["canales"] for f in informe["5d"])
-    assert informe["kappa"]["cryBTCUSD"]["fuente_regla_3a"] == "max(publico, demo)"
+    assert informe["kappa"]["cryBTCUSD"]["origen"] == "respaldo"
     assert "12.5" not in json.dumps(informe["real"]), "el saldo no se publica, solo si es 0"
 
 

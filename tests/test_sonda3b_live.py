@@ -325,6 +325,18 @@ def distancia_stop_out(m: int, kappa: float) -> float:
     return 1 / m - kappa
 
 
+def costo_en_fraccion_de_r(d, kappa: float):
+    """κ/(d+κ): el costo como fracción del riesgo R, con d el rango del día
+    en fracción del precio (el stop del otro lado del rango). Acepta un
+    número o un array."""
+    return kappa / (d + kappa)
+
+
+def umbral_pct(m: int, kappa: float) -> float:
+    """0,6 × la distancia de stop-out a ×m, en % del precio."""
+    return FRACCION_DEL_STOP_OUT * distancia_stop_out(m, kappa) * 100
+
+
 def mecanica_rango(dias: list[dict], kappa: Optional[float]) -> dict:
     """5c. Solo estadísticas del rango: nada de lo que pasó después."""
     rangos = np.array([d["rango_fraccion"] for d in dias])
@@ -339,9 +351,8 @@ def mecanica_rango(dias: list[dict], kappa: Optional[float]) -> dict:
         f"x{m}": (float(np.mean(rangos <= FRACCION_DEL_STOP_OUT * distancia_stop_out(m, kappa)))
                   if len(rangos) else None)
         for m in MULTIPLICADORES_5C}
-    out["umbral_pct"] = {f"x{m}": FRACCION_DEL_STOP_OUT * distancia_stop_out(m, kappa) * 100
-                         for m in MULTIPLICADORES_5C}
-    out["costo_en_fraccion_de_R"] = _pct(kappa / (rangos + kappa), PERCENTILES_5C)
+    out["umbral_pct"] = {f"x{m}": umbral_pct(m, kappa) for m in MULTIPLICADORES_5C}
+    out["costo_en_fraccion_de_R"] = _pct(costo_en_fraccion_de_r(rangos, kappa), PERCENTILES_5C)
     return out
 
 
