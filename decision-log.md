@@ -1308,6 +1308,156 @@ alguna vez hace falta.
 
 ---
 
+## 2026-09-25 — Gobernanza: DG-1 a DG-6
+
+**Fuente:** decisiones del Admin del 25-sep-2026 (Brief final v3, §0). Se registran en el PR
+de gobernanza (PR-G), antes que cualquier otro PR del brief.
+
+| ID | Decisión |
+|---|---|
+| DG-1 | El **repositorio es la única fuente canónica**. `SPEL_MANUAL_OPERACION.md` (Drive, 7-sep-2026) deja de ser canónico: se regenera desde el repo o se archiva, y lo hace el Admin en Drive. Se elimina la regla "gana el manual sin verificar fecha". |
+| DG-2 | El capital de referencia es de **100 USD** y reemplaza los "$10" de `BLUEPRINT.md`. |
+| DG-3 | `governance/PRINCIPLES.md` #6: **6 meses de forward en demo** antes de cualquier capital real. El paso a real exige que la hipótesis apruebe sus compuertas del pre-registro **sobre histórico + forward**, con el mismo N. **Reemplazada el 29-sep-2026**: ver la entrada de esa fecha. |
+| DG-4 | H3 usa **un contrato por activo**: largo si al menos la mitad de los lookbacks soportados están largos, fuera en caso contrario. |
+| DG-5 | **H1 se mantiene** sin cambios de diseño, salvo los del cierre de H1-A (PR-0). H3 es la ruta principal. |
+| DG-6 | El test anti-desfase de `ESTADO.md` falla si hay **más de 3 PRs fusionados** desde su commit de referencia. |
+
+**DG-1, por qué ahora.** La regla de desempate que ponía al manual por encima del repo
+decía "sin excepción y sin necesidad de verificar cuál de los dos se escribió después".
+Con la ingesta escribiendo en `data` todos los días y el estado cambiando PR a PR, un
+documento en Drive que nadie regenera queda atrás en días, y la regla lo hacía ganar igual.
+El código en `main` manda sobre cualquier documento.
+
+**DG-2, el motivo con los números.** Con 10 USD, el piso de comisión de 0,10 USD de los
+multiplicadores de cripto sería de ~2,5 % de una posición típica. Verificado: con el sizing
+del pre-registro H1 y una volatilidad del 60 % —el supuesto de la sonda—, la posición
+completa es de 10 × 0,25 / 0,60 = 4,17 USD, y 0,10 USD es el **2,40 %**. Por sub-posición
+del ensemble (1/6) sería el **14,4 %**. Con 100 USD: 0,24 % y 1,4 %.
+
+**DG-3** queda escrito en `governance/PRINCIPLES.md` #6, que decía que la duración "se
+decide una vez y se escribe acá": esta es esa vez. (El 29-sep el Admin la reemplazó por
+condiciones medibles; ver esa entrada.)
+
+**DG-4 y DG-5** van a `research/preregistro_h3.md` (PR-H3), que se fusiona **antes** que el
+PR #31: al fusionar el #31 el cron empieza a escribir los precios del universo, y el
+pre-registro de H3 tiene que existir antes de que haya un precio que mirar.
+
+**DG-6** es `tests/test_estado_al_dia.py`. La regla vieja —punto 6 de "cómo actualizar
+este archivo"— dependía de que alguien se acordara, y falló dos veces con el diagnóstico
+ya escrito (16 y 17 días de desfase). Al registrarse DG-6, `dd9ea63..main` tenía **5**
+merges: el test nace en rojo y lo pone en verde la actualización de `ESTADO.md` del mismo
+PR. El umbral vive en `governance/estado.py::MAX_MERGES_SIN_ACTUALIZAR_ESTADO` y en
+`config/constantes.json`.
+
+---
+
+## 2026-09-29 — La siembra, verificada: coincide con la serie medida, y la deuda tiene fecha
+
+**Fuente:** `tools/verificar_siembra.py` corrido el 29-sep-2026 contra la rama `data` en el
+commit `11e45f6`, con `SPEL_DRIVE_ROOT` apuntando a un `git archive` de esa rama. La
+verificación no se corrió por el workflow: el dispatch de `gdelt.yml` con
+`modo: verificar_siembra` nunca se hizo (las siete corridas de `gdelt.yml` del 19 al 28-sep
+son un dispatch del 19-sep, anterior a la rama `data`, y seis del cron). Es el mismo código
+sobre los mismos datos.
+
+**Resultado: VERDE en los dos activos.**
+
+| | filas en el rango sembrado | válidos | rango | líneas corruptas | salto final |
+|---|---|---|---|---|---|
+| BTC | 4.880 (esperadas 4.880) | 4.880 (4.880) | 2013-04-01 .. 2026-09-03 | 0 | sí |
+| XAU | 4.879 (esperadas 4.879) | 4.879 (4.879) | 2013-04-01 .. 2026-09-03 | 0 | sí |
+
+sha256 de los archivos **tal como se subieron** (commit de la siembra `03206fd`, 22-sep-2026),
+para cotejar a mano con el original de Drive:
+
+- `BTC.jsonl`: `57819bd8a65414ea29438d4f6d7689c7a75d1be59e28cfea294c939b3eadef1c`
+- `XAU.jsonl`: `00cd613177e8b003062f2acccb9a15139e5fdd7cb0c0d6bdd6187f6e980d7eb1`
+
+Los dos terminan en salto de línea, así que la guarda de `append_day()` no tuvo que actuar.
+
+**Las fechas de la deuda heredada** (la entrada del 21-sep decía que esta lista la
+completaba):
+
+- **BTC, 24 huecos:** 2014-01-23, 2014-01-24, 2014-01-25, 2014-03-19, 2022-11-10,
+  2023-03-23, y **2025-06-14 .. 2025-07-01** (18 días seguidos).
+- **XAU, 25 huecos:** los mismos, más 2014-03-10.
+
+**El hallazgo es el tramo de 2025:** 18 días de calendario seguidos sin fila en los dos
+activos. No es ruido suelto; es un corte de la serie. Cualquier análisis que use la
+entropía de esos meses —H2 en particular, que usa la entropía rezagada para pronosticar
+la volatilidad— tiene que declarar antes de mirar qué hace con él. Sigue sin
+rellenarse, como decidió la entrada del 21-sep.
+
+---
+
+## 2026-09-29 — DG-3 reemplazada: el paso de demo a real se mide, no se espera
+
+**Fuente:** decisión del Admin del 29-sep-2026 (addendum al Brief final v3, ítem 1).
+Reemplaza el texto de DG-3 del 25-sep ("6 meses de forward en demo").
+
+El paso de demo a capital real exige **todas**:
+
+| | condición | constante en `governance/paso_a_real.py` |
+|---|---|---|
+| a) | PSR ≥ 0,90 y DSR ≥ 0,90 sobre retornos diarios de cartera, en la serie combinada histórico + demo, con el mismo N | `PSR_MINIMO`, `DSR_MINIMO` |
+| b) | ≥ 30 días de demo y ≥ 20 operaciones cerradas en demo | `DIAS_MINIMOS_DEMO`, `OPERACIONES_CERRADAS_MINIMAS_DEMO` |
+| c) | costos observados en demo ≤ 1,25 × costos modelados | `RAZON_MAXIMA_COSTO_OBSERVADO_MODELADO` |
+| d) | reconciliación demo sin discrepancias | — |
+
+**Zona gris:** mientras falte alguna, el forward sigue, con un máximo de 6 meses
+(`MESES_MAXIMOS_ZONA_GRIS`). Al vencer sin cumplirlas, el trabajo pasa a H2.
+
+**Qué cambia.** La duración deja de ser un piso y pasa a ser un tope: con las cuatro
+cumplidas, el paso puede darse desde el día 30 de demo; sin ellas, tampoco a los 6 meses.
+Dos de las condiciones miden lo que solo la demo puede mostrar: los costos reales contra
+los modelados (c) y lo operado contra lo registrado (d).
+
+**Dos lecturas que no dicta el texto**, declaradas como [INTERPRETACIÓN] en el módulo:
+los 6 meses se cuentan desde el primer día de demo, en meses de calendario, y el día del
+vencimiento es el último en que todavía se puede cumplir; los días de demo son de
+calendario.
+
+**Dónde se aplica:** `governance/PRINCIPLES.md` #6 (con la cláusula "se decide una vez y
+se escribe acá — no se negocia por sesión bajo presión de tiempo", que el texto del 25-sep
+había perdido), `CLAUDE.md`, `BLUEPRINT.md`, las compuertas de `research/preregistro_h3.md`
+(PR #33) y la §10 del pre-registro de H1 (rama del PR #31). Las constantes, en
+`config/constantes.json`.
+
+APTO no autoriza ninguna orden: la compuerta de la Fase 4 y la decisión del Admin siguen
+haciendo falta.
+
+---
+
+## 2026-10-05 — DG-7 y DG-8: autonomía asimétrica y la batería fuera de execution/
+
+**Fuente:** decisiones del Admin del 05-oct-2026 (brief de respuesta a la sonda §0.A-3 v2,
+puntos 3c, 3d y 4).
+
+| ID | Decisión |
+|---|---|
+| DG-7 | **Autonomía asimétrica.** El sistema puede reducir riesgo sin intervención humana: pausar una estrategia, bajar el stake, cerrar posiciones o activar el circuit breaker. Aumentar riesgo, cambiar un parámetro, reactivar una estrategia pausada o reasignar capital solo ocurre ejecutando una regla fijada antes en un pre-registro sellado con sha256. Cada regla nueva suma a N y consume presupuesto de α. **Ningún parámetro sube en ejecución.** |
+| DG-8 | **Arquitectura.** La batería multi-estrategia se construye fuera de `execution/`, en paquetes nuevos (`strategies/` y un orquestador). Usa `execution/circuit_breaker.py` y `execution/execution_guard.py` sin modificarlos; su congelamiento hasta la Fase 4 se mantiene. |
+
+**DG-7, en la práctica.** Las cuatro acciones que reducen riesgo pueden estar en el
+código de ejecución sin otra condición. Las cuatro que lo aumentan solo pueden estar como
+regla de un pre-registro ya sellado, y esa regla cuenta en el N del Deflated Sharpe como
+cualquier otro ensayo.
+
+**DG-8, lo que no cambia.** El congelamiento de `execution/circuit_breaker.py` y
+`execution/execution_guard.py` (CLAUDE.md, "Congelados") sigue igual: la batería los llama,
+no los edita. `git diff --name-only origin/main...HEAD -- execution/` sigue teniendo que estar
+vacío.
+
+**La regla de órdenes demo de CLAUDE.md, reescrita.** Citaba `authorize.is_virtual == 1`,
+que pertenece a la API legacy, retirada (decision-log 2026-10-01). La API nueva no tiene
+`authorize`: la cuenta se elige al pedir el OTP. La regla nueva: órdenes demo solo desde
+`integracion_demo/`, con OTP emitido para una cuenta cuyo `account_type` sea `demo` según
+`GET /accounts`, y conexión solo a `/ws/demo`. Las sondas en `tests/` pueden pedir OTP y
+cotizar, nunca comprar, solo con autorización explícita del Admin en un brief fechado,
+registrada en este decision-log.
+
+---
+
 ## 2026-09-25 — Deriv: la API legacy no separa demo y real; la nueva sí
 
 **Fuente:** esquemas oficiales de `deriv-com/deriv-api-docs` (`config/v3/*/send.json` y
@@ -1752,4 +1902,3 @@ EUR/USD entre canales son solo barreras de contratos diarios (por ejemplo `4185.
   `subscribe`, que lanza antes de enviar cualquier otro tipo; una sola conexión, máximo 40
   mensajes, cierre al terminar; la URL con el OTP nunca va al informe. Es la autorización
   explícita que pide la regla nueva de CLAUDE.md para que una sonda en `tests/` pida un OTP.
-

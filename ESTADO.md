@@ -1,36 +1,27 @@
 # SPEL — ESTADO DEL PROYECTO
 
-> **⚠️ ESTE ARCHIVO YA NO ES CANÓNICO. Es un ESPEJO.**
+> **El repositorio es la única fuente canónica (DG-1, decision-log 25-sep-2026).** El
+> código en `main` manda sobre cualquier documento, este incluido.
+> `SPEL_MANUAL_OPERACION.md` (Drive, 7-sep-2026) dejó de ser canónico: el Admin lo
+> regenera desde el repo o lo archiva en Drive. La regla anterior —"si este archivo y el
+> manual divergen, gana el manual", sin verificar cuál se escribió después— quedó
+> eliminada.
 >
-> El documento canónico es **`SPEL_MANUAL_OPERACION.md`**, en Drive.
-> **Si este archivo y el manual divergen, GANA EL MANUAL** — sin excepción y sin
-> necesidad de verificar cuál de los dos se escribió después.
->
-> Qué sigue siendo cierto de la regla vieja: este archivo se lee primero en cada chat
-> nuevo, se actualiza al final de cada sesión y nunca a mitad, y frente a un chat que
-> lo contradiga sin evidencia, gana el archivo. Lo que cambió es el escalón de arriba:
-> antes decía "la única fuente de verdad" y ya no lo es.
->
-> Por qué se degrada a espejo en vez de borrarse: sigue siendo lo que un chat nuevo
-> tiene a mano dentro del repo, sin salir a Drive. Un espejo con una regla de
-> desempate explícita es más útil que dos documentos que se creen ambos canónicos —
-> que es exactamente el problema de gobernanza que este archivo viene arrastrando
-> desde el 17 de agosto (ver la sección de gobernanza más abajo).
+> Este archivo se lee primero en cada chat nuevo. Frente a un chat que lo contradiga sin
+> evidencia, gana el archivo; frente al código, gana el código.
 
-**Última actualización:** 16 sep 2026 — retiro de la cadena `gold_score` a `research/`.
+**Última actualización:** 06 oct 2026 — merge de `main` en la rama del PR #31, después de la sonda §0.A-3b.
 
-**Commit de referencia:** `dd9ea63` (merge del PR #26).
+**Commit de referencia:** `2d5dd35` (merge del PR #35).
 
-Desfase que este PR cierra: **dos PRs (#24 y #26)**, siete días. Es el desfase más
-corto que este archivo registró desde que existe la regla — los anteriores fueron de
-16 y 17 días. La regla del punto 6 sigue dependiendo de que alguien se acuerde
-(Incógnita #11), pero acá se acordó.
+**Tests:** **1296** recolectados en `tests/`, en 45 archivos, medido con
+`pytest --collect-only -q tests/` sobre la rama del PR #31 después del merge de `main`. Más 74 en `research/tests/`, que no
+bloquean.
 
-El encabezado anterior decía "cierra 17 días de desactualización real" y describía el
-mismo problema. Que haya vuelto a pasar, en el mismo archivo y con el mismo diagnóstico
-ya escrito arriba, dice que **la regla del punto 6 de "cómo actualizar" no alcanza**:
-está redactada como recordatorio y depende de que alguien se acuerde. Queda como
-incógnita abierta si hace falta un chequeo automático (ver Incógnita #11).
+Desfase: **ninguno**. El commit de referencia es el merge del PR #35, el último de `main`, y
+esta actualización entra con el merge de `main` en la rama del PR #31, que sigue abierta y en
+pausa. Los PRs #33 y #34 siguen abiertos. `tests/test_estado_al_dia.py` falla si hay **más
+de 3 PRs fusionados** desde el commit de referencia de arriba (DG-6).
 
 
 **Ver también:** `FASE2_NOTAS_ARQUITECTURA_MODELO.md` (raíz del repo) — glosario y
@@ -45,7 +36,7 @@ archivo a propósito para no mezclar "estado actual" con "notas de investigació
 FASE 1 — ingestion/ + core/scoring.py     🔵 CERRADA — checklist cumplido, resultado NEGATIVO
 FASE 2 — Modelo                            ⚪ NO INICIADA — reorientada, ver abajo
 FASE 3 — visualization/ (grafo)            ⚪ NO INICIADA
-FASE 4 — execution/ + Deriv real           🟡 Actuator confirmado, gate F2 firme
+FASE 4 — execution/ + Deriv real           🟡 Actuator confirmado; gate: modelo F2 o hipótesis H + DG-3
 FASE 5 — Escala (Supabase, Flet)           ⚪ NO INICIADA
 FASE 6 — Motor streaming multi-timeframe   🟡 Infraestructura lista, señal sin construir
 ```
@@ -66,53 +57,52 @@ Eso no reabre Fase 1 ni cambia su resultado; ordena el código para que coincida
 
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-**725 recolectados en `tests/`, 723 pasan y 2 se saltan**, en **22 archivos**. Contado
-corriendo `pytest --collect-only`, no de memoria. Los 2 `skip` son el test `live` de
-TwelveData (`skipif` sobre la credencial) y uno de persistencia.
+**1296 recolectados en `tests/`, en 45 archivos**, contados con `pytest --collect-only -q`
+el 06-oct-2026 sobre la rama del PR #31, no copiados de ningún documento. Sin credenciales se saltan 2: el test
+`live` de TwelveData y el guardián de secretos de `tests/test_sources.py`, los dos por su
+propio `skipif`.
 
-**Más 74 en `research/tests/`, que NO corren en el job que bloquea** — son los tests
-del código retirado (ver la sección de `research/` más abajo). El total real del repo
-es 799, pero mezclarlos en una sola cifra escondería justamente la distinción que el
-retiro del 16-sep existe para marcar.
+**Más 74 en `research/tests/`, que NO corren en el job que bloquea** — son los tests del
+código retirado (ver la sección de `research/` más abajo). Mezclarlos en una sola cifra
+escondería la distinción que el retiro del 16-sep existe para marcar.
 
-Este archivo decía **678**, de la actualización del 9 de septiembre.
-
-> **Precisión sobre cómo se cuenta**, porque los tres números que circulan son
-> distintos y los tres son "correctos" según qué se pregunte:
-> - **556** — funciones `def test_` escritas a mano.
-> - **678** — casos que pytest ejecuta, después de expandir `@pytest.mark.parametrize`.
-> - **20** — archivos `test_*.py` (`tests/` tiene 21 archivos contando `__init__.py`).
->
-> El número que vale para "¿cuánto cubre la suite?" es **678**, porque es lo que
-> efectivamente corre. Un brief anterior citaba "649 en 21 archivos" y no reproduce
-> con ninguna de las tres formas de contar sobre este commit.
+Este archivo decía **725**, de la actualización del 16 de septiembre.
 
 Todo lo de abajo corrió en clon 100% ajeno, venv limpio desde `requirements.txt`, 10
 corridas seguidas sin intermitencia.
 
 | Módulo | Qué hace | Tests | Estado |
 |---|---|---:|---|
-| `core/scoring.py` | `entropy_state` (Capa 1), `godel_active`, `compute_godel_score`, `gold_score_bma`, vitality_tesla, nash_frozen_7d, classify_gdelt_event | 171 | ✅ |
+| `core/scoring.py` | `entropy_state` (Capa 1), `godel_active`, `compute_godel_p66`, `compute_vitality_tesla`, `classify_gdelt_event`, `compute_adaptive_percentile` | 101 | ✅ |
 | `core/monte_carlo.py` | Validación GBM — NO entrena, simulación pura en cada llamada | 22 | ✅ |
-| `core/price_signals.py` | te_score (proxy TE) + backbone_score (EMA20/63) — **sin poder predictivo demostrado**, ver decision-log 6-sep | 12 | ⚠️ |
+| `core/execution_costs.py` + `trade_ledger.py` | P&L neto con desglose de costos; ledger append-only en el stream TRADE_LEDGER | 46 + 33 | ✅ código, 🧊 congelados (acta del 21-sep) |
 | `ingestion/adapters.py` | DerivAdapter + TwelveDataAdapter + contrato de datos | 65 + 29 | ✅ |
 | `ingestion/sources.py` | **Punto de composición** — `build_price_sources()`; `SourceInventory` distingue capacidad ausente de error | 11 | ✅ |
 | `ingestion/gdelt.py` + `_aggregation` + `_series` | Pipeline GDELT completo, persistencia JSONL | 14 + 15 + 18 | ✅ |
-| `ingestion/run_gdelt.py` + `.github/workflows/gdelt.yml` | Ingesta diaria; CI escritor único en la rama `data`; reintenta los días que GDELT no había publicado | 59 + 12 | ✅ código, 🟡 primera corrida real pendiente de la siembra |
+| `ingestion/run_gdelt.py` + `.github/workflows/gdelt.yml` | Ingesta diaria; CI escritor único en la rama `data`; reintenta los días que GDELT no había publicado | 59 + 12 | ✅ corre sola desde el 23-sep: seis corridas del cron, todas verdes; marca de inicio 2026-09-04 |
 | `ingestion/frescura.py` | Alarma de la serie: rojo solo por hueco interno posterior a la marca de inicio | 18 | ✅ |
-| `tools/verificar_siembra.py` | Compara BTC/XAU sembrados contra la serie medida | 14 | ✅ código, 🟡 no corrido contra la siembra real |
-| `ingestion/deriv_ws.py` | Sesión de solo lectura con Deriv: `entorno` obligatorio, `real` con permiso aparte, lista blanca de siete mensajes | 29 | ✅ |
-| `ingestion/sonda_instrumentos.py` + `.github/workflows/sonda.yml` | Contratos, multiplicadores, stake y comisión de BTC y oro, desde la API, siete días | 19 + 6 | ✅ código, 🟡 no corrido contra Deriv real (bloqueado desde el sandbox) |
-| `ingestion/velas.py` + `.github/workflows/velas.yml` | Velas diarias de BTC y oro en la rama `data`, profundidad usable, `leer_velas()` en polars | 33 + 6 | ✅ código, 🟡 no corrido contra Deriv real |
+| `tools/verificar_siembra.py` | Compara BTC/XAU sembrados contra la serie medida | 14 | ✅ verde contra la siembra real (corrido el 29-sep, ver decision-log) |
+| `ingestion/deriv_ws.py` | Sesión de solo lectura con Deriv: `entorno` obligatorio, `real` con permiso aparte, lista blanca de siete mensajes | 29 | 🟡 habla con el endpoint legacy, muerto desde el 01-oct (HTTP 520): falta migrar al WS público |
+| `ingestion/sonda_instrumentos.py` + `.github/workflows/sonda.yml` | Contratos, multiplicadores, stake y comisión de BTC y oro, desde la API, siete días | 19 + 6 | 🟡 usa `deriv_ws.py`, así que depende de la misma migración |
+| `ingestion/velas.py` + `.github/workflows/velas.yml` | Velas diarias de BTC y oro en la rama `data`, profundidad usable, `leer_velas()` en polars | 33 + 6 | 🟡 ídem; además, Deriv entrega 365 días de historia (sonda §0.A-2) |
 | `core/preregistro_h1.py` + `research/preregistro_h1.md` | Reglas del experimento H1, fijadas antes del backtest | 26 | 🟡 dos cláusulas PENDIENTES del Admin |
 | `ingestion/source_registry.py` | Registro versionado de cobertura por fuente | 34 | ✅ |
 | `tools/measure_godel_samples.py` | Mide el `n` post-máscara | 75 | ✅ |
 | `tools/provider_coverage.py` + `import_gdelt_entropy.py` + `audit_data_lake.py` | Inventario de proveedores, import histórico de entropía, auditoría del lake | 58 + 36 + 32 | ✅ |
+| `tools/calibrar_umbral_entropia.py` | Umbral de entropía por activo, con procedencia | 22 | ✅ código, 🟡 `config/calibracion_activos.json` todavía no se generó |
 | `ingestion/training_dataset.py` | Une OHLCV + serie GDELT, forward-fill, coverage_ratio explícito | 7 | ✅ |
-| `orchestration/cycle.py` | Corre vitality/nash/godel sobre 5 activos; calcula `gold_score`; sella `godel_criteria_version` | 26 | ✅ |
-| `execution/circuit_breaker.py` + `execution_guard.py` | Guardrails duros — congelados hasta F4 | 31 | ✅ |
-| `governance/persistence.py` + `secrets.py` | 4 streams, SecretKey único | 28 | ✅ |
-| `tools/heartbeat.py` + `.github/workflows/heartbeat.yml` | Trigger `schedule:` real — **desactivado a propósito**, ver Fase 6 | — | ✅ código, 🔴 apagado |
+| `orchestration/cycle.py` | Emite el **régimen medido** sobre 5 activos (`entropy_state`, `godel_active`, `compute_godel_p66`, vitality); sella `godel_criteria_version`. Sin `gold_score` desde el 16-sep | 18 | ✅ |
+| `execution/circuit_breaker.py` + `execution_guard.py` | Guardrails duros — congelados hasta F4 | 14 + 17 | ✅ |
+| `governance/persistence.py` + `secrets.py` | 5 streams (TRADE_LEDGER desde el PR #25), SecretKey único | 19 + 10 | ✅ |
+| `governance/estado.py` + `tests/test_estado_al_dia.py` | Control anti-desfase de este archivo (DG-6) | 16 | ✅ |
+| `tests/test_reglas_ordenes_demo.py` | La regla de órdenes demo de CLAUDE.md (OTP para una cuenta demo según `GET /accounts`, solo `/ws/demo`) y DG-7/DG-8 en el decision-log | 3 | ✅ |
+| `governance/paso_a_real.py` | DG-3: las cuatro condiciones del paso de demo a real y la zona gris de 6 meses (decision-log 29-sep) | 21 | ✅ |
+| `config/constantes.json` | Registro de las 108 constantes de módulo, verificado contra el código en las dos direcciones | 30 | ✅ |
+| `tests/test_registro_linguistico*.py` | Español neutro: sin voseo en `.py` y en `.md` | 84 + 5 | ✅ |
+| `tools/heartbeat.py` + `.github/workflows/heartbeat.yml` | Trigger `schedule:` real — **desactivado a propósito**, ver Fase 6 | 19 | ✅ código, 🔴 apagado |
+
+`core/price_signals.py` ya no está en `core/`: se retiró a `research/` el 16-sep (PR #27),
+con sus tests. Ver la sección de `research/`.
 
 **No existe todavía, confirmado por ausencia real (no supuesto):** grep de
 `^class.*Adapter` en `ingestion/adapters.py` da **dos** implementaciones concretas de
@@ -196,8 +186,9 @@ a la vez y ninguna sustituye a la otra, así que van las dos.
 > **Gold Score real** a partir de eso, con un test que corre en CI y pasa."
 
 El PR #19 (`compute_godel_score`) cerró la última pieza. Los tres componentes tienen
-función real: `compute_godel_score` (core/scoring.py), `compute_transfer_entropy_proxy`
-y `compute_backbone_score` (core/price_signals.py). El test de cierre corre en CI y
+función real: `compute_godel_score`, `compute_transfer_entropy_proxy` y
+`compute_backbone_score` — hoy en `research/` (`gold_score_chain.py` y `price_signals.py`),
+retirados del motor el 16-sep. El test de cierre corre en CI y
 verifica **el valor** —0.539239 sobre cierres deterministas— no que no lance excepción.
 
 **La salvedad, y no es letra chica: el criterio exige que el Gold Score SE CALCULE, no
@@ -253,9 +244,10 @@ cae es el uso que se les estaba dando.
 
 ### Cerrada ≠ exitosa
 
-La fase cierra porque su checklist se cumplió. Lo que el sistema produce hoy es un número
-calculado de punta a punta con funciones reales, y **no una señal operativa**. Todo
-`gold_score` viaja con esa advertencia pegada en `gold_score_warning`.
+La fase cierra porque su checklist se cumplió. Lo que el sistema producía al cerrarla era
+un número calculado de punta a punta con funciones reales, y **no una señal operativa**.
+Desde el 16-sep ese número ya no se emite: el ciclo diario emite el régimen medido y nada
+más, y la cadena `gold_score` vive en `research/`.
 
 ---
 
@@ -339,7 +331,7 @@ otro umbral; el `n` no se hereda entre preguntas distintas.
 Auditado contra el legacy real (18 ago), sin cambios desde entonces:
 
 - `te_score` y `backbone_score`: **listos**, portados con 2 bugs reales corregidos
-  (`core/price_signals.py`).
+  (hoy en `research/price_signals.py`: sin poder predictivo, acta del 6-sep).
 - `godel_score`: depende de `val_dir`, salida de un **LSTM entrenado** — arquitectura
   canónica "Regla 13", **bloqueada por guardián real** (`enforce_lstm_architecture()`
   en el legacy lanza `RuntimeError` ante cualquier desvío de `input_size=20,
@@ -382,57 +374,42 @@ Regla fija sin excepción: nada bajo `ingestion/`, `core/`, `execution/`,
 
 ---
 
-## ⚠️ GOBERNANZA DE DOCUMENTOS — hallazgo del 17 ago, TODAVÍA sin resolver
+## ✅ GOBERNANZA DE DOCUMENTOS — resuelta el 25-sep (DG-1)
 
-**RESUELTO EN PARTE, el 9-sep: ya hay un canónico declarado.**
-`SPEL_MANUAL_OPERACION.md` (Drive) es el documento canónico, y este archivo pasa a
-espejo con regla de desempate explícita — **si divergen, gana el manual**. Ver el
-encabezado.
+El hallazgo del 17 de agosto era que había varios documentos que se creían la fuente de
+verdad y ninguno cedía. El 9-sep se resolvió a medias declarando canónico a
+`SPEL_MANUAL_OPERACION.md`, en Drive, con este archivo como espejo. **DG-1 lo resuelve del
+todo y en la otra dirección: el repositorio es la única fuente canónica.** El manual se
+regenera desde el repo o se archiva; lo hace el Admin en Drive.
 
-Eso ataca la raíz del hallazgo del 17 de agosto, que no era "hay archivos de más" sino
-"hay varios documentos que se creen la fuente de verdad y ninguno cede". Con un canónico
-declarado, un documento de más es un espejo desactualizado —molesto— en vez de una
-contradicción sin árbitro.
+Queda en Drive, fuera del repo: archivar `SPEL_PERSISTENCE_STATE.md` y
+`SPEL_PERSISTENCIA_v2.md`, que ya quedaban por debajo del manual y ahora quedan por debajo
+del repo.
 
-**Lo que sigue pendiente:** `SPEL_PERSISTENCE_STATE.md` y `SPEL_PERSISTENCIA_v2.md` en
-Drive raíz siguen sin archivar. Ahora es una limpieza, no un problema de gobernanza: la
-jerarquía ya está definida y esos dos quedan por debajo del manual igual que este
-archivo. Sigue siendo acción en Drive, fuera del repo.
+**05-oct: DG-7 y DG-8** (decision-log 2026-10-05). DG-7: el sistema puede reducir riesgo
+solo; aumentarlo, cambiar un parámetro, reactivar una estrategia o reasignar capital solo
+ocurre por una regla de un pre-registro sellado, que suma a N. DG-8: la batería
+multi-estrategia va fuera de `execution/` (`strategies/` y un orquestador) y usa el circuit
+breaker y el guard sin modificarlos. La regla de órdenes demo de CLAUDE.md dejó de citar
+`authorize.is_virtual`, de la API retirada: ahora es OTP para una cuenta demo según
+`GET /accounts` y conexión solo a `/ws/demo`.
 
 ---
 
 ## ❓ INCÓGNITAS REALES — sin resolver, no inventadas para llenar espacio
 
-1. ~~**¿GitHub Actions ya verificó una descarga real de GDELT?**~~ **CERRADA el
-   9-sep, y la respuesta no es la que la pregunta esperaba: NO PUDO haberla
-   verificado, porque ningún workflow invoca GDELT.** Verificado leyendo los tres:
+1. ~~**¿GitHub Actions ya verificó una descarga real de GDELT?**~~ **CERRADA. Sí, y
+   todos los días.** Desde el PR #30 (21-sep) `.github/workflows/gdelt.yml` descarga GDELT
+   con el cron diario y escribe en la rama `data` como escritor único. Medido el 29-sep
+   sobre `data` en `11e45f6`: seis corridas del cron del 23 al 28-sep, las seis en verde;
+   la marca de inicio quedó en 2026-09-04; BTC y XAU llevan 24 días escritos por CI sobre
+   la siembra, y NVDA, NIFTY50 y EURUSD 15. El cron está programado a las 06:30 UTC y arrancó entre las 11:36 y las
+   14:16 UTC: GitHub lo demora entre 5 y 8 horas, y no pasa nada, porque la ingesta decide
+   qué día falta por lo que hay en la serie, no por la hora.
 
-   | workflow | qué corre | disparo |
-   |---|---|---|
-   | `tests.yml` | `python -m pytest tests/ -v` | push, pull_request |
-   | `live-tests.yml` | `python -m pytest tests/ -m live -v` | workflow_dispatch |
-   | `heartbeat.yml` | `python tools/heartbeat.py` | workflow_dispatch (el `schedule:` está comentado) |
-
-   Ninguno toca GDELT. `tools/heartbeat.py` importa `core.monte_carlo` y nada más.
-
-   La única mención de GDELT en todo `.github/workflows/` es un **comentario** en
-   `tests.yml:13`, que dice cambiar el paso final por `python ingestion/run_gdelt.py`.
-   **Ese archivo no existe** — un `grep` de `run_gdelt` en todo el repo devuelve
-   exactamente ese comentario y nada más.
-
-   **No era una verificación pendiente: era un entry point ausente.** La incógnita
-   estuvo abierta desde el 17 de agosto preguntando por el resultado de algo que nunca
-   se podía haber ejecutado, y el intento de contestarla mirando la pestaña Actions no
-   iba a resolverla nunca — la respuesta no estaba en Actions, estaba en que falta el
-   archivo. Se cierra como hallazgo, no como confirmación.
-
-   **Lo que queda pendiente, ahora bien formulado:** escribir `ingestion/run_gdelt.py`
-   (o el entry point que corresponda) y decidir si el `schedule:` de un workflow lo
-   dispara. Es trabajo, no una consulta.
-
-   *(Que la ingestion GDELT funciona ya está demostrado por otra vía: la entropía
-   histórica de BTC y XAU —3.998 días por activo— está importada y es la que alimentó
-   la medición de la máscara. Lo que falta es que corra sola en CI, no que corra.)*
+   *(La versión anterior de esta incógnita, del 9-sep, decía que ningún workflow invocaba
+   GDELT porque `ingestion/run_gdelt.py` no existía. Era cierto entonces: el entry point
+   llegó con el PR #24 y la escritura con el #30.)*
 2. **¿GDELT tiene cobertura completa de 2026?** El auditor legacy
    (`spel_auditoria_total.py`) tenía un chequeo específico para esto
    (`GDELT_GAP_2026`) — no se corrió el equivalente contra el pipeline nuevo.
@@ -464,14 +441,11 @@ archivo. Sigue siendo acción en Drive, fuera del repo.
     paper (17 ago). Cuando el amigo de Altair complete la verificación con Banco
     Pichincha, hace falta construir el adapter desde cero — no existe ni un stub.
 
-11. **¿Hace falta un chequeo automático de desactualización de este archivo?** El punto
-    6 de "cómo actualizar" dice que si pasan ~5 días con patches nuevos en `main` sin
-    tocar este archivo, eso es señal de circularidad. La regla existe desde el 18 de
-    agosto **y falló igual**: 16 días y 14 PRs de desfase, con el diagnóstico correcto
-    ya escrito en el propio encabezado. Un recordatorio que depende de que alguien se
-    acuerde no es un control. Una opción barata sería un job que compare la fecha del
-    último commit de `ESTADO.md` contra la del último commit de `main` y falle o avise
-    pasado un umbral. No implementado — es una decisión de Altair, no una tarea obvia.
+11. ~~**¿Hace falta un chequeo automático de desactualización de este archivo?**~~
+    **CERRADA por DG-6 (25-sep).** Sí: `tests/test_estado_al_dia.py` falla si hay más de
+    3 PRs fusionados desde el commit de referencia del encabezado, si ese commit no es
+    ancestro de HEAD, o si el clon es superficial. Nació en rojo —5 merges desde
+    `dd9ea63`— y lo puso en verde la actualización de este archivo en el mismo PR.
 
 ---
 
@@ -489,11 +463,9 @@ aparecieron, no una revisión exhaustiva:
    ESTADO.md y lo que el panel muestra diverjan otra vez.
 3. **Descarga de datos históricos para entrenamiento** (nuevo requisito, 18 ago):
    el flujo actual de `DerivAdapter` trae velas recientes para scoring en vivo, no
-   un backfill masivo de meses/años para entrenar. Antes de que Fase 2 pueda
-   arrancar de verdad, hace falta confirmar si `ticks_history` de Deriv soporta
-   pedir historia profunda con `count` alto, o si hace falta paginar con `start`/`end`
-   — no verificado todavía, es la primera pregunta técnica real cuando se retome
-   Fase 2.
+   un backfill masivo de meses/años para entrenar. **Contestado:** `ticks_history`
+   tiene un tope de 5.000 velas por petición y se pagina hacia atrás con `end`
+   (medido por `tools/provider_coverage.py::probe_deriv`, `DERIV_MAX_COUNT`).
 4. **Separar "modo patch" de "modo entrenamiento"**: cuando exista un trainer real,
    correrlo desde el mismo panel de aplicar-patches mezcla dos flujos de trabajo
    distintos (uno es minutos, el otro puede ser horas). Mejor un menú aparte, no
@@ -531,34 +503,15 @@ salvedad que hay que resolver **antes** de revertir.
 
 ## ▶️ PRÓXIMO PASO CONCRETO
 
-**Completar las dos cláusulas PENDIENTES de `research/preregistro_h1.md` y fusionar H1-A.**
+**Esperar el brief del Admin.** La sonda §0.A-3b corrió el 06-oct (run 37404371657) y sus
+resultados están en el decision-log de la rama del PR #31. Quedan abiertas, para decidir:
+la migración de `ingestion/deriv_ws.py` al WS público nuevo, de la que depende todo el PR
+#31 (la legacy está muerta desde el 01-oct), y el brief de la batería multi-estrategia
+(DG-8), que fija el nombre de su paquete.
 
-La alternativa para Sharpe < 0,3, y qué pasa entre 0,3 y 0,5 o con PSR/DSR por debajo de
-0,90. Sin eso el pre-registro no cierra, y declararlas después de ver un resultado es lo que
-el documento existe para impedir. H1-B —el backtest— arranca siete días después de fusionar,
-cuando la sonda haya medido la comisión siete veces.
-
-*(Lo que estaba acá —"decidir qué mide el éxito de Fase 2"— lo contesta el pre-registro H1
-con sus compuertas: Sharpe neto fuera de muestra, PSR y DSR. Queda abajo como historia.)*
-
-**Antes: decidir qué mide el éxito de Fase 2, ahora que el ciclo diario emite solo régimen.**
-
-El entry point de GDELT ya existe (`ingestion/run_gdelt.py`, PR #24) y el motor quedó
-limpio de la cadena muerta (PR #27). Lo que queda sin contestar es lo que bloquea
-arrancar Fase 2 de verdad: la accuracy direccional dejó de aplicar cuando Fase 1 cerró
-en negativo, y no hay métrica que la reemplace. Sin eso, entrenar un modelo es entrenar
-contra un criterio que nadie fijó.
-
-Es una sola cosa, y es anterior a cualquier línea de código de modelo.
-
-*(Se mueve acá desde la sección de Fase 2, donde figuraba como "decisión de diseño
-pendiente". Deja de serlo: con Fase 1 cerrada y el motor ordenado, es el único
-bloqueante que queda.)*
-
-*(Una sola, como manda el punto 3 de "cómo actualizar este archivo". La otra decisión
-pendiente —qué métrica valida un modelo de dimensionamiento, dado que la accuracy
-direccional ya no aplica— es de diseño y vive en la sección de Fase 2, no acá. Fase 1 ya
-está cerrada y no depende de ninguna de las dos.)*
+*(Lo que estaba acá —"decidir qué mide el éxito de Fase 2"— lo contestan los
+pre-registros de la Serie H —Sharpe neto fuera de muestra, PSR, DSR y la comparación contra
+un benchmark—, que llegan con los PRs de H1 y H3. Ver `BLUEPRINT.md`, "Serie H".)*
 
 ---
 
@@ -573,6 +526,8 @@ Al final de cada sesión de código (no a mitad):
    siguiente inmediato — la lección del 17 ago fue exactamente no hacer esto.
 5. Nunca dejar este archivo diciendo algo que no se verificó — si algo quedó a
    medias, decirlo explícitamente como 🟡, no como ✅.
-6. Si este archivo lleva más de ~5 días sin tocarse mientras hay patches nuevos en
-   `main`, esa es la misma señal de circularidad que ya dispara "cortar y empezar de
-   nuevo con foco" — trátese como tal.
+6. Actualizar el **encabezado** —fecha, commit de referencia (el de `main`) y conteo de
+   tests medido con `pytest --collect-only -q`— en el mismo PR que cambia el estado.
+   `tests/test_estado_al_dia.py` falla si quedan **más de 3 PRs** fusionados sin hacerlo
+   (DG-6). La regla vieja —"más de ~5 días sin tocarse"— era un recordatorio y falló dos
+   veces; esta corre en cada PR.

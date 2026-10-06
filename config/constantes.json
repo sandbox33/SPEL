@@ -1,6 +1,6 @@
 {
   "schema_version": "1.1.0",
-  "actualizado": "2026-09-22",
+  "actualizado": "2026-10-01",
   "constantes": [
     {
       "nombre": "EPSILON_BREAKEVEN",
@@ -588,6 +588,123 @@
       "fuente": "Un solo archivo para todos los activos: el ledger se lee entero (equity, drawdown son de la cuenta, no de un activo).",
       "usado_en": [
         "core.trade_ledger._ledger_file_path"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "MAX_MERGES_SIN_ACTUALIZAR_ESTADO",
+      "modulo": "governance.estado",
+      "categoria": "parametro",
+      "valor": 3,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "DG-6, decisión del Admin del 25-sep-2026 (Brief final v3 §0): el test anti-desfase falla con más de 3 PRs fusionados desde el commit de referencia de ESTADO.md.",
+      "usado_en": [
+        "governance.estado.Desfase.al_dia"
+      ],
+      "notas": "Al registrarse, dd9ea63..main tenía 5 merges: la regla nació en rojo y la puso en verde la actualización de ESTADO.md del mismo PR."
+    },
+    {
+      "nombre": "PATRON_COMMIT_DE_REFERENCIA",
+      "modulo": "governance.estado",
+      "categoria": "etiqueta",
+      "valor": "^\\*\\*Commit de referencia:\\*\\*\\s*`([0-9a-f]{7,40})`",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "El formato con que ESTADO.md declara su commit de referencia desde antes de DG-6 (\"**Commit de referencia:** `dd9ea63`\").",
+      "usado_en": [
+        "governance.estado.commit_de_referencia"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "RAIZ",
+      "modulo": "governance.estado",
+      "categoria": "derivada",
+      "expresion": "Path(__file__).resolve().parent.parent",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "La raíz del repo clonado, donde viven ESTADO.md y .git.",
+      "usado_en": [
+        "governance.estado.medir"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "DIAS_MINIMOS_DEMO",
+      "modulo": "governance.paso_a_real",
+      "categoria": "parametro",
+      "valor": 30,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "DG-3, decisión del Admin del 29-sep-2026 (addendum al Brief final v3, ítem 1; decision-log 2026-09-29): b) ≥ 30 días de demo.",
+      "usado_en": [
+        "governance.paso_a_real.evaluar"
+      ],
+      "notas": "Días de calendario: [INTERPRETACIÓN] declarada en el módulo."
+    },
+    {
+      "nombre": "DSR_MINIMO",
+      "modulo": "governance.paso_a_real",
+      "categoria": "parametro",
+      "valor": 0.9,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "DG-3, decisión del Admin del 29-sep-2026 (addendum al Brief final v3, ítem 1; decision-log 2026-09-29): a) DSR ≥ 0,90, con el mismo N que el pre-registro.",
+      "usado_en": [
+        "governance.paso_a_real.evaluar"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "MESES_MAXIMOS_ZONA_GRIS",
+      "modulo": "governance.paso_a_real",
+      "categoria": "parametro",
+      "valor": 6,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "DG-3, decisión del Admin del 29-sep-2026 (addendum al Brief final v3, ítem 1; decision-log 2026-09-29): zona gris, forward hasta cumplir a)–d), máximo 6 meses; al vencer, pasa a H2.",
+      "usado_en": [
+        "governance.paso_a_real.evaluar"
+      ],
+      "notas": "Meses de calendario desde el primer día de demo; el día del vencimiento todavía cuenta: [INTERPRETACIÓN] declarada en el módulo."
+    },
+    {
+      "nombre": "OPERACIONES_CERRADAS_MINIMAS_DEMO",
+      "modulo": "governance.paso_a_real",
+      "categoria": "parametro",
+      "valor": 20,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "DG-3, decisión del Admin del 29-sep-2026 (addendum al Brief final v3, ítem 1; decision-log 2026-09-29): b) ≥ 20 operaciones cerradas en demo.",
+      "usado_en": [
+        "governance.paso_a_real.evaluar"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "PSR_MINIMO",
+      "modulo": "governance.paso_a_real",
+      "categoria": "parametro",
+      "valor": 0.9,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "DG-3, decisión del Admin del 29-sep-2026 (addendum al Brief final v3, ítem 1; decision-log 2026-09-29): a) PSR ≥ 0,90 sobre retornos diarios de cartera, histórico + demo.",
+      "usado_en": [
+        "governance.paso_a_real.evaluar"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "RAZON_MAXIMA_COSTO_OBSERVADO_MODELADO",
+      "modulo": "governance.paso_a_real",
+      "categoria": "parametro",
+      "valor": 1.25,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "DG-3, decisión del Admin del 29-sep-2026 (addendum al Brief final v3, ítem 1; decision-log 2026-09-29): c) costos observados en demo ≤ 1,25 × costos modelados.",
+      "usado_en": [
+        "governance.paso_a_real.evaluar"
       ],
       "notas": ""
     },
