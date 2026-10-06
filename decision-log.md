@@ -1860,7 +1860,8 @@ de 13:37 a 13:45 UTC, la última vela de 15min fue `2026-10-06 00:30:00` (sha256
 `f739368a2df6ebc915151cefabcad3ec1c7a94d4404ba017619d545730a21456`) y la de 5min
 `2026-10-06 00:40:00` (`166ad4f4b838dde2ad7014f3dcfbfb29d2102144e265bfde1f5f0dcc02edce5b`): unas
 11 horas en el futuro. BTC/USD sí cerró en la hora de la corrida (13:30 y 13:40). **Toda
-llamada futura a TwelveData lleva `timezone=UTC`** (decisión del Admin).
+llamada intradía futura a TwelveData lleva `timezone=UTC`; 1d no la lleva** (decisión del
+Admin; el texto decía "toda llamada", y el Admin lo precisó el 06-oct: ver esa entrada).
 
 **h) Alpha Vantage está operativo; el oro solo trae un precio.**
 

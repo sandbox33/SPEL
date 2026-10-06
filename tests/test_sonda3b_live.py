@@ -86,12 +86,12 @@ from tests.test_deriv_sonda2_live import profundidad
 from tests.test_deriv_sonda3_live import _CanalPausado
 from tests.test_fuentes_sonda3_live import (
     OUTPUTSIZE_TWELVEDATA,
-    TIMEZONE_TWELVEDATA,
     TOPE_CREDITOS_TWELVEDATA,
     GetHttp,
     Limitador,
     _get_httpx,
     pedir_twelvedata,
+    zona_twelvedata,
 )
 
 #: 5a.
@@ -161,7 +161,7 @@ def chequeo_utc(valores: list[dict], intervalo: str, *, end_date: Optional[str],
 async def pagina_5a(simbolo: str, intervalo: str, end_date: str, *, key: str,
                     limitador: Limitador, get: GetHttp) -> dict:
     params = {"symbol": simbolo, "interval": intervalo, "outputsize": OUTPUTSIZE_TWELVEDATA,
-              "end_date": end_date, "timezone": TIMEZONE_TWELVEDATA}
+              "end_date": end_date, **zona_twelvedata(intervalo)}
     entrada, datos = await pedir_twelvedata("time_series", params, key=key,
                                             limitador=limitador, get=get)
     out: dict[str, Any] = {"simbolo": simbolo, "intervalo": intervalo, "end_date": end_date,
@@ -185,8 +185,7 @@ async def sondear_5a(*, key: str, limitador: Limitador, get: GetHttp = _get_http
     for s in SIMBOLOS_TD:
         for i in INTERVALOS_5A:
             entrada, datos = await pedir_twelvedata(
-                "earliest_timestamp", {"symbol": s, "interval": i,
-                                       "timezone": TIMEZONE_TWELVEDATA},
+                "earliest_timestamp", {"symbol": s, "interval": i, **zona_twelvedata(i)},
                 key=key, limitador=limitador, get=get)
             out["earliest_timestamp"].append({
                 "simbolo": s, "intervalo": i, "ok": entrada["ok"],
@@ -212,7 +211,7 @@ async def serie_td_ultimo_anio(simbolo: str, *, key: str, limitador: Limitador,
     corte = ""
     while True:
         params = {"symbol": simbolo, "interval": INTERVALO_5B,
-                  "outputsize": OUTPUTSIZE_TWELVEDATA, "timezone": TIMEZONE_TWELVEDATA,
+                  "outputsize": OUTPUTSIZE_TWELVEDATA, **zona_twelvedata(INTERVALO_5B),
                   "start_date": inicio.strftime("%Y-%m-%d %H:%M:%S"), "end_date": fin}
         entrada, datos = await pedir_twelvedata("time_series", params, key=key,
                                                 limitador=limitador, get=get)

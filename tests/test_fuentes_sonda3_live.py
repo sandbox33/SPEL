@@ -11,8 +11,10 @@ decision-log de esa fecha. Las entradas `live` se retiraron: volver a
 correrlas gastaría créditos de TwelveData que la sonda §0.A-3b necesita. Las
 funciones y sus tests offline quedan, porque la 3b las reutiliza. La parte
 de cTrader se retiró del todo (decisión del Admin del 05-oct). Desde el
-05-oct, toda llamada a TwelveData lleva `timezone=UTC`: el intradía de
-XAU/USD llegó sin ella con unas 11 horas de corrimiento.
+06-oct (decision-log de esa fecha), toda llamada INTRADÍA a TwelveData lleva
+`timezone=UTC` y 1d no la lleva, porque es una barra de solo fecha: el
+intradía de XAU/USD llegó sin zona con unas 11 horas de corrimiento. Es la
+misma regla de `TwelveDataAdapter`, y `zona_twelvedata()` la lee de ahí.
 
 ══ LO QUE CONTESTA ══
 
@@ -57,7 +59,11 @@ import pytest
 
 from tests.test_deriv_endpoints_live import texto_libre
 
-from ingestion.adapters import TWELVEDATA_ENDPOINT
+from ingestion.adapters import (
+    _INTERVALOS_SIN_TIMEZONE,
+    _TWELVEDATA_INTERVALS,
+    TWELVEDATA_ENDPOINT,
+)
 from tests.test_deriv_sonda2_live import _limpiador
 
 #: 5. Símbolos e intervalos de TwelveData.
@@ -68,8 +74,19 @@ LLAMADAS_POR_MINUTO_TWELVEDATA = 8
 TOPE_CREDITOS_TWELVEDATA = 60
 BASE_TWELVEDATA = TWELVEDATA_ENDPOINT.rsplit("/", 1)[0]
 
-#: Toda llamada a TwelveData desde el 05-oct (decision-log 2026-10-05, g).
+#: La zona de toda llamada INTRADÍA a TwelveData (decision-log 2026-10-06).
 TIMEZONE_TWELVEDATA = "UTC"
+
+#: Los intervalos de TwelveData que NO llevan zona: los del adapter, en el
+#: vocabulario del proveedor ("1d" → "1day"). Se leen del adapter, no se
+#: copian: la regla es una sola.
+INTERVALOS_SIN_ZONA: frozenset[str] = frozenset(
+    _TWELVEDATA_INTERVALS[t] for t in _INTERVALOS_SIN_TIMEZONE)
+
+
+def zona_twelvedata(intervalo: str) -> dict[str, str]:
+    """{"timezone": "UTC"} para un intervalo intradía; {} para 1day."""
+    return {} if intervalo in INTERVALOS_SIN_ZONA else {"timezone": TIMEZONE_TWELVEDATA}
 
 #: 6. Alpha Vantage: las tres llamadas del brief.
 ENDPOINT_ALPHAVANTAGE = "https://www.alphavantage.co/query"
@@ -175,7 +192,7 @@ async def serie_twelvedata(simbolo: str, intervalo: str, *, key: str,
     corte = ""
     while True:
         params = {"symbol": simbolo, "interval": intervalo,
-                  "outputsize": OUTPUTSIZE_TWELVEDATA, "timezone": TIMEZONE_TWELVEDATA}
+                  "outputsize": OUTPUTSIZE_TWELVEDATA, **zona_twelvedata(intervalo)}
         if end_date:
             params["end_date"] = end_date
         entrada, datos = await pedir_twelvedata("time_series", params, key=key,
@@ -216,7 +233,7 @@ async def sondear_twelvedata(*, key: str, get: GetHttp = _get_httpx,
     for s in SIMBOLOS_TWELVEDATA:
         entrada, datos = await pedir_twelvedata(
             "earliest_timestamp", {"symbol": s, "interval": "1day",
-                                   "timezone": TIMEZONE_TWELVEDATA}, key=key,
+                                   **zona_twelvedata("1day")}, key=key,
             limitador=lim, get=get)
         if datos is not None:
             entrada.update(datetime=datos.get("datetime"), unix_time=datos.get("unix_time"))
@@ -508,14 +525,28 @@ def test_alphavantage_cuerpo_que_no_es_objeto():
     assert resumir_alphavantage([1, 2])["ok"] is False
 
 
-def test_toda_llamada_a_twelvedata_lleva_timezone_utc():
+def test_el_intradia_lleva_timezone_utc_y_1day_no():
+    """La regla del 06-oct: intradía con zona; 1day sin ella."""
     async def correr():
         get, vistos = _twelvedata()
         lim, _ = _lim()
         await sondear_twelvedata(key="K", get=get, limitador=lim)
         return vistos
     vistos = asyncio.run(correr())
-    assert vistos and all(p.get("timezone") == "UTC" for _, p, _ in vistos)
+    diarios = [p for _, p, _ in vistos if p["interval"] == "1day"]
+    intradia = [p for _, p, _ in vistos if p["interval"] != "1day"]
+    assert diarios and intradia
+    assert all("timezone" not in p for p in diarios)
+    assert all(p["timezone"] == "UTC" for p in intradia)
+
+
+@pytest.mark.parametrize("intervalo, zona", [
+    ("1day", {}), ("5min", {"timezone": "UTC"}), ("15min", {"timezone": "UTC"}),
+    ("1h", {"timezone": "UTC"}),
+])
+def test_zona_twelvedata(intervalo, zona):
+    assert zona_twelvedata(intervalo) == zona
+    assert INTERVALOS_SIN_ZONA == {"1day"}
 
 
 def test_el_workflow_ya_no_pasa_ctrader_ni_alphavantage():
