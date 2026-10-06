@@ -1903,3 +1903,185 @@ EUR/USD entre canales son solo barreras de contratos diarios (por ejemplo `4185.
   `subscribe`, que lanza antes de enviar cualquier otro tipo; una sola conexión, máximo 40
   mensajes, cierre al terminar; la URL con el OTP nunca va al informe. Es la autorización
   explícita que pide la regla nueva de CLAUDE.md para que una sonda en `tests/` pida un OTP.
+
+---
+
+## 2026-10-06 — Sonda §0.A-3b: real y demo cuestan lo mismo, κ entra al registro, y decisiones del Admin
+
+**Fuente:** sonda §0.A-3b (`tests/test_deriv_cotizacion_real_live.py` y `tests/test_sonda3b_live.py`),
+corrida por el Admin en *SPEL Live Tests* sobre la rama del PR #31: run `37404371657`, job
+`112078531190`, commit `6bc0795`, 06-oct-2026 a las 02:29 UTC. Seis tests `live` pasaron. El log
+tiene 381 líneas y se leyó **entero**: los informes de la 3b salen en una sola línea. El Admin lo
+auditó.
+
+### Decisiones del Admin
+
+- **TwelveData.** La regla queda: **toda llamada intradía a TwelveData lleva `timezone=UTC`; 1d no
+  la lleva, porque es una barra de solo fecha.** `TwelveDataAdapter` no se toca: ya hacía eso. La
+  regla del 05-oct decía "toda llamada" y quedó corregida. Los tests existentes del adapter la
+  fijaban para 1d y 1h; `tests/test_twelvedata_timezone.py` la fija para cada timeframe, 5m y 15m
+  incluidos.
+- **κ.** Entra el **máximo medido en la cuenta real** por activo. Si en un activo la medición real
+  falla, va el máximo entre público y demo, marcado como respaldo. **Reemplaza "el mayor medido en
+  5d"** que usó 5c.
+- **DG-8.** La batería va en un **paquete nuevo**; no usa `orchestration/`. El nombre se fija en el
+  brief de la batería, y el paquete no se crea antes.
+- **Aprobados:** las interpretaciones de la 3b, el retiro de las sondas 2 y 3 del job live, y la
+  salida de `ALPHAVANTAGE_API_KEY` y de cTrader.
+
+### a) Canal real: saldo 0, 21 mensajes, cerrado, ninguna orden
+
+`GET /accounts` (HTTP 200, sha256 `678171c4f008f891c56baba0da0c776711969c35b0890c4e21045c35084262c2`): una cuenta demo
+(`DOT********`) y una real (`ROT********`), las dos activas. Saldo real **0 según `GET /accounts`**,
+así que no hizo falta el mensaje `balance`. Un OTP real (HTTP 200), una conexión, **21 mensajes**
+(las 21 `proposal`), conexión **cerrada** al terminar 5d. **Ninguna orden**: la lista blanca del canal
+real no deja pasar nada que no sea `time`, `balance`, `contracts_for` o una `proposal` MULTUP sin
+`subscribe`. Un OTP demo, también una conexión. Las 21 combinaciones se cotizaron en el mismo
+minuto UTC en los tres canales, con a lo sumo 0,91 s entre el primero y el último.
+
+### b) Real y demo dan lo mismo; el canal público es distinto
+
+| símbolo | stake | mult. | público | demo | real | sha256 (real) |
+|---|---|---|---|---|---|---|
+| `cryBTCUSD` | 1 | ×50 | 0.04 | rechazo: 100,200,300,500,800 | rechazo: 100,200,300,500,800 | `5c5c1c054463a29f68cb379da068738f116d013e00af13872844fecbb189e87b` |
+| `cryBTCUSD` | 1 | ×100 | 0.07 | 0.03 | 0.03 | `158a5167875bceafd5956a9bbcaa5564741b7bf81dd21dc8b60a6baec573a865` |
+| `cryBTCUSD` | 1 | ×200 | 0.14 | 0.05 | 0.05 | `091593b931c6af2d9984524511faff2aa7b937845732d69a3ad3b179682ab964` |
+| `cryBTCUSD` | 2 | ×50 | 0.07 | rechazo: 100,200,300,500,800 | rechazo: 100,200,300,500,800 | `7f49c8141ed9ee00850ff9872a23e4e479408e94e3523dd074c1fda7b38a381b` |
+| `cryBTCUSD` | 2 | ×100 | 0.14 | 0.05 | 0.05 | `5b29492162c944314682311bb08727fbc38ec5388ab864eb4da5ad6e23857cde` |
+| `cryBTCUSD` | 2 | ×200 | 0.28 | 0.10 | 0.10 | `e2b5034fee654691c791483c75f9be8e2f107458d0c35b17f83aa27aa18afe2c` |
+| `cryBTCUSD` | 1 | ×100 + SL 0,30 | 0.07 | 0.03 | 0.03 | `0a1e73ab4b88301e6077cb80c7e12f18fa4f48a148cb45812db32e301e12fa2e` |
+| `frxXAUUSD` | 1 | ×50 | 0.02 | rechazo: 100,200,300,500,800 | rechazo: 100,200,300,500,800 | `19844950094c5ad3a695326b5f231f26df8c39f36bd9a84f0f781a244699b320` |
+| `frxXAUUSD` | 1 | ×100 | 0.02 | 0.02 | 0.02 | `7d88c8b3ba7851801c80d96894e79412e39acd56583cef80a514a6a6afdf2f5d` |
+| `frxXAUUSD` | 1 | ×200 | rechazo: 50,100,150,250,500 | 0.02 | 0.02 | `8488e70d3a3ef876ab8edd19a9052c2430268642ba08f34ae7cddc463b9d2b62` |
+| `frxXAUUSD` | 2 | ×50 | 0.02 | rechazo: 100,200,300,500,800 | rechazo: 100,200,300,500,800 | `436756dd9a2b05c0e66ec7c0fdfcfbd353e2b34241f7a79ee7da994b77512f4c` |
+| `frxXAUUSD` | 2 | ×100 | 0.04 | 0.02 | 0.02 | `84b1e2a1df288880da9222e7c2e921759a1e83bfdd8a17f1afd2a776977ea3eb` |
+| `frxXAUUSD` | 2 | ×200 | rechazo: 50,100,150,250,500 | 0.05 | 0.05 | `f99d2291496e45b80a8e3ed562cd125dbcc0353c5f421f7a369329b3aeeba79a` |
+| `frxXAUUSD` | 1 | ×100 + SL 0,30 | 0.02 | 0.02 | 0.02 | `e82ec6c294166cfcb2a41d64585e6e96247718e98d821b059a6e163a03d480b5` |
+| `frxEURUSD` | 1 | ×50 | 0.02 | rechazo: 100,200,300,500,800 | rechazo: 100,200,300,500,800 | `db84232c55050a4ed118c08b177ffe42ec3b3161169c2069c73f71644d9e89e2` |
+| `frxEURUSD` | 1 | ×100 | 0.02 | 0.02 | 0.02 | `0855a6643212653769318d038b4acea3c1163ee89d15907877bda1b3479917d7` |
+| `frxEURUSD` | 1 | ×200 | rechazo: 50,100,150,250,500 | 0.05 | 0.05 | `747f54c44aa6a6855474b0e920e8ee145af1d6197e41858bf6340dab25099d52` |
+| `frxEURUSD` | 2 | ×50 | 0.02 | rechazo: 100,200,300,500,800 | rechazo: 100,200,300,500,800 | `d7525bce485efeb6ec6f31e7a7fa7cc746f560a99132cae64740168ef26d3cac` |
+| `frxEURUSD` | 2 | ×100 | 0.05 | 0.05 | 0.05 | `ad7a04b2d10759d423723365fd3f0a36546eaee35f88505e343498b7fbab323e` |
+| `frxEURUSD` | 2 | ×200 | rechazo: 50,100,150,250,500 | 0.09 | 0.09 | `35158844bb91beb10ba24526f3ef71c1e69d7e387b68d78e577a02e7e4cca6ce` |
+| `frxEURUSD` | 1 | ×100 + SL 0,30 | 0.02 | 0.02 | 0.02 | `d878f4494525cfcbffe1ebf37944fe790675f626d6f6b1d78d038a659c6b46e3` |
+
+`commission`, límites de stake (1–2.000 en demo y real; 1–500 en el público), límites de stop-loss
+y multiplicadores aceptados son **idénticos entre real y demo en las 21 combinaciones**. El
+`stop_out` también, salvo en una: BTC ×200 con stake 2, `85188.895` en demo y `85188.898` en
+real, la diferencia de un spot cotizado 0,3 s después. Los rechazos de ×50 de demo y real tienen
+el **mismo sha256**. **Queda descartado que la demo sea más barata que la real** para cryBTCUSD,
+frxXAUUSD y frxEURUSD a esta fecha. El público cobra más en BTC (0,07 contra 0,03 a ×100 con stake
+1) y en oro con stake 2 a ×100 (0,04 contra 0,02).
+
+### c) Multiplicadores aceptados
+
+Real y demo aceptan **{100, 200, 300, 500, 800}** y rechazan ×50 ("Multiplier is not in
+acceptable range. Accepts 100,200,300,500,800."): **en real el mínimo es ×100**. El público acepta
+**{50, 100, 150, 250, 500}** en oro y EUR/USD (rechaza ×200 con ese mensaje) y acepta ×50, ×100 y
+×200 en BTC.
+
+### d) κ entra en `config/constantes.json`
+
+`ingestion/kappa_deriv.py`: `KAPPA_DERIV` = **cryBTCUSD 0,0003, frxXAUUSD 0,0002, frxEURUSD
+0,00025**, los tres con origen "real".
+
+| símbolo | κ | de qué cotización | sha256 |
+|---|---|---|---|
+| cryBTCUSD | 0,0003 | 0,03 / 100 (stake 1 ×100, con y sin stop-loss) | `158a5167875bceafd5956a9bbcaa5564741b7bf81dd21dc8b60a6baec573a865`, `0a1e73ab4b88301e6077cb80c7e12f18fa4f48a148cb45812db32e301e12fa2e` |
+| frxXAUUSD | 0,0002 | 0,02 / 100 (stake 1 ×100, con y sin stop-loss) | `7d88c8b3ba7851801c80d96894e79412e39acd56583cef80a514a6a6afdf2f5d`, `e82ec6c294166cfcb2a41d64585e6e96247718e98d821b059a6e163a03d480b5` |
+| frxEURUSD | 0,00025 | 0,05 / 200 (stake 1 ×200 y stake 2 ×100) | `747f54c44aa6a6855474b0e920e8ee145af1d6197e41858bf6340dab25099d52`, `ad7a04b2d10759d423723365fd3f0a36546eaee35f88505e343498b7fbab323e` |
+
+**La comisión viene redondeada a centavos, y con stake de 1–2 USD κ es una cota medida, no una tasa
+exacta:** en el oro, nocional 100 y 200 pagan los mismos 0,02 USD (κ 0,0002 y 0,0001).
+`tests/test_kappa_deriv.py` reconstruye cada máximo desde las 15 cotizaciones reales.
+`core/execution_costs.py` sigue sin tocar (acta del 21-sep).
+
+### e) 5c, con κ público (medido) y con κ real (recalculado)
+
+5c usó `kappa_5c`, el máximo de los tres canales, que fue el del **canal público**. Se recalculó
+offline, sin correr nada nuevo, el costo en fracción de R y el umbral con κ real, usando las
+funciones del código (`costo_en_fraccion_de_r` y `umbral_pct` de `tests/test_sonda3b_live.py`). El
+costo es decreciente en el rango, así que su percentil p sale del percentil 100 − p del rango:
+recalculado así con κ público, reproduce los valores medidos a la cuarta decimal (BTC p90: 0,3739
+medido, 0,3738 recalculado, por la interpolación). **La fracción de días bajo el umbral no se puede
+recalcular sin las velas: queda la medida con κ público, marcada.** Lo que sí se sabe: con κ
+real el umbral sube (1/m − κ crece cuando κ baja), así que la fracción con κ real es **mayor o
+igual** que la medida.
+
+**frxXAUUSD** (08:00 Europe/London; 258 días con las tres velas, 107 sin ellas; 69463 velas M5)
+
+| | p10 | p25 | p50 | p75 | p90 |
+|---|---|---|---|---|---|
+| rango, % del precio | 0,118 | 0,146 | 0,194 | 0,257 | 0,386 |
+| costo en fracción de R, κ público 0,0004 (medido) | 0,094 | 0,135 | 0,171 | 0,215 | 0,253 |
+| costo en fracción de R, κ real 0,0002 (recalculado) | 0,049 | 0,072 | 0,093 | 0,120 | 0,145 |
+
+| | ×50 | ×100 |
+|---|---|---|
+| umbral (0,6 × stop-out), %, κ público (medido) | 1,176 | 0,576 |
+| umbral, %, κ real (recalculado) | 1,188 | 0,588 |
+| fracción de días con rango ≤ umbral, **κ público (medido; sin recalcular)** | 0,992 | 0,973 |
+
+**cryBTCUSD** (09:30 America/New_York; 365 días con las tres velas, 0 sin ellas; 105037 velas M5)
+
+| | p10 | p25 | p50 | p75 | p90 |
+|---|---|---|---|---|---|
+| rango, % del precio | 0,134 | 0,328 | 0,538 | 0,821 | 1,145 |
+| costo en fracción de R, κ público 0,0008 (medido) | 0,065 | 0,089 | 0,129 | 0,196 | 0,374 |
+| costo en fracción de R, κ real 0,0003 (recalculado) | 0,026 | 0,035 | 0,053 | 0,084 | 0,183 |
+
+| | ×50 | ×100 |
+|---|---|---|
+| umbral (0,6 × stop-out), %, κ público (medido) | 1,152 | 0,552 |
+| umbral, %, κ real (recalculado) | 1,182 | 0,582 |
+| fracción de días con rango ≤ umbral, **κ público (medido; sin recalcular)** | 0,907 | 0,515 |
+
+### f) 5a: el intradía de TwelveData empieza en 2020
+
+| símbolo | intervalo | `earliest_timestamp` (UTC) | sha256 |
+|---|---|---|---|
+| BTC/USD | 5min | 2020-03-25 04:20:00 | `e82385e2d41a47805e52ea11c587e4324e7966470107124e9927b86368754241` |
+| BTC/USD | 15min | 2020-02-19 08:00:00 | `410c1ba5595da51450907ec44bfb3d5b9f152cd15ce15e8b870432709a32c85e` |
+| XAU/USD | 5min | 2020-03-16 01:10:00 | `c6250399d925f4aea07c9a0ce8b528bcf33b44a1cbf90a2b575655401dbab3cf` |
+| XAU/USD | 15min | 2020-01-24 02:00:00 | `ef50428efa32d175c427097f1e9a3ab3054f243aa5a8a71567dc0b91e7add067` |
+
+| símbolo | intervalo | `end_date` | resultado | sha256 |
+|---|---|---|---|---|
+| BTC/USD | 5min | 2018-06-30 | 404 "Data not found" | `d2228951ae71f0c6daa139c067d8d2e1ad792b34998b86120df267a14766ad4e` |
+| BTC/USD | 5min | 2021-06-30 | 5000 filas, 2021-06-12 15:25:00 .. 2021-06-30 00:00:00 | `e852b2280bd4ec23c0205b93ddf190a7268f5cbb212484b5f47ff0fdfc331cf3` |
+| BTC/USD | 5min | 2024-06-30 | 5000 filas, 2024-06-12 13:55:00 .. 2024-06-30 00:00:00 | `c9c8d7c58afeeab23e9c2f860e90943fd042bfbbd923ae3381638035778d13c7` |
+| BTC/USD | 15min | 2018-06-30 | 404 "Data not found" | `54265e4202319b1b57fe8e703af16bf663a160047f40640bc491f3e7b1b85e3d` |
+| BTC/USD | 15min | 2021-06-30 | 5000 filas, 2021-05-08 22:00:00 .. 2021-06-30 00:00:00 | `fe30ebc9bd5eafada8ac44271c68a3ef6936c2aaa9191c2e0744cd5deb8db8be` |
+| BTC/USD | 15min | 2024-06-30 | 5000 filas, 2024-05-08 21:30:00 .. 2024-06-30 00:00:00 | `f1105cf770da42559896b6fecd738ccfe6b5dc15d3ea68cf805e7b91495a4171` |
+| XAU/USD | 5min | 2018-06-30 | 404 "Data not found" | `8a4539c48e1642736133b81ed157f970d545a867de890f129c01e17fd18555e8` |
+| XAU/USD | 5min | 2021-06-30 | 5000 filas, 2021-06-03 20:25:00 .. 2021-06-30 00:00:00 | `6ac4c7d4883165bf255d7b035bc23d1c91c133a1c6a3fbcee8294766ae81e795` |
+| XAU/USD | 5min | 2024-06-30 | 5000 filas, 2024-06-04 12:50:00 .. 2024-06-28 20:55:00 | `0d257c302291a8284ce594d69cf824c6e667606a733011cefc9d799832b96725` |
+| XAU/USD | 15min | 2018-06-30 | 404 "Data not found" | `b5823989301cfb84759d87a842e4a0697200eb412e34975ad3c1bcbc4c89cad6` |
+| XAU/USD | 15min | 2021-06-30 | 5000 filas, 2021-04-14 04:00:00 .. 2021-06-30 00:00:00 | `5fb3b900cb9ab96d103732888e7dd5460ef40eb3953fce7373e5e59fb33e1a74` |
+| XAU/USD | 15min | 2024-06-30 | 5000 filas, 2024-04-12 20:00:00 .. 2024-06-28 20:45:00 | `849292dfaeb2be88024ad507b5ac3503f820894c8c8c3a30ff8a6d1d0357d06d` |
+
+2018 da **404**. De las tres comprobaciones de UTC, dos dan verde en todas las páginas con datos
+(ninguna vela pasa el `end_date`, todas en la grilla). La tercera **no se pudo medir**:
+`meta.exchange_timezone` vino `null` en todas. 33 créditos de TwelveData.
+
+### g) 5b: desfase 0 en los dos; el oro queda ABIERTO
+
+| | velas Deriv | velas TwelveData | comunes | close p50/p90/p99 % | high p50/p90/p99 % | low p50/p90/p99 % | close, mediana con signo % | correlación de retornos M15 | desfase (velas) |
+|---|---|---|---|---|---|---|---|---|---|
+| BTC/USD | 35019 | 35040 | 35019 | 0,047 / 0,059 / 0,074 | 0,043 / 0,057 / 0,082 | 0,050 / 0,061 / 0,072 | 0,047 | 0.9983 | 0 |
+| XAU/USD | 23160 | 33605 | 23160 | 0,017 / 0,095 / 0,433 | 0,014 / 0,084 / 0,437 | 0,015 / 0,093 / 0,440 | 0,001 | 0.9508 | 0 |
+
+Páginas de TwelveData (M15, último año, `timezone=UTC`), BTC/USD: `a5cbdfb6829aa013806c7d7b158259db7a24221398134eadea782eb078071613`, `bee5d88a152fb18fba9aabb2c00780e2a7a27294cd75bddbed975e281a186901`, `9be9b2a05519b757c22a982a3a63b8e1866c4adf0373c197e9e3537bfeb1ece6`, `9064943d0da35d5cc6e0fd550edb8d6aa46a0f4c3c62d37ced939f4386baaf9f`, `06c8e57bc0329d3b192dd4d736d76010211aaae47ba0860162662713b297ccf3`, `08bbd7b00c3881c1e613dd76847eb1cd44c556fc28a276e02ab72d07e9274b4f`, `f94dcba7e561c1b4194aa0a3fe9b53c23fc351d1e0cecc60b8ae454def508599`, `b775f79de24e566feeb54653422db75fe7391164541dad2f9161d57b16cd3542`, `246e0446aa6ce25a8d629b58342134f4705ec469647919ba40c138760347502f`. XAU/USD: `733d203f326634eff6d659c276d2cd3ed8667a93b993401b2faecd3a3bda63ef`, `d129b7d9324ef0cb204793f33a274f86707d665dc75a855c3fce048ef6ff3a44`, `b39dbe1fe1ed084aee423960fad289c5b059b59cc874f0735a99573c8ad71db4`, `0708296bcc633f525296b1ab7686535553bf439dea8bfec6291d1e5fe00305f4`, `7e17ad37ba83b8f8306b2ec04673f8940d12a10bbba67e3f3bc4670956bbe3c5`, `37058d4b0079383203e3d30b112dcaa539466b8fa71a0ec3fc7a114e4763cee0`, `7a46ba782d817e32124971897217ab3b32cbb783ce3a06974f572fff3d02ccdf`, `dbe9d52fe8234b12ac9541053bb645103202a3feecafd710232749845857193b`.
+La última página de cada serie, que pasa el inicio del año, devuelve 400 "No data is available on
+the specified dates", no 404.
+
+**BTC:** correlación 0,998 y sesgo de **+0,047 %** (TwelveData por encima de Deriv). **Oro:**
+correlación 0,951, p50 0,017 %, p99 0,43 %, con 23.160 velas en Deriv y 33.605 en TwelveData.
+**Queda ABIERTO, sin investigar todavía:** dónde caen las colas del oro y qué son las velas de más
+de TwelveData.
+
+### h) La legacy sigue en HTTP 520
+
+`wss://ws.derivws.com/websockets/v3`: `InvalidStatus: server rejected WebSocket connection: HTTP
+520` en el handshake, otra vez con el App ID válido.
+
