@@ -1,6 +1,6 @@
 {
   "schema_version": "1.1.0",
-  "actualizado": "2026-10-01",
+  "actualizado": "2026-10-06",
   "constantes": [
     {
       "nombre": "EPSILON_BREAKEVEN",
@@ -1192,6 +1192,36 @@
         "ingestion.gdelt_aggregation._shannon_entropy"
       ],
       "notas": ""
+    },
+    {
+      "nombre": "KAPPA_DERIV",
+      "modulo": "ingestion.kappa_deriv",
+      "categoria": "parametro",
+      "valor": {
+        "cryBTCUSD": 0.0003,
+        "frxXAUUSD": 0.0002,
+        "frxEURUSD": 0.00025
+      },
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Sonda §0.A-3b, run 37404371657 (job 112078531190), 06-oct-2026: máximo de comisión/nocional en la cuenta REAL. cryBTCUSD 0,03/100, cotizaciones 158a5167875bceafd5956a9bbcaa5564741b7bf81dd21dc8b60a6baec573a865 y 0a1e73ab4b88301e6077cb80c7e12f18fa4f48a148cb45812db32e301e12fa2e; frxXAUUSD 0,02/100, 7d88c8b3ba7851801c80d96894e79412e39acd56583cef80a514a6a6afdf2f5d y e82ec6c294166cfcb2a41d64585e6e96247718e98d821b059a6e163a03d480b5; frxEURUSD 0,05/200, 747f54c44aa6a6855474b0e920e8ee145af1d6197e41858bf6340dab25099d52 y ad7a04b2d10759d423723365fd3f0a36546eaee35f88505e343498b7fbab323e. Decision-log 2026-10-06.",
+      "usado_en": [],
+      "notas": "Regla del Admin del 06-oct: máximo en la cuenta real; si falla, máximo de público y demo, marcado respaldo. Cota medida, no tasa exacta: la comisión viene redondeada a centavos y con stake 1–2 USD el redondeo pesa (en oro, nocional 100 y 200 pagan los mismos 0,02 USD). Sin consumidor todavía."
+    },
+    {
+      "nombre": "ORIGEN_KAPPA_DERIV",
+      "modulo": "ingestion.kappa_deriv",
+      "categoria": "etiqueta",
+      "valor": {
+        "cryBTCUSD": "real",
+        "frxXAUUSD": "real",
+        "frxEURUSD": "real"
+      },
+      "evidencia": "medido",
+      "afecta_resultado": false,
+      "fuente": "Sonda §0.A-3b, run 37404371657, 06-oct-2026: los tres κ salen de la cuenta real; ninguno es respaldo.",
+      "usado_en": [],
+      "notas": "Etiqueta de procedencia: nada ramifica sobre ella."
     },
     {
       "nombre": "DEFAULT_MAX_DAYS",
