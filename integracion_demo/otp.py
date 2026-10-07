@@ -217,7 +217,10 @@ async def url_demo_nueva(cuenta: dict, *, token: str, app_id: str,
     esquema, host y ruta, que no son el OTP."""
     informe, url = await emitir_otp_demo(cuenta, token=token, app_id=app_id, post=post)
     if url is None:
-        raise OtpNoEmitidoError(json.dumps(informe, ensure_ascii=False))
+        # El cuerpo de un rechazo va al informe recortado y con los IDs
+        # tapados; un `otp=` dentro de él también se tapa.
+        raise OtpNoEmitidoError(re.sub(r"otp=[^&\s\"\\]+", "otp=***",
+                                       json.dumps(informe, ensure_ascii=False)))
     motivo = motivo_para_no_conectar(url)
     if motivo:
         raise UrlNoDemoError(motivo)
