@@ -512,6 +512,16 @@ def test_reconciliar_tolera_medio_centavo_y_no_mas(tmp_path):
     assert reconciliar(r2, profit_table=pt, statement=st)[0]["reconciliado"] == "discrepancia"
 
 
+def test_la_tolerancia_es_medio_centavo(tmp_path):
+    """Deriv devuelve centavos: un centavo de diferencia ya es discrepancia."""
+    assert TOLERANCIA_USD == 0.005
+    r = _cerrado(tmp_path)
+    pt = [{**_PT[0], "sell_price": 0.91}]
+    st = [_ST[0], {**_ST[1], "amount": 0.91}]
+    n = reconciliar(r, profit_table=pt, statement=st)
+    assert n[0]["reconciliado"] == "discrepancia" and "≠ profit_deriv" in n[0]["evidencia"]
+
+
 def test_una_rechazada_con_una_compra_cerca_es_discrepancia(tmp_path):
     r = Registro(tmp_path)
     r.agregar(evento="sin_respuesta", trade_uuid=_U, outcome="desconocido",

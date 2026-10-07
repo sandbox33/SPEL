@@ -583,6 +583,9 @@ async def test_sin_cierre_observado_es_desconocido(tmp_path):
                                              reloj_s=reloj)
     assert cierre["outcome"] == "desconocido"
     assert "no se observó el cierre" in cierre["evidencia"]
+    # 0, 5, …, 60 (13), otra vez a los 60 tras el sell, y 65, …, 90 (6):
+    # siguió mirando los 30 s antes de rendirse.
+    assert len(falso.de_tipo("proposal_open_contract")) == 20
     assert "sin cierre observado 30 s" in cierre["evidencia"]
     venta = [f for f in leer_registro(tmp_path).filas if f["evento"] == "venta"]
     assert len(venta) == 1 and "SellNotAvailable" in venta[0]["evidencia"]
