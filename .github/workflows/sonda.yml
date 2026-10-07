@@ -1,0 +1,90 @@
+# .github/workflows/sonda.yml
+# ============================
+# Sonda de instrumentos de Deriv, una vez por día durante siete días (Brief
+# H1-A, Entregable 1). Escribe en la rama `data`, en
+# metrics/instrumentos/<símbolo>_<fecha>.json y resumen_<fecha>.json.
+#
+# SE DETIENE SOLA: con siete resúmenes en `data`, el script sale 0 sin abrir
+# conexión y este workflow no commitea nada. El cron puede quedar activo.
+#
+# Mismo patrón que gdelt.yml y velas.yml, y el MISMO grupo de concurrency:
+# los tres escriben en `data`.
+#
+# ENTORNO: `--entorno demo`, explícito. La sonda solo cotiza: `proposal` sin
+# `subscribe`, y la lista blanca de ingestion/deriv_ws.py no admite ningún
+# mensaje de orden.
+#
+# SALIDAS: INVALIDO (sin frxEURUSD en active_symbols) y SIN_BTC ponen el job
+# en rojo. PETICION_ADMIN (más de un BTC califica) no: se registra, y el
+# Admin elige mirando el resumen.
+
+name: SPEL sonda de instrumentos
+
+on:
+  schedule:
+    - cron: "45 0 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: gdelt-data
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sonda:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      SPEL_DRIVE_ROOT: ${{ github.workspace }}/data-store
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout de la rama data
+        uses: actions/checkout@v4
+        with:
+          ref: data
+          path: data-store
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Sonda de instrumentos (escribe en data-store)
+        id: sonda
+        continue-on-error: true
+        env:
+          DERIV_APP_ID: ${{ secrets.DERIV_APP_ID }}
+          DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
+        run: python ingestion/sonda_instrumentos.py --entorno demo --write
+
+      - name: Commit a data
+        working-directory: data-store
+        run: |
+          git add -A metrics/instrumentos
+          if git diff --cached --quiet; then
+            echo "Sin cambios: no hay nada que commitear."
+            exit 0
+          fi
+          n=$(git diff --cached --name-only | wc -l)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "sonda de instrumentos $(date -u +%F): $n archivo(s)" \
+            -m "Corrida ${{ github.run_id }} de ${{ github.workflow }} (${{ github.event_name }})."
+          for intento in 1 2; do
+            git pull --rebase -q origin data && git push -q origin HEAD:data && exit 0
+            echo "Push rechazado (intento $intento)."
+          done
+          exit 1
+
+      - name: Resultado
+        if: steps.sonda.outcome == 'failure'
+        run: |
+          echo "La sonda terminó en rojo (INVALIDO o SIN_BTC, ver el paso anterior)."
+          exit 1

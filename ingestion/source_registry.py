@@ -109,6 +109,18 @@ class DepthKind:
         return frozenset({cls.COMPLETA, cls.TOPE_DE_PETICION, cls.NO_MEDIDA})
 
 
+class EndpointState:
+    """Estado de un ENDPOINT de un proveedor, que no es lo mismo que la
+    cobertura de un activo: la API legacy de Deriv puede estar muerta y la
+    cobertura de EURUSD por la API nueva seguir sin medirse."""
+    DISPONIBLE = "DISPONIBLE"
+    NO_DISPONIBLE = "NO_DISPONIBLE"
+
+    @classmethod
+    def todos(cls) -> frozenset[str]:
+        return frozenset({cls.DISPONIBLE, cls.NO_DISPONIBLE})
+
+
 class RegistryError(Exception):
     """El archivo del registro no cumple su propio contrato. Se lanza al
     cargar: un registro mal formado leído a medias es peor que uno ausente,
@@ -194,6 +206,12 @@ class SourceRegistry:
         return any(e.activo == activo and e.usable for e in self.entradas)
 
     # ── consultas ────────────────────────────────────────────────────────
+
+    def estado_de_endpoint(self, proveedor: str, endpoint: str) -> Optional[str]:
+        """El estado medido de un endpoint (EndpointState), o None si nunca
+        se midió. None no es "disponible": es que no se sabe."""
+        e = (self.proveedores.get(proveedor) or {}).get("endpoints", {}).get(endpoint)
+        return e["estado"] if e else None
 
     def for_asset(self, activo: str) -> tuple[RegistryEntry, ...]:
         """Todas las entradas de un activo, usables o no. Devuelve también
@@ -367,9 +385,24 @@ def load_registry(path: Optional[Path] = None) -> SourceRegistry:
                 f"del mismo par son dos verdades sobre lo mismo.")
         vistos.add(clave)
 
+    proveedores = dict(bruto.get("proveedores") or {})
+    for nombre, prov in proveedores.items():
+        for url, ep in (prov.get("endpoints") or {}).items():
+            _exigir(ep.get("estado") in EndpointState.todos(),
+                    f"{nombre} {url}: estado de endpoint {ep.get('estado')!r} "
+                    f"no es uno de {sorted(EndpointState.todos())}.")
+            try:
+                date.fromisoformat(ep.get("verificado_el") or "")
+            except ValueError:
+                raise RegistryError(
+                    f"{nombre} {url}: un estado de endpoint sin fecha de "
+                    f"verificación válida no se puede evaluar.") from None
+            _exigir(bool(ep.get("evidencia")),
+                    f"{nombre} {url}: falta la evidencia del estado.")
+
     return SourceRegistry(
         entradas=entradas,
-        proveedores=dict(bruto.get("proveedores") or {}),
+        proveedores=proveedores,
         meta=dict(bruto.get("meta") or {}),
     )
 
@@ -405,7 +438,7 @@ def render_text(registro: SourceRegistry, *, hoy: Optional[date] = None) -> str:
 
 
 __all__ = [
-    "CoverageState", "DepthKind", "REGISTRY_PATH", "RegistryEntry",
+    "CoverageState", "DepthKind", "EndpointState", "REGISTRY_PATH", "RegistryEntry",
     "RegistryError", "SCHEMA_VERSION", "SourceRegistry", "load_registry",
     "render_text",
 ]

@@ -22,6 +22,7 @@ from ingestion.source_registry import (
     SCHEMA_VERSION,
     CoverageState,
     DepthKind,
+    EndpointState,
     RegistryError,
     SourceRegistry,
     load_registry,
@@ -426,3 +427,76 @@ def test_comparte_los_idioms_de_source_inventory():
         assert hasattr(cls, "__len__")
         assert hasattr(cls, "__contains__")
         assert hasattr(cls, "log_summary")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  Estado de endpoints (decision-log 2026-10-01)
+# ══════════════════════════════════════════════════════════════════════════
+
+def _url_legacy() -> str:
+    """La URL legacy como la usa el adaptador, sin la query: el registro no
+    puede hablar de un endpoint distinto del que el código abre."""
+    from ingestion.adapters import DERIV_WS_ENDPOINT
+    return DERIV_WS_ENDPOINT.split("?")[0]
+
+
+def _url_publica() -> str:
+    from tests.test_deriv_endpoints_live import ENDPOINT_PUBLICO_NUEVO
+    return ENDPOINT_PUBLICO_NUEVO
+
+
+def test_la_legacy_de_deriv_figura_como_no_disponible(registro):
+    assert registro.estado_de_endpoint("deriv", _url_legacy()) == \
+        EndpointState.NO_DISPONIBLE
+    ep = registro.proveedores["deriv"]["endpoints"][_url_legacy()]
+    assert ep["verificado_el"] == "2026-10-01"
+    assert "520" in ep["evidencia"]
+    assert "36894412401" in ep["evidencia"]
+    # La medición usó un App ID inválido: el estado no puede descansar solo
+    # en ella, y la evidencia lo dice (decision-log 2026-10-01).
+    assert "App ID inválido" in ep["evidencia"]
+    assert "documentación oficial" in ep["evidencia"]
+
+
+def test_el_ws_publico_nuevo_figura_como_disponible(registro):
+    assert registro.estado_de_endpoint("deriv", _url_publica()) == \
+        EndpointState.DISPONIBLE
+
+
+def test_un_endpoint_nunca_medido_no_tiene_estado(registro):
+    """None, no DISPONIBLE: que nadie lo haya medido no dice que ande."""
+    assert registro.estado_de_endpoint("deriv", "wss://otro/") is None
+    assert registro.estado_de_endpoint("proveedor_inexistente", _url_publica()) is None
+
+
+def test_las_entradas_de_deriv_avisan_que_su_endpoint_murio(registro):
+    entradas = [e for e in registro.entradas if e.proveedor == "deriv"]
+    assert {e.activo for e in entradas} == {"EURUSD", "GBPUSD", "USDJPY"}
+    for e in entradas:
+        assert any("HTTP 520" in a for a in e.advertencias), e.activo
+
+
+def _proveedores(**ep) -> dict:
+    base = {"estado": EndpointState.NO_DISPONIBLE, "verificado_el": "2026-10-01",
+            "evidencia": "HTTP 520"}
+    base.update(ep)
+    return {"prov": {"endpoints": {"wss://x/": base}}}
+
+
+def test_un_endpoint_bien_formado_carga(tmp_path):
+    reg = load_registry(_escribir(tmp_path, [_entrada()], proveedores=_proveedores()))
+    assert reg.estado_de_endpoint("prov", "wss://x/") == EndpointState.NO_DISPONIBLE
+
+
+@pytest.mark.parametrize("campo, valor", [
+    ("estado", "MUERTO"),
+    ("estado", None),
+    ("verificado_el", None),
+    ("verificado_el", "1-oct"),
+    ("evidencia", ""),
+    ("evidencia", None),
+])
+def test_un_endpoint_mal_formado_no_carga(tmp_path, campo, valor):
+    ruta = _escribir(tmp_path, [_entrada()], proveedores=_proveedores(**{campo: valor}))
+    with pytest.raises(RegistryError):
+        load_registry(ruta)

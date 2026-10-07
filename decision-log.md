@@ -1456,3 +1456,632 @@ que pertenece a la API legacy, retirada (decision-log 2026-10-01). La API nueva 
 cotizar, nunca comprar, solo con autorización explícita del Admin en un brief fechado,
 registrada en este decision-log.
 
+---
+
+## 2026-09-25 — Deriv: la API legacy no separa demo y real; la nueva sí
+
+**Fuente:** esquemas oficiales de `deriv-com/deriv-api-docs` (`config/v3/*/send.json` y
+`receive.json`, leídos el 25-sep-2026); búsqueda sobre `developers.deriv.com/docs/options/websocket/`
+(el sitio está bloqueado desde el sandbox: lo que sigue de la API nueva sale del extracto del
+buscador, no de la página leída); `ingestion/adapters.py`; `ingestion/deriv_ws.py`.
+
+**La API legacy** —`wss://ws.derivws.com/websockets/v3?app_id=…`, la de `DERIV_WS_ENDPOINT`—
+tiene **un endpoint único**, y **el token decide la cuenta**. Nada en la URL dice si la
+conexión es demo o real.
+
+**La API nueva de opciones separa las cuentas por ruta:**
+`wss://api.derivws.com/trading/v1/options/ws/demo` y `…/ws/real`, autenticadas con un OTP de
+un solo uso que se pide por REST por cuenta (válido 120 segundos, según el extracto).
+
+**El adapter está en la legacy, y Deriv está migrando.** Lo segundo lo reportó el Admin; el
+calendario de la migración no se pudo leer desde acá.
+
+**Consecuencia en el código:** `ingestion/deriv_ws.py` exige `entorno: "demo" | "real"` sin
+default en todo punto de entrada, y `real` exige además `SPEL_DERIV_PERMITIR_REAL=1`,
+comprobado **antes** de abrir la conexión. Como en la legacy el entorno no se puede verificar
+por la URL, se verifica contra la cuenta: con token, se llama a `authorize` y se compara
+`authorize.is_virtual` ("1 or 0, indicating whether the account is a virtual-money account",
+según el esquema) con el entorno pedido. Un token de cuenta real con `entorno="demo"` corta la
+sesión. Migrar a la API nueva haría esa verificación estructural en vez de por respuesta.
+
+---
+
+## 2026-09-25 — La demo valida integración, no ejecución
+
+**Fuente:** decisión del Admin (Brief H1-A).
+
+Una cuenta demo **no es evidencia suficiente de deslizamiento ni de rechazos**: el
+precio de llenado y la probabilidad de rechazo de una cuenta virtual no tienen por qué
+parecerse a los de una real, y no hay forma de saber cuánto difieren sin operar en real.
+
+Para lo que **sí** sirve: validar **integración** (que los mensajes sean los que la API
+acepta), **idempotencia** (que una corrida repetida no duplique nada) y **reconciliación**
+(que lo que el sistema cree que pasó coincida con lo que la cuenta dice que pasó).
+
+Cualquier número de costo de ejecución que salga de la demo se reporta como tal, y no
+reemplaza a la comisión del pre-registro (`research/preregistro_h1.md`, sección 8).
+
+---
+
+## 2026-09-25 — El 1,246× en BTC no es operativo todavía
+
+**Fuente:** entrada del 2026-09-04 ("Magnitud — sí discrimina, y solo en BTC"); decisión del
+Admin (Brief H1-A).
+
+La razón de volatilidad de **1,246** (Mann-Whitney, p = 3,4×10⁻⁹) dentro vs. fuera del
+régimen de entropía se midió **contemporáneamente**: la entropía del día `t` contra la
+magnitud del retorno del día `t`. Para usarla en el dimensionamiento hace falta que prediga,
+no que acompañe.
+
+**Queda como no operativa hasta superar dos pruebas:**
+
+1. **El rezago a `t−1`:** la entropía de `t−1` tiene que discriminar la magnitud de `t`.
+2. **La comparación contra HAR-RV:** tiene que aportar algo sobre un modelo HAR de volatilidad
+   realizada, que ya predice volatilidad con la propia historia de precios. Si la entropía no
+   mejora lo que HAR-RV ya hace, es una forma cara de medir lo mismo.
+
+Ninguna de las dos se corrió. El sizing del pre-registro H1 usa volatilidad realizada de 20
+días, **no** la entropía.
+
+---
+
+## 2026-09-25 — Nada de órdenes automáticas, ni en demo, hasta que H1-B dé ventaja neta
+
+**Fuente:** decisión del Admin (Brief H1-A); `ingestion/deriv_ws.py`; `tests/test_deriv_ws.py`.
+
+Ninguna orden automática, **tampoco en demo**, hasta que H1-B produzca una ventaja **neta de
+costos** que pase las compuertas del pre-registro.
+
+**Cómo se sostiene, y no solo se promete:**
+
+- `ingestion/deriv_ws.py` solo envía siete mensajes (`active_symbols`, `contracts_for`,
+  `proposal`, `ticks_history`, `time`, `authorize`, `ping`). Cualquier otro se rechaza antes
+  de tocar el socket.
+- `proposal` sale sin `subscribe`: es una cotización, no un stream. El brief pedía
+  `subscribe: 0`, pero el esquema oficial solo admite el valor 1, y omitir el campo es lo
+  equivalente sin arriesgar un error de validación.
+- `tests/test_deriv_ws.py` recorre por AST `core/`, `ingestion/`, `orchestration/`,
+  `governance/`, `execution/`, `tools/` y `research/`, y falla si aparece como literal el
+  nombre de un mensaje de orden.
+
+**Condición de reversión:** H1-B pasa las compuertas (Sharpe neto fuera de muestra ≥ 0,5,
+PSR(0) ≥ 0,90 y DSR ≥ 0,90), y un brief propio amplía la lista blanca con su decision-log.
+`execution/` sigue congelado hasta Fase 4 y esto no lo toca.
+
+---
+
+## 2026-10-01 — La API legacy de Deriv está muerta; el WS público nuevo responde
+
+**Fuente:** sonda de endpoints §0.A (`tests/test_deriv_endpoints_live.py`), corrida por el Admin
+en *SPEL Live Tests* sobre la rama del PR #31: run `36894412401`, job `110477682413`, commit
+`18c8c0b`, 01-oct-2026 16:45–16:46 UTC. El informe está en el log del job; lo que sigue
+se copió de ahí, no se reconstruyó.
+
+**Legacy, `wss://ws.derivws.com/websockets/v3?app_id=…`: NO DISPONIBLE.** El handshake
+devuelve **HTTP 520** (`InvalidStatus: server rejected WebSocket connection: HTTP 520`).
+Ningún mensaje llegó a enviarse. Coincide con lo que reportaba la fuente secundaria.
+
+> **Corrección del mismo día (ver la entrada siguiente):** esta medición usó un App ID
+> inválido. El 520 no prueba por sí solo que la legacy esté muerta; la decisión de migrar se
+> sostiene por la documentación oficial y por el reporte de terceros.
+
+**WS público nuevo, `wss://api.derivws.com/trading/v1/options/ws/public`: responde.**
+Handshake 101 y los cuatro mensajes, con estos sha256 de la respuesta cruda:
+
+| mensaje | resultado | sha256 |
+|---|---|---|
+| `time` | `1790873176` (2026-10-01 16:46:16 UTC) | `89de6289b94175e076f6d2e4b723bf60275bf540b00e56bb3caa669b52e5c3ca` |
+| `active_symbols` | **89** símbolos; el código viene como `underlying_symbol` | `d358da161475bbc35fb5243dc98b8f52e55623d1c74c15f8b878cad3da160827` |
+| `ticks_history` | 256 velas diarias de `OTC_AEX` | `29eb33559f8c178a0b253478f10022e8abcabf78d9178bdbdea4a0c7d46c795d` |
+| `contracts_for` | `OTC_AEX`: CALL, PUT y otros; **sin MULTUP** | `c17b226ce010faa492d56f4e38ae904f4808cf7676e28b7b1e8b06addf561551` |
+
+**Lo que el informe muestra además, y que la sonda 2 tiene que medir antes de migrar:**
+
+- **El símbolo elegido no fue BTC.** La sonda tomó el primer no sintético en orden
+  alfabético, `OTC_AEX` (mercado `indices`). Nada de esto dice todavía qué pasa con BTC y
+  con el oro.
+- **Una ventana de exactamente 365 días.** Con `count` 5000 y `end: latest` llegaron 256
+  velas. La primera tiene época `1759337176` (2025-10-01 16:46:16 UTC), justo **31.536.000 s
+  = 365 días** antes de la hora del servidor. Si ese es un tope por petición y la historia no
+  se puede paginar hacia atrás, la condición de parada no se alcanza con datos de Deriv: 1.076
+  velas para la rejilla completa de H3, 1.058 para la mínima de H1 y 2.608 para la completa
+  de H1.
+- **Velas desalineadas.** Esa primera vela no es múltiplo de 86.400: es una vela de borde,
+  cortada en la hora de la corrida. La siguiente (`1759363200`, 2025-10-02 00:00) sí está
+  alineada. `ingestion/velas.py` rechaza toda vela desalineada, así que la migración tiene
+  que descartarlas.
+- La última vela (`1790812800`, 2026-10-01 00:00) era la del día en curso, todavía abierta.
+  `velas.py` ya la descarta por la hora del servidor.
+
+**Consecuencias:**
+
+- `ingestion/source_registry.json` marca el endpoint legacy como no disponible, con esta fecha
+  y esta evidencia.
+- `test_live_endpoint_legacy` deja de exigir éxito: registra el estado y se retira con la
+  migración. Si siguiera fallando, el job de live-tests quedaría rojo para siempre y su rojo
+  dejaría de significar algo.
+- **Antes de migrar** `ingestion/deriv_ws.py` corre una segunda sonda (§0.A-2) con la
+  profundidad paginada de BTC y del oro, la alineación por página, `contracts_for` de BTC, del
+  oro y del control, una `proposal` de cotización en el canal público, y la autenticación REST
+  de la cuenta. La migración se decide con su resultado.
+
+---
+
+## 2026-10-01 — Credenciales de Deriv: el App ID era inválido, un solo token, y su vencimiento no se conoce
+
+**Fuente:** respuesta del Admin al reporte del 01-oct, verificada por el Admin en
+developers.deriv.com y en el OpenAPI oficial (`deriv-com/deriv-api-schemas`). Lo que dice el
+OpenAPI se volvió a leer acá, en el commit `54e3538` (release `production_v20260901_0`);
+developers.deriv.com no se pudo leer desde el sandbox.
+
+**La sonda del 01-oct midió la legacy con un App ID inválido.** El secret `DERIV_APP_ID` tenía
+el nombre del token, no un App ID. El HTTP 520 de la entrada anterior no prueba por sí solo que
+la legacy esté muerta para un App ID válido. **La decisión de migrar se sostiene** por la
+documentación oficial de Deriv —la API legacy está retirada y los App IDs heredados ya no son
+válidos— y por el reporte de terceros con HTTP 520 (`nuchukwuma/trading-bot#4`). Lo medido en
+el WS público no depende del App ID: el OpenAPI no lo pide en `ws/public`.
+
+**Credenciales nuevas.** El Admin registró una app tipo PAT, "SPEL TRADER", con recargo 0 %, y
+actualizó `DERIV_APP_ID` y `DERIV_API_TOKEN`. El token tiene solo el scope `trade`: la API
+nueva no tiene un scope de lectura, y el OpenAPI exige `trade` en `GET /accounts`. Según el
+OpenAPI, el header `Deriv-App-ID` es obligatorio en `/accounts`, `/accounts/{accountId}/otp`,
+`bulk-purchase/demo`, `bulk-purchase/real` y `legacy/*`; ninguna de las tres rutas `ws/*` lo
+declara.
+
+**Un solo token.** Se elimina `DERIV_DEMO_TRADE_TOKEN` del plan de PR-D: los PAT son por
+usuario, así que un segundo token no aísla la demo de la real. Queda solo `DERIV_API_TOKEN`.
+Lo que aísla es la guarda siguiente.
+
+**Guarda nueva, a construir en la migración de `deriv_ws.py` y en PR-D:**
+
+- un test por AST que falla si `"ws/real"` o `"bulk-purchase/real"` aparecen en el código fuera
+  de `tests/`;
+- OTP solo para un `accountId` cuyo `account_type` sea `demo` según `GET /accounts`.
+
+Reemplaza a la guarda vieja de `authorize.is_virtual`, que la API nueva no tiene.
+
+**Límite conocido: el vencimiento del token es DESCONOCIDO.** La interfaz de Deriv no mostró
+una fecha al crearlo. El OpenAPI tampoco documenta un campo ni un header con el vencimiento en
+`/accounts` ni en `/legacy/migration-status`; el único `expires_at` del archivo es el del
+código de verificación de los agentes de pago. La sonda §0.A-2 informa cualquier header o
+campo con "expir" en el nombre, por si Deriv manda uno igual. La alarma de frescura, con aviso
+14 días antes, se configura cuando haya fecha. Hasta entonces, **un 401 en la parte
+autenticada se reporta como posible vencimiento del token, no como un fallo de código.**
+
+**Lo que se espera de la parte e) de la sonda §0.A-2:** con estas credenciales, `GET /accounts`
+y `GET /legacy/migration-status` tienen que autenticar. Si fallan, el informe trae el código
+HTTP y el cuerpo con los IDs tapados, sin reintentos: un pedido por ruta.
+
+**Interpretaciones de la sonda §0.A-2 y de los pre-registros, aprobadas por el Admin:**
+
+- La moneda de la `proposal` sale de la cuenta demo de `/accounts`.
+- La paginación usa `start = end − 5000 × 86400`, y el host REST es `api.derivws.com`.
+- Los umbrales de historia diaria de BTC: **1.058** (H1, rejilla mínima), **1.076** (H3,
+  rejilla completa, la condición de parada del addendum) y **2.608** (H1, rejilla completa).
+  El informe compara contra los tres, con velas alineadas.
+- PR #34: `TOLERANCIA_ASOF_DIAS = 0`.
+- PR #33: los pesos vigentes son las posiciones abiertas más la nueva, antes de `s`, con 60
+  días de calendario. Para pasar a real, la lectura estricta: Sharpe ≥ 0,5 y benchmark sobre
+  la serie combinada.
+- PR #32: los 6 meses son de calendario desde el primer día de demo, y el día del vencimiento
+  cuenta.
+
+---
+
+## 2026-10-05 — Sonda §0.A-2: la REST autentica, y la historia diaria de Deriv es de 365 días
+
+**Fuente:** sonda §0.A-2 (`tests/test_deriv_sonda2_live.py`), corrida por el Admin en
+*SPEL Live Tests* sobre la rama del PR #31: run `36915129174`, job `110547122004`, commit
+`e5ca13e`, 01-oct-2026 19:33–19:34 UTC, con las credenciales nuevas (app PAT "SPEL TRADER").
+Los cinco tests `live` pasaron. Lo que sigue se copió del log del job.
+
+**REST, `https://api.derivws.com`: autentica.**
+
+| ruta | resultado | sha256 del cuerpo |
+|---|---|---|
+| `GET /trading/v1/options/accounts` | HTTP 200; dos cuentas: `DOT********` **demo** y `ROT********` **real** | `8a57245d401aa4fec4e52ace68c8c8150bb5eb6496ab02b189e8afd1b3098c00` |
+| `GET /trading/v1/options/legacy/migration-status` | HTTP 200; `status: not_applicable` | `8d3e483568f67bed6eea9c2e194f6402b30b9b6019eb2f686acab230ba1cf5f5` |
+
+**El `header:expires` del informe no es el vencimiento del token.** La sonda informó
+`expires: Mon, 03 Oct 2016 19:33:52 GMT` en `/accounts`: es la cabecera HTTP de caché
+(RFC 9111 §5.3), y una fecha pasada es la forma de decir "no cachear". Se eliminó de la
+detección (`CABECERAS_HTTP_DE_CACHE`). **El vencimiento del token sigue DESCONOCIDO.**
+
+**WS público: los símbolos se resolvieron por mercado, sin literal.** `active_symbols`: 89
+símbolos en cinco mercados (`commodities`, `cryptocurrency`, `forex`, `indices`,
+`synthetic_index`), sha256 `c8aadca843934a5ef29ca26d565e47c9bced76eecfd02a52943dc68b6b671cf8`.
+BTC = **`cryBTCUSD`** (el único candidato con BTC en `cryptocurrency`), oro =
+**`frxXAUUSD`** (el único con XAU en `commodities`), y el control `frxEURUSD` presente.
+
+**Profundidad diaria: 365 días, y `end` se ignora.**
+
+| símbolo | página | `end` pedido | velas | primera época | última época | desalineadas | sha256 |
+|---|---|---|---|---|---|---|---|
+| `cryBTCUSD` | 1 | `latest` | 366 | `1759347233` | `1790812800` | 1 | `ed70ce0c1fad9c19acbdd9ccf58b89a08cdcf3e43b5222193d5eac72f24d879d` |
+| `cryBTCUSD` | 2 | `1759347232` | 366 | `1759347233` | `1790812800` | 1 | `8f6d021ceb340756ead8c2d4726dfbbaf0038f6be0b4891f9bf238b7e7c2a12f` |
+| `frxXAUUSD` | 1 | `latest` | 259 | `1759347233` | `1790812800` | 1 | `b5de0c3d7f3653332f10a7a96f19f2ba0ec4eb46b746ac22dd83f903684b7154` |
+| `frxXAUUSD` | 2 | `1759347232` | 259 | `1759347233` | `1790812800` | 1 | `f3fdd8df31f1de5e3d98656ec31e30d163dc06ee32e25a551c5011dbc4d13998` |
+
+La página 2 pidió `end` = primera época − 1 y devolvió la misma ventana: **Deriv ignora
+`end`** y la sonda cortó por "la página no retrocedió". La primera época es la hora de la
+corrida menos 31.536.000 s (365 días), desalineada; el resto está en múltiplos de 86.400. En
+total: **365 velas alineadas de BTC y 258 del oro.**
+
+**Umbrales: BTC no llega a ninguno.** 365 < 1.058 (H1, rejilla mínima) < 1.076 (H3, rejilla
+completa) < 2.608 (H1, rejilla completa). La sonda marcó `detener: true`. Por el ítem 8 del
+addendum del 29-sep, la condición de parada de H1 y H3 es inalcanzable con datos diarios de
+Deriv y la decide el Admin. El brief del 02-oct abre la sonda §0.A-3 sobre una candidata
+intradía; no dice nada de H1 ni de H3, y este registro tampoco.
+
+**Contratos: MULTUP y MULTDOWN en los tres símbolos**, con `multiplier_range`
+**{100, 200, 300, 500, 800}**, `default_stake` 2 y `cancellation_range` vacío.
+
+| símbolo | sha256 de `contracts_for` | `proposal` MULTUP ×100, stake 2 USD: `commission` | sha256 de la `proposal` |
+|---|---|---|---|
+| `cryBTCUSD` | `bc75c06431b423aa967c5c9313a65da274e7659c798b1fe3ee92dc76662eb7e9` | 0,14 | `322069e5932841bcfcbdb3efabc94c9536577ecebec0fa1775a1384361f3ecff` |
+| `frxXAUUSD` | `27577a30cf9d013270af050b1638e1d7eae30b48b7242a32dba6d74d1179991f` | 0,04 | `252561f27716779bfcb2f4a829b7802b0ce578c6558ab5d18d2cf054f528d3d1` |
+| `frxEURUSD` | `c8a47a164233c46d7bac22869499fcf5ae2142f16e373fd726312ef6ba344b08` | 0,05 | `d2bd3d25167ff7c3fc8a771624f3c1f6a376156dedf0aafa81c3fb3069f319bf` |
+
+La `proposal` respondió en `ws/public` con `underlying_symbol` y la moneda de la cuenta demo
+(USD). `validation_params.stake`: mínimo 1,00 y máximo 500,00 USD en los tres.
+
+**La unidad de `commission` no está resuelta.** El esquema la describe como "Commission
+changed in percentage (%)". Si fuera un monto, 0,14 USD sobre un nocional de 200 USD es
+0,07 %; si fuera un porcentaje, serían 0,28 USD. La sonda §0.A-3 cotiza a tres stakes y dos
+multiplicadores para separar las dos lecturas.
+
+**La legacy, con el App ID nuevo:** HTTP 520 en el handshake otra vez.
+
+---
+
+## 2026-10-05 — Sonda §0.A-3 v2: sin pata convexa, costos proporcionales, y TwelveData no siempre en UTC
+
+**Fuente:** sonda §0.A-3 v2 (`tests/test_deriv_sonda3_live.py` y
+`tests/test_fuentes_sonda3_live.py`), corrida por el Admin en *SPEL Live Tests* sobre la rama
+del PR #31: run `37318228891`, job `111790308511`, commit `c85ea5e`, 05-oct-2026 13:37–13:45
+UTC. Pasaron los 9 tests `live`.
+
+**Qué parte del log se pudo leer.** El log del job tiene 12.624 líneas. Desde el sandbox se
+leyeron las últimas 5.000, que es lo que devuelve la herramienta de GitHub; el archivo
+completo está en un host que el proxy del sandbox bloquea. Quedaron legibles el canal
+**demo** entero, las **diferencias** público-demo, el final del intradía público (oro M15),
+TwelveData, Alpha Vantage y cTrader. Quedaron fuera la sonda de la legacy, las cuentas y el
+canal **público** (escaneo, cotizaciones y la mayor parte del intradía). Las cifras de esa
+parte se marcan como **lectura del Admin** y no llevan sha256. La sonda §0.A-3b publica cada
+informe en una sola línea, para que entre entero en lo legible.
+
+**a) Vanillas y turbos solo existen en 13 índices sintéticos.** En el canal demo
+(`active_symbols` con 89 símbolos, sha256
+`2ffc9b9d30a6bf3755b1fe107877a8430069219d1ddbddf6abe9f73209912270`), VANILLALONGCALL/PUT y
+TURBOSLONG/SHORT aparecen en `1HZ100V`, `1HZ10V`, `1HZ15V`, `1HZ25V`, `1HZ30V`, `1HZ50V`,
+`1HZ75V`, `1HZ90V`, `R_10`, `R_100`, `R_25`, `R_50` y `R_75`, todos sintéticos, y en
+**ningún** símbolo no sintético. El escaneo del canal público no difiere del demo: la lista
+de diferencias no tiene ninguna clave `escaneo:`. **La pata convexa queda descartada**
+(decisión del Admin). Multiplicadores no sintéticos: `cryBTCUSD`, `cryETHUSD`, 14 pares
+`frx…`, `frxXAGUSD` y `frxXAUUSD`.
+
+**b) Los multiplicadores de BTC, oro y EUR/USD aceptan `limit_order.stop_loss`.** Las 18
+cotizaciones demo con stop-loss (tres símbolos × tres stakes × 0,3 % y 0,6 % del nocional)
+fueron aceptadas, y en el canal público también: ninguna de sus claves está entre las
+diferencias de aceptación.
+
+| símbolo | stake | stop-loss | devuelto | sha256 |
+|---|---|---|---|---|
+| `cryBTCUSD` | 1 | 0.30 | `-0.30` | `b77a46a30ed3104990dad11fe06895141166f5c6586c5acaaf8fc405d9acdca2` |
+| `cryBTCUSD` | 1 | 0.60 | `-0.60` | `32e6a45771a52754ffdb81d343c134c242e29c5fbff4f346774c6cb04f5ec65d` |
+| `cryBTCUSD` | 1.5 | 0.45 | `-0.45` | `8b171b6218ab0e61619f4b16a514b87a175a11cdbbc7d4d9a79fe801f18233a4` |
+| `cryBTCUSD` | 1.5 | 0.90 | `-0.90` | `510fea9e895fc609ec73539cee564ba15a547520149445efc420f209738e66b7` |
+| `cryBTCUSD` | 2 | 0.60 | `-0.60` | `c04b1d8cc4959e71ee7f501e7e5853f68547cdcb8d52014dd4a095f1b5055ff8` |
+| `cryBTCUSD` | 2 | 1.20 | `-1.20` | `43b7f3dd487b39b836cf95d47854ebc2b72584bef882283b104a0322375d0d49` |
+| `frxXAUUSD` | 1 | 0.30 | `-0.30` | `e70462b60f8fff5c64d5a5262c22c6802d8db054f7bf010d4b58c918bd57e98a` |
+| `frxXAUUSD` | 1 | 0.60 | `-0.60` | `66aec2669bd625049682bb99b54aecc93b0e81a927a059d97af098c76e6675db` |
+| `frxXAUUSD` | 1.5 | 0.45 | `-0.45` | `06c9b4bbfbc9fa422591bde5d3bb1f342d030290d4f5f65ace220381275b7ef8` |
+| `frxXAUUSD` | 1.5 | 0.90 | `-0.90` | `01695abf538b636f3da0f307dadeb7b7864b1a33613e877cef52d3d92054a9ea` |
+| `frxXAUUSD` | 2 | 0.60 | `-0.60` | `fe20bad3f1aaf4b4eec7ebf5398a8fb96d545efb6052c9c6fd6df694604121a4` |
+| `frxXAUUSD` | 2 | 1.20 | `-1.20` | `485a587aacf3603e2ff9a1e424ba7bc5b5cf50de9a668e3be3f482329a4df0fe` |
+| `frxEURUSD` | 1 | 0.30 | `-0.30` | `7e57fe196ad1809bc722675bb6d9bae6107c9fa2aab7b0297fc6f1f4a718a093` |
+| `frxEURUSD` | 1 | 0.60 | `-0.60` | `8b70cea3372b0bae3f24f4f100b001175041896e430c6fae023c36a403e04aaa` |
+| `frxEURUSD` | 1.5 | 0.45 | `-0.45` | `31dbb8956df4bf991ce270db7c91b3a2d428b825c4baba09616ccab04fa7231c` |
+| `frxEURUSD` | 1.5 | 0.90 | `-0.90` | `8c81554867f9fa73e262d9f0d2a0ac02c5fa3f0ea486f7b060953703385c354d` |
+| `frxEURUSD` | 2 | 0.60 | `-0.60` | `9990a08aa859ba392614bc14f1e0df367f12bc4792df368f3e87c2df34b14851` |
+| `frxEURUSD` | 2 | 1.20 | `-1.20` | `29bcacc1258248d48eae76341f3f81914723e6ed0ba37e4965dc59dfda1051f2` |
+
+*El monto del stop incluye la comisión.* Con el spot que implica el stop-out de la misma
+corrida (×100, stake 1), la distancia al precio del stop de 0,30 USD es 0,2842 % en el oro y
+0,2805 % en EUR/USD: coincide con (0,30 − 0,02) / 100 = 0,28 % y no con 0,30 %. Lo mismo a
+0,60 USD (0,5848 % y 0,5807 % contra 0,58 %). En BTC el cálculo no es concluyente: el spot
+se movió entre las cotizaciones.
+
+*El mínimo.* `validation_params.stop_loss.min` fue **0,10 USD** en todas las cotizaciones
+demo salvo BTC ×200: **0,12 = comisión 0,11 + 0,01**. El Admin lo leyó como "mínimo 0,10 USD
+(en BTC, comisión + 0,01)". En lo legible, ninguna cotización de BTC tiene un mínimo de 0,10
+igual a la comisión + 0,01: lo que muestra es un mínimo de max(0,10; comisión + 0,01).
+
+**c) La comisión es proporcional al nocional, sin mínimo fijo.** Demo, con el stop-out de
+d):
+
+| símbolo | mult. | stake | comisión | % del nocional | mínimo del stop-loss | error del stop-out | sha256 |
+|---|---|---|---|---|---|---|---|
+| `cryBTCUSD` | ×100 | 1 | 0.03 | 0.0300 % | 0.10 | 0.20 % | `3ebf5013effa340645bece7d1b0bc73dd8b744c821da3c3fae3e777e540c701a` |
+| `cryBTCUSD` | ×100 | 1.5 | 0.04 | 0.0267 % | 0.10 | 0.14 % | `09f59e906ad15696895af297a32f5eff5deaa3ba6a369c105f31cc8adb804eba` |
+| `cryBTCUSD` | ×100 | 2 | 0.06 | 0.0300 % | 0.10 | 0.20 % | `c143dc79e96336e36d7ff9d6dd29d123c9cbe39605d58e05bf5be9c7d0a57268` |
+| `cryBTCUSD` | ×200 | 2 | 0.11 | 0.0275 % | 0.12 | 0.11 % | `b88bb77388a82a14a7bfa82ca34c7630af002ce415217b98b6a3e520a89ce780` |
+| `frxXAUUSD` | ×100 | 1 | 0.02 | 0.0200 % | 0.10 | 0.08 % | `d8e4c729d6129f4ca6277a626d02e9b4bec142a00a6ecdb50d7ab859481affd0` |
+| `frxXAUUSD` | ×100 | 1.5 | 0.03 | 0.0200 % | 0.10 | 0.08 % | `bffaa528ba3c39278ad4f11ceefb727e334a1cab844c4fb53efb236aab908cb8` |
+| `frxXAUUSD` | ×100 | 2 | 0.04 | 0.0200 % | 0.10 | 0.08 % | `f38482550c84db11273e377787f643e66faaa1ffbc841a7fef9d39a2507c04ad` |
+| `frxXAUUSD` | ×200 | 2 | 0.08 | 0.0200 % | 0.10 | 0.19 % | `1f232835bb3340b917d5892af23e9ecf6bbf3c808dc8c99509557500a403209a` |
+| `frxEURUSD` | ×100 | 1 | 0.02 | 0.0200 % | 0.10 | 0.01 % | `f08d72b809346f1174bc1709562ab9672dd82c59ae411b333b52ab4f2665995a` |
+| `frxEURUSD` | ×100 | 1.5 | 0.03 | 0.0200 % | 0.10 | 0.10 % | `7ed2d2e601bee7355cac2e908a8d606c330bf9e6549a2bb0a56dabbf96b8d766` |
+| `frxEURUSD` | ×100 | 2 | 0.04 | 0.0200 % | 0.10 | 0.10 % | `dc16416788e0d30db6ab17b85beba6f5bc3d9ce91a57f6289566e6fc044ca9f3` |
+| `frxEURUSD` | ×200 | 2 | 0.08 | 0.0200 % | 0.10 | 0.14 % | `8133ef166b56588c3ba12eff69297d626b9165a65a37ca2288eeac5643fb87bc` |
+
+Canal público, tomado de las diferencias público-demo (cotizaciones de la misma corrida, no
+del mismo instante):
+
+- BTC: 0,08 / 100 = **0,080 %**; 0,11 / 150 = **0,073 %**; 0,15 / 200 = **0,075 %**;
+  0,31 / 400 = **0,078 %**. El Admin lo resumió como 0,075–0,08 %; el valor de 150 USD queda
+  en 0,073 % por el redondeo a centavos.
+- Oro: 0,03 / 100 = **0,030 %**; 0,05 / 150 = **0,033 %**; 0,06 / 200 = **0,030 %**.
+- EUR/USD: igual al demo, **0,02 %**.
+
+Demo: BTC **0,027–0,030 %**, oro **0,02 %**, EUR/USD **0,02 %**.
+
+**El canal público rechaza ×200 en el oro y en EUR/USD** con `ContractBuyValidationError`; el
+mensaje literal ("Accepts 50,100,150,250,500") es lectura del Admin. El demo lo acepta, y su
+`validation_params.stake.max` es **2.000 USD** en todas las cotizaciones (el público decía
+500 en la sonda 2). Nota: `contracts_for` publica `multiplier_range` {100, 200, 300, 500,
+800} en los dos canales, así que el rango que acepta la `proposal` pública no es el que
+publica `contracts_for`.
+
+**d) Stop-out verificado: distancia = 1/m − comisión/nocional.** En las 12 cotizaciones
+demo, la lectura más cercana fue la de la comisión como **monto**, con un error relativo de
+entre 0,01 % y 0,20 %. Las tres de stake 1 a ×100 son ambiguas por construcción (nocional
+100). La unidad de `commission` queda resuelta: es un monto en la moneda de la cuenta, no un
+porcentaje, aunque el esquema diga "percentage".
+
+**e) Las velas intradía de Deriv tienen el mismo tope de 365 días.** En lo legible, oro M15:
+23.152 velas, **23.123 alineadas**, de `1759708800` (2025-10-06 00:00 UTC) a `1791207000`, y
+las 12 páginas legibles respetan `end`. BTC M5 con **105.037** alineadas y oro M5 con **69.352** son
+lectura del Admin.
+
+**f) TwelveData, plan Basic, diario:**
+
+| símbolo | `earliest_timestamp` | sha256 | filas | páginas (sha256) |
+|---|---|---|---|---|
+| BTC/USD | 2017-08-28 | `ab43cf45ca799f89ea8e1ef1e816f30c0af42556732b4cf34d900aadb141f131` | **3.326**, OHLC | `58b1f13e58469495487bcb0a8dd4f7af64b3dddd0c1e9c8a8fe72100c4063e0d`; fin: 404 "Data not found" `5043c1af5d2100923002ba840ce0522cb9298e8402022bf1bd0a6ea906b026f2` |
+| XAU/USD | 1979-12-26 | `a756fdc4ff44d4e1b1203e958418b70bbfbeb9fef3c79154d58f8de5ece135bf` | **12.288**, OHLC | `6f11f6430a1379425480f01ca37af7f1131ead252f13fd88c8593589fae9967f`, `7932ba5d332d9792ed696b220ec6ae6024c65b625c73e5beb73ce9ade6d39c08`, `57f6859f320b5930400516f22b45d0cf4ac58840b62766bd6c04817c51e4a9ca`; fin: 404 `ec8e83467a8f38fb4ee1fab0aa2d6badc2b1921f39661354b7c0d5fc4c4f7fd4` |
+
+Sin columna de volumen en ninguno. La página que pasa el fondo devuelve **404 "Data not
+found"**, no una respuesta vacía. Los headers muestran el límite por minuto: `api-credits-left`
+bajó de 7 a 0 y volvió a 7. Se usaron 12 créditos.
+
+**g) Las velas intradía de XAU/USD de TwelveData NO vienen en UTC.** En una corrida del 05-oct
+de 13:37 a 13:45 UTC, la última vela de 15min fue `2026-10-06 00:30:00` (sha256
+`f739368a2df6ebc915151cefabcad3ec1c7a94d4404ba017619d545730a21456`) y la de 5min
+`2026-10-06 00:40:00` (`166ad4f4b838dde2ad7014f3dcfbfb29d2102144e265bfde1f5f0dcc02edce5b`): unas
+11 horas en el futuro. BTC/USD sí cerró en la hora de la corrida (13:30 y 13:40). **Toda
+llamada intradía futura a TwelveData lleva `timezone=UTC`; 1d no la lleva** (decisión del
+Admin; el texto decía "toda llamada", y el Admin lo precisó el 06-oct: ver esa entrada).
+
+**h) Alpha Vantage está operativo; el oro solo trae un precio.**
+
+| llamada | filas | primera fecha | campos | sha256 |
+|---|---|---|---|---|
+| FX_DAILY EUR/USD, full | 5.000 | 2007-08-03 | open, high, low, close | `55f6e8792074878ed4ff18cd25df0a6fac54c6ff990b10861462206ba5fbda5a` |
+| DIGITAL_CURRENCY_DAILY BTC | 5.925 | 2010-07-17 | open, high, low, close, volume | `616b9ccc3e188ebf9402af186b830236f3df70b1a35e079f0d736a9ce2261911` |
+| GOLD_SILVER_HISTORY GOLD, daily | 5.415 | 2011-06-01 | `date`, `price` | `39eaf4de509bb99b346ab59d77dbc302476274a2dbf2bd0cd0ead6f7db124913` |
+
+**La legacy sigue muerta con un App ID válido**: lectura del Admin para esta corrida, y ya
+medido en la del 01-oct (run `36915129174`, HTTP 520 con la app PAT).
+
+**cTrader:** los tres secrets ausentes, "pendiente de registro".
+
+**Un defecto de la sonda, corregido para la 3b.** Las diferencias de `contracts_for` de oro y
+EUR/USD entre canales son solo barreras de contratos diarios (por ejemplo `4185.90` contra
+`4182.91`), que siguen al spot: la huella de comparación no excluía las barreras.
+
+---
+
+## 2026-10-05 — Respuesta del Admin a la sonda §0.A-3 v2: κ, cTrader y la cotización real
+
+**Fuente:** brief del Admin del 05-oct-2026.
+
+- **Interpretaciones 1 a 7 de la sonda §0.A-3 v2: aprobadas tal como están.**
+- **Modelo de costos (κ).** κ por activo = el **máximo medido en la cuenta real** (sonda
+  §0.A-3b, punto 5d). Si esa medición falla, el máximo entre público y demo. Va en
+  `config/constantes.json` con su procedencia (run y sha256). **Pendiente:** se registra
+  cuando corra la 3b.
+- **cTrader queda fuera del alcance** por ahora y se retira de las sondas.
+- **DG-7 y DG-8** se registran en el PR de gobernanza contra `main`.
+- **Autorización de un solo uso, para la sonda §0.A-3b:** UN OTP para la cuenta cuyo
+  `account_type` sea `real` según `GET /accounts`, y una conexión a `/ws/real` **solo para
+  cotizar**, entre el 05-oct-2026 00:00 y el 09-oct-2026 23:59 UTC. Reglas, sin excepciones:
+  exactamente una cuenta real en `GET /accounts`; saldo 0 antes del OTP, o, si `/accounts`
+  no lo expone, `balance` como primer mensaje y cierre sin enviar nada más si es mayor que 0;
+  esquema `wss`, host `api.derivws.com` y ruta `/trading/v1/options/ws/real` verificados antes
+  de conectar; lista blanca de `time`, `balance`, `contracts_for` y `proposal` sin
+  `subscribe`, que lanza antes de enviar cualquier otro tipo; una sola conexión, máximo 40
+  mensajes, cierre al terminar; la URL con el OTP nunca va al informe. Es la autorización
+  explícita que pide la regla nueva de CLAUDE.md para que una sonda en `tests/` pida un OTP.
+
+---
+
+## 2026-10-06 — Sonda §0.A-3b: real y demo cuestan lo mismo, κ entra al registro, y decisiones del Admin
+
+**Fuente:** sonda §0.A-3b (`tests/test_deriv_cotizacion_real_live.py` y `tests/test_sonda3b_live.py`),
+corrida por el Admin en *SPEL Live Tests* sobre la rama del PR #31: run `37404371657`, job
+`112078531190`, commit `6bc0795`, 06-oct-2026 a las 02:29 UTC. Seis tests `live` pasaron. El log
+tiene 381 líneas y se leyó **entero**: los informes de la 3b salen en una sola línea. El Admin lo
+auditó.
+
+### Decisiones del Admin
+
+- **TwelveData.** La regla queda: **toda llamada intradía a TwelveData lleva `timezone=UTC`; 1d no
+  la lleva, porque es una barra de solo fecha.** `TwelveDataAdapter` no se toca: ya hacía eso. La
+  regla del 05-oct decía "toda llamada" y quedó corregida. Los tests existentes del adapter la
+  fijaban para 1d y 1h; `tests/test_twelvedata_timezone.py` la fija para cada timeframe, 5m y 15m
+  incluidos.
+- **κ.** Entra el **máximo medido en la cuenta real** por activo. Si en un activo la medición real
+  falla, va el máximo entre público y demo, marcado como respaldo. **Reemplaza "el mayor medido en
+  5d"** que usó 5c.
+- **DG-8.** La batería va en un **paquete nuevo**; no usa `orchestration/`. El nombre se fija en el
+  brief de la batería, y el paquete no se crea antes.
+- **Aprobados:** las interpretaciones de la 3b, el retiro de las sondas 2 y 3 del job live, y la
+  salida de `ALPHAVANTAGE_API_KEY` y de cTrader.
+
+### a) Canal real: saldo 0, 21 mensajes, cerrado, ninguna orden
+
+`GET /accounts` (HTTP 200, sha256 `678171c4f008f891c56baba0da0c776711969c35b0890c4e21045c35084262c2`): una cuenta demo
+(`DOT********`) y una real (`ROT********`), las dos activas. Saldo real **0 según `GET /accounts`**,
+así que no hizo falta el mensaje `balance`. Un OTP real (HTTP 200), una conexión, **21 mensajes**
+(las 21 `proposal`), conexión **cerrada** al terminar 5d. **Ninguna orden**: la lista blanca del canal
+real no deja pasar nada que no sea `time`, `balance`, `contracts_for` o una `proposal` MULTUP sin
+`subscribe`. Un OTP demo, también una conexión. Las 21 combinaciones se cotizaron en el mismo
+minuto UTC en los tres canales, con a lo sumo 0,91 s entre el primero y el último.
+
+### b) Real y demo dan lo mismo; el canal público es distinto
+
+| símbolo | stake | mult. | público | demo | real | sha256 (real) |
+|---|---|---|---|---|---|---|
+| `cryBTCUSD` | 1 | ×50 | 0.04 | rechazo: 100,200,300,500,800 | rechazo: 100,200,300,500,800 | `5c5c1c054463a29f68cb379da068738f116d013e00af13872844fecbb189e87b` |
+| `cryBTCUSD` | 1 | ×100 | 0.07 | 0.03 | 0.03 | `158a5167875bceafd5956a9bbcaa5564741b7bf81dd21dc8b60a6baec573a865` |
+| `cryBTCUSD` | 1 | ×200 | 0.14 | 0.05 | 0.05 | `091593b931c6af2d9984524511faff2aa7b937845732d69a3ad3b179682ab964` |
+| `cryBTCUSD` | 2 | ×50 | 0.07 | rechazo: 100,200,300,500,800 | rechazo: 100,200,300,500,800 | `7f49c8141ed9ee00850ff9872a23e4e479408e94e3523dd074c1fda7b38a381b` |
+| `cryBTCUSD` | 2 | ×100 | 0.14 | 0.05 | 0.05 | `5b29492162c944314682311bb08727fbc38ec5388ab864eb4da5ad6e23857cde` |
+| `cryBTCUSD` | 2 | ×200 | 0.28 | 0.10 | 0.10 | `e2b5034fee654691c791483c75f9be8e2f107458d0c35b17f83aa27aa18afe2c` |
+| `cryBTCUSD` | 1 | ×100 + SL 0,30 | 0.07 | 0.03 | 0.03 | `0a1e73ab4b88301e6077cb80c7e12f18fa4f48a148cb45812db32e301e12fa2e` |
+| `frxXAUUSD` | 1 | ×50 | 0.02 | rechazo: 100,200,300,500,800 | rechazo: 100,200,300,500,800 | `19844950094c5ad3a695326b5f231f26df8c39f36bd9a84f0f781a244699b320` |
+| `frxXAUUSD` | 1 | ×100 | 0.02 | 0.02 | 0.02 | `7d88c8b3ba7851801c80d96894e79412e39acd56583cef80a514a6a6afdf2f5d` |
+| `frxXAUUSD` | 1 | ×200 | rechazo: 50,100,150,250,500 | 0.02 | 0.02 | `8488e70d3a3ef876ab8edd19a9052c2430268642ba08f34ae7cddc463b9d2b62` |
+| `frxXAUUSD` | 2 | ×50 | 0.02 | rechazo: 100,200,300,500,800 | rechazo: 100,200,300,500,800 | `436756dd9a2b05c0e66ec7c0fdfcfbd353e2b34241f7a79ee7da994b77512f4c` |
+| `frxXAUUSD` | 2 | ×100 | 0.04 | 0.02 | 0.02 | `84b1e2a1df288880da9222e7c2e921759a1e83bfdd8a17f1afd2a776977ea3eb` |
+| `frxXAUUSD` | 2 | ×200 | rechazo: 50,100,150,250,500 | 0.05 | 0.05 | `f99d2291496e45b80a8e3ed562cd125dbcc0353c5f421f7a369329b3aeeba79a` |
+| `frxXAUUSD` | 1 | ×100 + SL 0,30 | 0.02 | 0.02 | 0.02 | `e82ec6c294166cfcb2a41d64585e6e96247718e98d821b059a6e163a03d480b5` |
+| `frxEURUSD` | 1 | ×50 | 0.02 | rechazo: 100,200,300,500,800 | rechazo: 100,200,300,500,800 | `db84232c55050a4ed118c08b177ffe42ec3b3161169c2069c73f71644d9e89e2` |
+| `frxEURUSD` | 1 | ×100 | 0.02 | 0.02 | 0.02 | `0855a6643212653769318d038b4acea3c1163ee89d15907877bda1b3479917d7` |
+| `frxEURUSD` | 1 | ×200 | rechazo: 50,100,150,250,500 | 0.05 | 0.05 | `747f54c44aa6a6855474b0e920e8ee145af1d6197e41858bf6340dab25099d52` |
+| `frxEURUSD` | 2 | ×50 | 0.02 | rechazo: 100,200,300,500,800 | rechazo: 100,200,300,500,800 | `d7525bce485efeb6ec6f31e7a7fa7cc746f560a99132cae64740168ef26d3cac` |
+| `frxEURUSD` | 2 | ×100 | 0.05 | 0.05 | 0.05 | `ad7a04b2d10759d423723365fd3f0a36546eaee35f88505e343498b7fbab323e` |
+| `frxEURUSD` | 2 | ×200 | rechazo: 50,100,150,250,500 | 0.09 | 0.09 | `35158844bb91beb10ba24526f3ef71c1e69d7e387b68d78e577a02e7e4cca6ce` |
+| `frxEURUSD` | 1 | ×100 + SL 0,30 | 0.02 | 0.02 | 0.02 | `d878f4494525cfcbffe1ebf37944fe790675f626d6f6b1d78d038a659c6b46e3` |
+
+`commission`, límites de stake (1–2.000 en demo y real; 1–500 en el público), límites de stop-loss
+y multiplicadores aceptados son **idénticos entre real y demo en las 21 combinaciones**. El
+`stop_out` también, salvo en una: BTC ×200 con stake 2, `85188.895` en demo y `85188.898` en
+real, la diferencia de un spot cotizado 0,3 s después. Los rechazos de ×50 de demo y real tienen
+el **mismo sha256**. **Queda descartado que la demo sea más barata que la real** para cryBTCUSD,
+frxXAUUSD y frxEURUSD a esta fecha. El público cobra más en BTC (0,07 contra 0,03 a ×100 con stake
+1) y en oro con stake 2 a ×100 (0,04 contra 0,02).
+
+### c) Multiplicadores aceptados
+
+Real y demo aceptan **{100, 200, 300, 500, 800}** y rechazan ×50 ("Multiplier is not in
+acceptable range. Accepts 100,200,300,500,800."): **en real el mínimo es ×100**. El público acepta
+**{50, 100, 150, 250, 500}** en oro y EUR/USD (rechaza ×200 con ese mensaje) y acepta ×50, ×100 y
+×200 en BTC.
+
+### d) κ entra en `config/constantes.json`
+
+`ingestion/kappa_deriv.py`: `KAPPA_DERIV` = **cryBTCUSD 0,0003, frxXAUUSD 0,0002, frxEURUSD
+0,00025**, los tres con origen "real".
+
+| símbolo | κ | de qué cotización | sha256 |
+|---|---|---|---|
+| cryBTCUSD | 0,0003 | 0,03 / 100 (stake 1 ×100, con y sin stop-loss) | `158a5167875bceafd5956a9bbcaa5564741b7bf81dd21dc8b60a6baec573a865`, `0a1e73ab4b88301e6077cb80c7e12f18fa4f48a148cb45812db32e301e12fa2e` |
+| frxXAUUSD | 0,0002 | 0,02 / 100 (stake 1 ×100, con y sin stop-loss) | `7d88c8b3ba7851801c80d96894e79412e39acd56583cef80a514a6a6afdf2f5d`, `e82ec6c294166cfcb2a41d64585e6e96247718e98d821b059a6e163a03d480b5` |
+| frxEURUSD | 0,00025 | 0,05 / 200 (stake 1 ×200 y stake 2 ×100) | `747f54c44aa6a6855474b0e920e8ee145af1d6197e41858bf6340dab25099d52`, `ad7a04b2d10759d423723365fd3f0a36546eaee35f88505e343498b7fbab323e` |
+
+**La comisión viene redondeada a centavos, y con stake de 1–2 USD κ es una cota medida, no una tasa
+exacta:** en el oro, nocional 100 y 200 pagan los mismos 0,02 USD (κ 0,0002 y 0,0001).
+`tests/test_kappa_deriv.py` reconstruye cada máximo desde las 15 cotizaciones reales.
+`core/execution_costs.py` sigue sin tocar (acta del 21-sep).
+
+### e) 5c, con κ público (medido) y con κ real (recalculado)
+
+5c usó `kappa_5c`, el máximo de los tres canales, que fue el del **canal público**. Se recalculó
+offline, sin correr nada nuevo, el costo en fracción de R y el umbral con κ real, usando las
+funciones del código (`costo_en_fraccion_de_r` y `umbral_pct` de `tests/test_sonda3b_live.py`). El
+costo es decreciente en el rango, así que su percentil p sale del percentil 100 − p del rango:
+recalculado así con κ público, reproduce los valores medidos a la cuarta decimal (BTC p90: 0,3739
+medido, 0,3738 recalculado, por la interpolación). **La fracción de días bajo el umbral no se puede
+recalcular sin las velas: queda la medida con κ público, marcada.** Lo que sí se sabe: con κ
+real el umbral sube (1/m − κ crece cuando κ baja), así que la fracción con κ real es **mayor o
+igual** que la medida.
+
+**frxXAUUSD** (08:00 Europe/London; 258 días con las tres velas, 107 sin ellas; 69463 velas M5)
+
+| | p10 | p25 | p50 | p75 | p90 |
+|---|---|---|---|---|---|
+| rango, % del precio | 0,118 | 0,146 | 0,194 | 0,257 | 0,386 |
+| costo en fracción de R, κ público 0,0004 (medido) | 0,094 | 0,135 | 0,171 | 0,215 | 0,253 |
+| costo en fracción de R, κ real 0,0002 (recalculado) | 0,049 | 0,072 | 0,093 | 0,120 | 0,145 |
+
+| | ×50 | ×100 |
+|---|---|---|
+| umbral (0,6 × stop-out), %, κ público (medido) | 1,176 | 0,576 |
+| umbral, %, κ real (recalculado) | 1,188 | 0,588 |
+| fracción de días con rango ≤ umbral, **κ público (medido; sin recalcular)** | 0,992 | 0,973 |
+
+**cryBTCUSD** (09:30 America/New_York; 365 días con las tres velas, 0 sin ellas; 105037 velas M5)
+
+| | p10 | p25 | p50 | p75 | p90 |
+|---|---|---|---|---|---|
+| rango, % del precio | 0,134 | 0,328 | 0,538 | 0,821 | 1,145 |
+| costo en fracción de R, κ público 0,0008 (medido) | 0,065 | 0,089 | 0,129 | 0,196 | 0,374 |
+| costo en fracción de R, κ real 0,0003 (recalculado) | 0,026 | 0,035 | 0,053 | 0,084 | 0,183 |
+
+| | ×50 | ×100 |
+|---|---|---|
+| umbral (0,6 × stop-out), %, κ público (medido) | 1,152 | 0,552 |
+| umbral, %, κ real (recalculado) | 1,182 | 0,582 |
+| fracción de días con rango ≤ umbral, **κ público (medido; sin recalcular)** | 0,907 | 0,515 |
+
+### f) 5a: el intradía de TwelveData empieza en 2020
+
+| símbolo | intervalo | `earliest_timestamp` (UTC) | sha256 |
+|---|---|---|---|
+| BTC/USD | 5min | 2020-03-25 04:20:00 | `e82385e2d41a47805e52ea11c587e4324e7966470107124e9927b86368754241` |
+| BTC/USD | 15min | 2020-02-19 08:00:00 | `410c1ba5595da51450907ec44bfb3d5b9f152cd15ce15e8b870432709a32c85e` |
+| XAU/USD | 5min | 2020-03-16 01:10:00 | `c6250399d925f4aea07c9a0ce8b528bcf33b44a1cbf90a2b575655401dbab3cf` |
+| XAU/USD | 15min | 2020-01-24 02:00:00 | `ef50428efa32d175c427097f1e9a3ab3054f243aa5a8a71567dc0b91e7add067` |
+
+| símbolo | intervalo | `end_date` | resultado | sha256 |
+|---|---|---|---|---|
+| BTC/USD | 5min | 2018-06-30 | 404 "Data not found" | `d2228951ae71f0c6daa139c067d8d2e1ad792b34998b86120df267a14766ad4e` |
+| BTC/USD | 5min | 2021-06-30 | 5000 filas, 2021-06-12 15:25:00 .. 2021-06-30 00:00:00 | `e852b2280bd4ec23c0205b93ddf190a7268f5cbb212484b5f47ff0fdfc331cf3` |
+| BTC/USD | 5min | 2024-06-30 | 5000 filas, 2024-06-12 13:55:00 .. 2024-06-30 00:00:00 | `c9c8d7c58afeeab23e9c2f860e90943fd042bfbbd923ae3381638035778d13c7` |
+| BTC/USD | 15min | 2018-06-30 | 404 "Data not found" | `54265e4202319b1b57fe8e703af16bf663a160047f40640bc491f3e7b1b85e3d` |
+| BTC/USD | 15min | 2021-06-30 | 5000 filas, 2021-05-08 22:00:00 .. 2021-06-30 00:00:00 | `fe30ebc9bd5eafada8ac44271c68a3ef6936c2aaa9191c2e0744cd5deb8db8be` |
+| BTC/USD | 15min | 2024-06-30 | 5000 filas, 2024-05-08 21:30:00 .. 2024-06-30 00:00:00 | `f1105cf770da42559896b6fecd738ccfe6b5dc15d3ea68cf805e7b91495a4171` |
+| XAU/USD | 5min | 2018-06-30 | 404 "Data not found" | `8a4539c48e1642736133b81ed157f970d545a867de890f129c01e17fd18555e8` |
+| XAU/USD | 5min | 2021-06-30 | 5000 filas, 2021-06-03 20:25:00 .. 2021-06-30 00:00:00 | `6ac4c7d4883165bf255d7b035bc23d1c91c133a1c6a3fbcee8294766ae81e795` |
+| XAU/USD | 5min | 2024-06-30 | 5000 filas, 2024-06-04 12:50:00 .. 2024-06-28 20:55:00 | `0d257c302291a8284ce594d69cf824c6e667606a733011cefc9d799832b96725` |
+| XAU/USD | 15min | 2018-06-30 | 404 "Data not found" | `b5823989301cfb84759d87a842e4a0697200eb412e34975ad3c1bcbc4c89cad6` |
+| XAU/USD | 15min | 2021-06-30 | 5000 filas, 2021-04-14 04:00:00 .. 2021-06-30 00:00:00 | `5fb3b900cb9ab96d103732888e7dd5460ef40eb3953fce7373e5e59fb33e1a74` |
+| XAU/USD | 15min | 2024-06-30 | 5000 filas, 2024-04-12 20:00:00 .. 2024-06-28 20:45:00 | `849292dfaeb2be88024ad507b5ac3503f820894c8c8c3a30ff8a6d1d0357d06d` |
+
+2018 da **404**. De las tres comprobaciones de UTC, dos dan verde en todas las páginas con datos
+(ninguna vela pasa el `end_date`, todas en la grilla). La tercera **no se pudo medir**:
+`meta.exchange_timezone` vino `null` en todas. 33 créditos de TwelveData.
+
+### g) 5b: desfase 0 en los dos; el oro queda ABIERTO
+
+| | velas Deriv | velas TwelveData | comunes | close p50/p90/p99 % | high p50/p90/p99 % | low p50/p90/p99 % | close, mediana con signo % | correlación de retornos M15 | desfase (velas) |
+|---|---|---|---|---|---|---|---|---|---|
+| BTC/USD | 35019 | 35040 | 35019 | 0,047 / 0,059 / 0,074 | 0,043 / 0,057 / 0,082 | 0,050 / 0,061 / 0,072 | 0,047 | 0.9983 | 0 |
+| XAU/USD | 23160 | 33605 | 23160 | 0,017 / 0,095 / 0,433 | 0,014 / 0,084 / 0,437 | 0,015 / 0,093 / 0,440 | 0,001 | 0.9508 | 0 |
+
+Páginas de TwelveData (M15, último año, `timezone=UTC`), BTC/USD: `a5cbdfb6829aa013806c7d7b158259db7a24221398134eadea782eb078071613`, `bee5d88a152fb18fba9aabb2c00780e2a7a27294cd75bddbed975e281a186901`, `9be9b2a05519b757c22a982a3a63b8e1866c4adf0373c197e9e3537bfeb1ece6`, `9064943d0da35d5cc6e0fd550edb8d6aa46a0f4c3c62d37ced939f4386baaf9f`, `06c8e57bc0329d3b192dd4d736d76010211aaae47ba0860162662713b297ccf3`, `08bbd7b00c3881c1e613dd76847eb1cd44c556fc28a276e02ab72d07e9274b4f`, `f94dcba7e561c1b4194aa0a3fe9b53c23fc351d1e0cecc60b8ae454def508599`, `b775f79de24e566feeb54653422db75fe7391164541dad2f9161d57b16cd3542`, `246e0446aa6ce25a8d629b58342134f4705ec469647919ba40c138760347502f`. XAU/USD: `733d203f326634eff6d659c276d2cd3ed8667a93b993401b2faecd3a3bda63ef`, `d129b7d9324ef0cb204793f33a274f86707d665dc75a855c3fce048ef6ff3a44`, `b39dbe1fe1ed084aee423960fad289c5b059b59cc874f0735a99573c8ad71db4`, `0708296bcc633f525296b1ab7686535553bf439dea8bfec6291d1e5fe00305f4`, `7e17ad37ba83b8f8306b2ec04673f8940d12a10bbba67e3f3bc4670956bbe3c5`, `37058d4b0079383203e3d30b112dcaa539466b8fa71a0ec3fc7a114e4763cee0`, `7a46ba782d817e32124971897217ab3b32cbb783ce3a06974f572fff3d02ccdf`, `dbe9d52fe8234b12ac9541053bb645103202a3feecafd710232749845857193b`.
+La última página de cada serie, que pasa el inicio del año, devuelve 400 "No data is available on
+the specified dates", no 404.
+
+**BTC:** correlación 0,998 y sesgo de **+0,047 %** (TwelveData por encima de Deriv). **Oro:**
+correlación 0,951, p50 0,017 %, p99 0,43 %, con 23.160 velas en Deriv y 33.605 en TwelveData.
+**Queda ABIERTO, sin investigar todavía:** dónde caen las colas del oro y qué son las velas de más
+de TwelveData.
+
+### h) La legacy sigue en HTTP 520
+
+`wss://ws.derivws.com/websockets/v3`: `InvalidStatus: server rejected WebSocket connection: HTTP
+520` en el handshake, otra vez con el App ID válido.
+

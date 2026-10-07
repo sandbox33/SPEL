@@ -51,6 +51,19 @@ jobs:
     # procesos; una variable de entorno no.
     env:
       TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+      # El App ID de la app PAT "SPEL TRADER" (registrada por el Admin el
+      # 01-oct; decision-log 2026-10-01). La sonda de la legacy lo pone en
+      # la URL; la sonda §0.A-3b lo manda en el header Deriv-App-ID, que el
+      # OpenAPI oficial exige en /accounts y en /otp. No autoriza ninguna
+      # cuenta por sí solo. El informe lo enmascara.
+      DERIV_APP_ID: ${{ secrets.DERIV_APP_ID }}
+      # La sonda §0.A-3b (tests/test_deriv_cotizacion_real_live.py) lo
+      # manda como Bearer a GET /accounts y a dos POST de OTP: UNO para la
+      # cuenta demo y UNO para la real, este último con la autorización de
+      # un solo uso del Admin (decision-log 2026-10-05), solo para cotizar y
+      # solo entre el 05 y el 09-oct-2026. Ninguna compra. El informe no lo
+      # incluye: el test falla si aparece.
+      DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
       # Le dice al guardián de tests/test_sources.py que en ESTE entorno la
       # ausencia de credenciales no es lo esperado, sino una falla de
       # plomería. Sin esto el guardián se saltea y un secreto mal escrito

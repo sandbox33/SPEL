@@ -10,18 +10,18 @@
 > Este archivo se lee primero en cada chat nuevo. Frente a un chat que lo contradiga sin
 > evidencia, gana el archivo; frente al código, gana el código.
 
-**Última actualización:** 05 oct 2026 — gobernanza: órdenes demo por OTP, DG-7 y DG-8.
+**Última actualización:** 06 oct 2026 — merge de `main` en la rama del PR #31, después de la sonda §0.A-3b.
 
-**Commit de referencia:** `465d199` (merge del PR #32).
+**Commit de referencia:** `2d5dd35` (merge del PR #35).
 
-**Tests:** **977** recolectados en `tests/`, en 33 archivos, medido con
-`pytest --collect-only -q tests/` sobre este PR. Más 74 en `research/tests/`, que no
+**Tests:** **1315** recolectados en `tests/`, en 47 archivos, medido con
+`pytest --collect-only -q tests/` sobre la rama del PR #31 después del merge de `main`. Más 74 en `research/tests/`, que no
 bloquean.
 
-Desfase: **ninguno**. El único merge desde la actualización anterior es el del PR #32 (PR-G),
-que es el que la escribió. Los PRs #31, #33 y #34 siguen abiertos; el #31, en pausa con
-las sondas de Deriv. `tests/test_estado_al_dia.py` falla si hay **más de 3 PRs
-fusionados** desde el commit de referencia de arriba (DG-6).
+Desfase: **ninguno**. El commit de referencia es el merge del PR #35, el último de `main`, y
+esta actualización entra con el merge de `main` en la rama del PR #31, que sigue abierta y en
+pausa. Los PRs #33 y #34 siguen abiertos. `tests/test_estado_al_dia.py` falla si hay **más
+de 3 PRs fusionados** desde el commit de referencia de arriba (DG-6).
 
 
 **Ver también:** `FASE2_NOTAS_ARQUITECTURA_MODELO.md` (raíz del repo) — glosario y
@@ -57,8 +57,8 @@ Eso no reabre Fase 1 ni cambia su resultado; ordena el código para que coincida
 
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-**977 recolectados en `tests/`, en 33 archivos**, contados con `pytest --collect-only -q`
-el 05-oct-2026, no copiados de ningún documento. Sin credenciales se saltan 2: el test
+**1315 recolectados en `tests/`, en 47 archivos**, contados con `pytest --collect-only -q`
+el 06-oct-2026 sobre la rama del PR #31, no copiados de ningún documento. Sin credenciales se saltan 2: el test
 `live` de TwelveData y el guardián de secretos de `tests/test_sources.py`, los dos por su
 propio `skipif`.
 
@@ -82,6 +82,11 @@ corridas seguidas sin intermitencia.
 | `ingestion/run_gdelt.py` + `.github/workflows/gdelt.yml` | Ingesta diaria; CI escritor único en la rama `data`; reintenta los días que GDELT no había publicado | 59 + 12 | ✅ corre sola desde el 23-sep: seis corridas del cron, todas verdes; marca de inicio 2026-09-04 |
 | `ingestion/frescura.py` | Alarma de la serie: rojo solo por hueco interno posterior a la marca de inicio | 18 | ✅ |
 | `tools/verificar_siembra.py` | Compara BTC/XAU sembrados contra la serie medida | 14 | ✅ verde contra la siembra real (corrido el 29-sep, ver decision-log) |
+| `ingestion/deriv_ws.py` | Sesión de solo lectura con Deriv: `entorno` obligatorio, `real` con permiso aparte, lista blanca de siete mensajes | 29 | 🟡 habla con el endpoint legacy, muerto desde el 01-oct (HTTP 520): falta migrar al WS público |
+| `ingestion/sonda_instrumentos.py` + `.github/workflows/sonda.yml` | Contratos, multiplicadores, stake y comisión de BTC y oro, desde la API, siete días | 19 + 6 | 🟡 usa `deriv_ws.py`, así que depende de la misma migración |
+| `ingestion/velas.py` + `.github/workflows/velas.yml` | Velas diarias de BTC y oro en la rama `data`, profundidad usable, `leer_velas()` en polars | 33 + 6 | 🟡 ídem; además, Deriv entrega 365 días de historia (sonda §0.A-2) |
+| `core/preregistro_h1.py` + `research/preregistro_h1.md` | Reglas del experimento H1, fijadas antes del backtest | 26 | 🟡 dos cláusulas PENDIENTES del Admin |
+| `ingestion/kappa_deriv.py` | κ = comisión/nocional de MULTUP por activo, máximo medido en la cuenta real (sonda §0.A-3b, decision-log 06-oct) | 6 | ✅ dato medido, sin consumidor todavía |
 | `ingestion/source_registry.py` | Registro versionado de cobertura por fuente | 34 | ✅ |
 | `tools/measure_godel_samples.py` | Mide el `n` post-máscara | 75 | ✅ |
 | `tools/provider_coverage.py` + `import_gdelt_entropy.py` + `audit_data_lake.py` | Inventario de proveedores, import histórico de entropía, auditoría del lake | 58 + 36 + 32 | ✅ |
@@ -93,7 +98,7 @@ corridas seguidas sin intermitencia.
 | `governance/estado.py` + `tests/test_estado_al_dia.py` | Control anti-desfase de este archivo (DG-6) | 16 | ✅ |
 | `tests/test_reglas_ordenes_demo.py` | La regla de órdenes demo de CLAUDE.md (OTP para una cuenta demo según `GET /accounts`, solo `/ws/demo`) y DG-7/DG-8 en el decision-log | 3 | ✅ |
 | `governance/paso_a_real.py` | DG-3: las cuatro condiciones del paso de demo a real y la zona gris de 6 meses (decision-log 29-sep) | 21 | ✅ |
-| `config/constantes.json` | Registro de las 108 constantes de módulo, verificado contra el código en las dos direcciones | 30 | ✅ |
+| `config/constantes.json` | Registro de las 138 constantes de módulo, verificado contra el código en las dos direcciones | 30 | ✅ |
 | `tests/test_registro_linguistico*.py` | Español neutro: sin voseo en `.py` y en `.md` | 84 + 5 | ✅ |
 | `tools/heartbeat.py` + `.github/workflows/heartbeat.yml` | Trigger `schedule:` real — **desactivado a propósito**, ver Fase 6 | 19 | ✅ código, 🔴 apagado |
 
@@ -499,14 +504,11 @@ salvedad que hay que resolver **antes** de revertir.
 
 ## ▶️ PRÓXIMO PASO CONCRETO
 
-**Correr la sonda §0.A-3b sobre la rama del PR #31: Actions → SPEL Live Tests → Run
-workflow, entre el 05 y el 09-oct-2026 (UTC).**
-
-La legacy de Deriv está muerta (decision-log 2026-10-01) y el PR #31 sigue en pausa hasta
-migrar al WS nuevo. Las sondas §0.A-2 y §0.A-3 ya midieron profundidad, contratos y costos
-en los canales público y demo. La §0.A-3b compara los tres canales —público, demo y real,
-este último solo para cotizar, con autorización de un solo uso— y de ella sale el κ de
-costos por activo que entra en `config/constantes.json`. Es una acción del Admin.
+**Esperar el brief del Admin.** La sonda §0.A-3b corrió el 06-oct (run 37404371657) y sus
+resultados están en el decision-log de la rama del PR #31. Quedan abiertas, para decidir:
+la migración de `ingestion/deriv_ws.py` al WS público nuevo, de la que depende todo el PR
+#31 (la legacy está muerta desde el 01-oct), y el brief de la batería multi-estrategia
+(DG-8), que fija el nombre de su paquete.
 
 *(Lo que estaba acá —"decidir qué mide el éxito de Fase 2"— lo contestan los
 pre-registros de la Serie H —Sharpe neto fuera de muestra, PSR, DSR y la comparación contra
