@@ -10,17 +10,17 @@
 > Este archivo se lee primero en cada chat nuevo. Frente a un chat que lo contradiga sin
 > evidencia, gana el archivo; frente al código, gana el código.
 
-**Última actualización:** 06 oct 2026 — merge de `main` en la rama del PR #31, después de la sonda §0.A-3b.
+**Última actualización:** 07 oct 2026 — `integracion_demo/` (brief del Admin del 06-oct-2026 (3)), en la rama `claude/create-claude-md-spel-lni9s9`.
 
-**Commit de referencia:** `2d5dd35` (merge del PR #35).
+**Commit de referencia:** `a84778b` (merge del PR #31).
 
-**Tests:** **1315** recolectados en `tests/`, en 47 archivos, medido con
-`pytest --collect-only -q tests/` sobre la rama del PR #31 después del merge de `main`. Más 74 en `research/tests/`, que no
+**Tests:** **1538** recolectados en `tests/`, en 51 archivos, medido con
+`pytest --collect-only -q tests/` el 07-oct-2026 sobre esta rama. Más 74 en `research/tests/`, que no
 bloquean.
 
-Desfase: **ninguno**. El commit de referencia es el merge del PR #35, el último de `main`, y
-esta actualización entra con el merge de `main` en la rama del PR #31, que sigue abierta y en
-pausa. Los PRs #33 y #34 siguen abiertos. `tests/test_estado_al_dia.py` falla si hay **más
+Desfase: **ninguno**. El commit de referencia es el merge del PR #31, el último de `main`, y
+esta actualización entra con el PR de `integracion_demo/`. Los PRs #33 y #34 siguen abiertos y en
+pausa. `tests/test_estado_al_dia.py` falla si hay **más
 de 3 PRs fusionados** desde el commit de referencia de arriba (DG-6).
 
 
@@ -57,10 +57,11 @@ Eso no reabre Fase 1 ni cambia su resultado; ordena el código para que coincida
 
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-**1315 recolectados en `tests/`, en 47 archivos**, contados con `pytest --collect-only -q`
-el 06-oct-2026 sobre la rama del PR #31, no copiados de ningún documento. Sin credenciales se saltan 2: el test
-`live` de TwelveData y el guardián de secretos de `tests/test_sources.py`, los dos por su
-propio `skipif`.
+**1538 recolectados en `tests/`, en 51 archivos**, contados con `pytest --collect-only -q`
+el 07-oct-2026 sobre la rama de `integracion_demo/`, no copiados de ningún documento. Sin credenciales
+se saltan 6, cada uno por su propio `skipif`: el test `live` de TwelveData, el guardián de
+secretos de `tests/test_sources.py`, las dos sondas de endpoints de Deriv, la 3b de TwelveData y
+la orden demo de la parte B.
 
 **Más 74 en `research/tests/`, que NO corren en el job que bloquea** — son los tests del
 código retirado (ver la sección de `research/` más abajo). Mezclarlos en una sola cifra
@@ -96,6 +97,11 @@ corridas seguidas sin intermitencia.
 | `execution/circuit_breaker.py` + `execution_guard.py` | Guardrails duros — congelados hasta F4 | 14 + 17 | ✅ |
 | `governance/persistence.py` + `secrets.py` | 5 streams (TRADE_LEDGER desde el PR #25), SecretKey único | 19 + 10 | ✅ |
 | `governance/estado.py` + `tests/test_estado_al_dia.py` | Control anti-desfase de este archivo (DG-6) | 16 | ✅ |
+| `integracion_demo/otp.py` + `conexion.py` | OTP solo para la cuenta que `GET /accounts` dice demo, URL solo `/ws/demo`, un OTP nuevo por conexión, reconexión con backoff, ping como parámetro | 104 (con `ejecucion.py`) | ✅ offline; 🟡 nunca conectó en vivo |
+| `integracion_demo/ejecucion.py` | Lista blanca de ocho mensajes; `buy` solo MULTUP/MULTDOWN con `stop_loss`; un `buy` sin respuesta no se reintenta | ídem | ✅ offline; 🟡 la parte B no corrió |
+| `integracion_demo/registro.py` + `reconciliar.py` | Registro demo JSONL con cadena de hashes y crudo aparte (porta `trade_ledger.py`, no lo importa); reconciliación con `profit_table` y `statement` | 73 | ✅ offline; 🟡 parser de `proposal_open_contract` sin fijar |
+| `tests/test_integracion_demo_orden_live.py` | Parte B: UNA orden demo, 07..16-oct-2026, job `orden_demo` de `live-tests.yml` | 13 | 🟡 escrito, no disparado |
+| `tests/test_guarda_integracion_demo.py` | `buy`/`sell`/`contract_update` solo en `integracion_demo/`; el paquete no nombra el canal real ni importa `execution/` ni lo congelado de `core/` | 34 | ✅ |
 | `tests/test_reglas_ordenes_demo.py` | La regla de órdenes demo de CLAUDE.md (OTP para una cuenta demo según `GET /accounts`, solo `/ws/demo`) y DG-7/DG-8 en el decision-log | 3 | ✅ |
 | `governance/paso_a_real.py` | DG-3: las cuatro condiciones del paso de demo a real y la zona gris de 6 meses (decision-log 29-sep) | 21 | ✅ |
 | `config/constantes.json` | Registro de las 138 constantes de módulo, verificado contra el código en las dos direcciones | 30 | ✅ |
@@ -504,11 +510,11 @@ salvedad que hay que resolver **antes** de revertir.
 
 ## ▶️ PRÓXIMO PASO CONCRETO
 
-**Esperar el brief del Admin.** La sonda §0.A-3b corrió el 06-oct (run 37404371657) y sus
-resultados están en el decision-log de la rama del PR #31. Quedan abiertas, para decidir:
-la migración de `ingestion/deriv_ws.py` al WS público nuevo, de la que depende todo el PR
-#31 (la legacy está muerta desde el 01-oct), y el brief de la batería multi-estrategia
-(DG-8), que fija el nombre de su paquete.
+**La parte B: el Admin dispara `SPEL Live Tests` con `objetivo: orden_demo`** entre el 07 y el
+16-oct-2026 23:59 UTC. Su informe (una línea JSON en el log) fija el parser de
+`proposal_open_contract`, la unidad de `commission` y el cierre del socket inactivo. Siguen
+abiertas la migración de `ingestion/deriv_ws.py` al WS público nuevo (la legacy está muerta desde
+el 01-oct) y el brief de la batería multi-estrategia (DG-8).
 
 *(Lo que estaba acá —"decidir qué mide el éxito de Fase 2"— lo contestan los
 pre-registros de la Serie H —Sharpe neto fuera de muestra, PSR, DSR y la comparación contra
