@@ -2258,3 +2258,28 @@ flojos y se reforzaron. Uno destapó una regla de más (el sábado era fin de se
 - El PR #36 (`integracion_demo/`) y este agregan entradas al final de este archivo y cambian el
   encabezado de ESTADO.md. El que se fusione segundo tiene un conflicto de texto en esos dos
   archivos.
+
+---
+
+## 2026-10-07 — Merge de `main` (PR #36) en el PR #37, y un cierre de conexión que podía colgarse
+
+**Fuente:** brief del Admin del 07-oct-2026.
+
+- **Merge, sin rebase.** `main` (con el PR #36) se trajo a la rama del #37 con un merge. Los
+  conflictos de este archivo y de ESTADO.md se resolvieron conservando lo de los dos PRs, en
+  orden cronológico.
+- **Guarda de mensajes de orden.** `tests/test_velas_intradia.py` entra a
+  `ARCHIVOS_DE_TEST_PERMITIDOS`, bajo "Prueban que la lista blanca de solo lectura los rechaza":
+  su `{"buy": "1"}` prueba que la lista blanca pública lo rechaza. Nada más de la guarda cambió.
+- **Defecto encontrado al verificar, y corregido.** La suite se colgaba de forma intermitente
+  en `test_el_ping_es_un_parametro`. `ConexionDemo` (PR #36) tenía dos fallas al cerrar con ping
+  activo:
+  1. En Python 3.11, `asyncio.wait_for` se traga una cancelación que llega con la respuesta ya
+     lista (corregido en 3.12). El bucle del ping no terminaba nunca.
+  2. `__aexit__` atrapaba `CancelledError` al esperar al ping, y con eso se tragaba también la
+     cancelación de quien cerraba.
+
+  Ahora el bucle sale por una bandera que prende `__aexit__`, y el cierre espera con
+  `asyncio.wait`. Fuera de pytest se colgaba en la primera iteración; con el arreglo, 3000
+  aperturas y cierres pasan sin cuelgue. La parte B corre sin ping y no estaba expuesta. Lleva
+  dos tests deterministas y tres mutantes atrapados.
