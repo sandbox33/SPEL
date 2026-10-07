@@ -1,6 +1,6 @@
 {
   "schema_version": "1.1.0",
-  "actualizado": "2026-10-06",
+  "actualizado": "2026-10-07",
   "constantes": [
     {
       "nombre": "EPSILON_BREAKEVEN",
@@ -887,6 +887,20 @@
       "notas": ""
     },
     {
+      "nombre": "TWELVEDATA_MAX_OUTPUTSIZE",
+      "modulo": "ingestion.adapters",
+      "categoria": "parametro",
+      "valor": 5000,
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Tope observado del plan gratuito en el sondeo real de profundidad histórica (2026-09-03), y páginas de 5000 filas en la sonda §0.A-3b (run 37404371657). Se movió de tools.provider_coverage al adapter el 06-oct-2026 (4).",
+      "usado_en": [
+        "ingestion.adapters.TwelveDataAdapter.fetch_pagina",
+        "tools.provider_coverage.probe_twelvedata"
+      ],
+      "notas": ""
+    },
+    {
       "nombre": "_DERIV_GRANULARITY_SECONDS",
       "modulo": "ingestion.adapters",
       "categoria": "etiqueta",
@@ -1002,7 +1016,8 @@
       "valor": {
         "EURUSD": "EUR/USD",
         "BTCUSD": "BTC/USD",
-        "AAPL": "AAPL"
+        "AAPL": "AAPL",
+        "XAUUSD": "XAU/USD"
       },
       "evidencia": "provisional_sin_evidencia",
       "afecta_resultado": true,
@@ -1011,7 +1026,7 @@
         "ingestion.adapters.TwelveDataAdapter",
         "tools.provider_coverage"
       ],
-      "notas": ""
+      "notas": "XAUUSD entró el 06-oct-2026 con la respuesta real de la sonda §0.A-3b (earliest_timestamp 5min 2020-03-16 01:10:00 UTC, sha256 c6250399d925f4aea07c9a0ce8b528bcf33b44a1cbf90a2b575655401dbab3cf) y la autorización del Admin del 06-oct-2026 (4)."
     },
     {
       "nombre": "MENSAJES_PERMITIDOS",
@@ -1972,19 +1987,6 @@
       "fuente": "Fecha de arranque deliberadamente anterior a cualquier dato, para que el proveedor devuelva todo lo que tenga.",
       "usado_en": [
         "tools.provider_coverage.probe_tiingo"
-      ],
-      "notas": ""
-    },
-    {
-      "nombre": "TWELVEDATA_MAX_OUTPUTSIZE",
-      "modulo": "tools.provider_coverage",
-      "categoria": "parametro",
-      "valor": 5000,
-      "evidencia": "medido",
-      "afecta_resultado": true,
-      "fuente": "Tope observado del plan gratuito en el sondeo real de profundidad histórica (2026-09-03).",
-      "usado_en": [
-        "tools.provider_coverage.probe_twelvedata"
       ],
       "notas": ""
     },

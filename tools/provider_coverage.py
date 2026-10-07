@@ -75,6 +75,7 @@ from ingestion.adapters import (  # noqa: E402
     DERIV_WS_ENDPOINT,
     REQUIRED_COLUMNS,
     TWELVEDATA_ENDPOINT,
+    TWELVEDATA_MAX_OUTPUTSIZE,
     DerivAdapter,
     TwelveDataAdapter,
     _DERIV_GRANULARITY_SECONDS,
@@ -268,9 +269,8 @@ _TWELVEDATA_CANDIDATOS: dict[str, str] = {
 #  como tal, y el sondeo lo confirma o lo desmiente en la corrida.
 # ══════════════════════════════════════════════════════════════════════════
 
-#: TwelveData: `outputsize` acepta hasta 5000 por petición según su doc.
-#: Se pide el máximo; si vuelven exactamente 5000, el tope fue la petición.
-TWELVEDATA_MAX_OUTPUTSIZE = 5000
+#: TwelveData: se pide el máximo de `outputsize` (TWELVEDATA_MAX_OUTPUTSIZE,
+#: del adapter); si vuelven exactamente esas filas, el tope fue la petición.
 
 #: Tiingo: no acepta un conteo, acepta `startDate`. Se pide desde una fecha
 #: anterior a cualquier serie financiera diaria para que el límite lo ponga
