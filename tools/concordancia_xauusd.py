@@ -48,10 +48,10 @@ tests/test_concordancia_xauusd.py con una serie espía.
 TwelveData se filtra a las velas en que Deriv cotiza frxXAUUSD, con el
 horario de `trading_times` (ingestion/velas_intradia.py lo guarda crudo con
 su sha256). Las que quedan fuera se cuentan por franja:
-  · fin_de_semana: sábado; viernes desde el primer cierre del día (el
+  · fin_de_semana: un día que no está en `trading_days`; viernes desde el
+    primer cierre del día (el
     horario de una fecha hábil tiene una pausa, y el viernes ese cierre es
-    el del fin de semana); domingo antes de la primera apertura; un día
-    que no está en `trading_days`.
+    el del fin de semana); domingo antes de la primera apertura.
   · pausa_diaria: un día hábil, fuera de los tramos open/close.
   · feriado: dentro del horario, en un día en que Deriv no tiene NINGUNA
     vela (solo dentro del tramo de fechas que cubre Deriv).
@@ -241,7 +241,7 @@ def franja(epoch: int, horario: dict) -> Optional[str]:
     seg = t.hour * 3600 + t.minute * 60 + t.second
     tr = tramos(horario)
     habiles = horario.get("trading_days") or list(_DIAS_SEMANA[:5])
-    if dia not in habiles or dia == "Sat":
+    if dia not in habiles:
         return "fin_de_semana"
     if any(a <= seg and seg + GRANULARIDAD_M5 <= c for a, c in tr):
         return None

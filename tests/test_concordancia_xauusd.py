@@ -274,7 +274,7 @@ def test_una_rompe_y_la_otra_no():
 
 def test_los_peores_van_primero_y_son_veinte_como_mucho():
     base = [(1, 1)] * 30
-    otra = [(1, -1)] * 22 + [(5, 1)] * 8                # 22 de dirección opuesta
+    otra = [(5, 1)] * 8 + [(1, -1)] * 22                # otra vela primero en fecha
     c = concordancia(_serie_de_dias(otra), _serie_de_dias(base))
     assert len(c["peores_dias"]) == 20
     assert all(p["td"]["ruptura"]["direccion"] == -1 for p in c["peores_dias"])
@@ -326,6 +326,17 @@ def test_franja(cuando, esperado):
     if cuando[:3] == (2026, 10, 11):
         horario = {**HORARIO, "aperturas": ["22:00:00"], "cierres": ["23:59:59"]}
     assert franja(_utc(*cuando), horario) == esperado
+
+
+def test_un_sabado_en_trading_days_cotiza():
+    con_sabado = {**HORARIO, "trading_days": HORARIO["trading_days"] + ["Sat"]}
+    assert franja(_utc(2026, 10, 10, 12, 0), con_sabado) is None
+
+
+def test_una_vela_que_cruza_un_cierre_queda_fuera():
+    raro = {**HORARIO, "cierres": ["20:58:00", "23:59:59"]}
+    assert franja(_utc(2026, 10, 7, 20, 55), raro) == "pausa_diaria"
+    assert franja(_utc(2026, 10, 7, 20, 50), raro) is None
 
 
 def test_un_dia_fuera_de_trading_days_es_fin_de_semana():
@@ -384,3 +395,32 @@ def test_el_informe_lee_metrics_y_publica_cuatro_bloques(tmp_path, monkeypatch, 
     assert conc["dias_comunes"] == 3
     assert comp["compuerta"] == "roja" and len(comp["peores_dias"]) == 1
     assert comp["pct_misma_direccion_y_vela"] == pytest.approx(200 / 3)
+
+
+def test_el_informe_filtra_twelvedata_antes_de_comparar(tmp_path, monkeypatch, capsys):
+    """Una ruptura de TwelveData en una hora en que Deriv no cotiza no
+    cuenta: el filtro se aplica antes de la concordancia."""
+    import json
+
+    from ingestion.velas import _append, ruta_serie
+    from ingestion.velas_intradia import ruta_calendario
+    monkeypatch.setenv("SPEL_DRIVE_ROOT", str(tmp_path))
+    d = date(2026, 6, 1)                          # lunes, BST: ancla 07:00 UTC
+    ancla, _ = ancla_y_limite(d)
+    dr = _dia({}, d, ruptura=(6, 1))
+    td = _dia({}, d, ruptura=(6, 1))
+    pausa = ancla + 4 * M5                        # 07:20 UTC
+    td[pausa] = _vela(pausa, c=BASE - 5)          # rompe abajo antes, en la pausa
+    for nombre, serie in (("td_XAUUSD", td), ("frxXAUUSD", dr)):
+        _append(ruta_serie(nombre, M5), [{"epoch": e, **{k: float(v[k]) for k in
+                                         ("open", "high", "low", "close")}}
+                                        for e, v in sorted(serie.items())])
+    horario = {"trading_days": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+               "aperturas": ["00:00:00", "07:25:00"], "cierres": ["07:20:00", "23:59:59"]}
+    _append(ruta_calendario(), [{"fecha_servidor": "2026-06-01", "sha256": "cd" * 32,
+                                 "horario": horario, "crudo": "{}"}])
+    cx.main([])
+    lineas = [l for l in capsys.readouterr().out.splitlines() if not l.startswith("===")]
+    cal, comp = json.loads(lineas[1]), json.loads(lineas[3])
+    assert cal["fuera_por_franja"]["pausa_diaria"] == 1
+    assert comp["compuerta"] == "verde" and comp["pct_misma_direccion_y_vela"] == 100
