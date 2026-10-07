@@ -455,3 +455,9 @@ class Ejecutor:
     async def statement(self, **filtros: Any) -> tuple[list[dict], str]:
         datos, sha = await self.pedir({"statement": 1, "description": 1, **filtros})
         return list((datos.get("statement") or {}).get("transactions") or []), sha
+
+    async def compras_desde(self, epoch: int, *, limite: int = 50) -> tuple[list[dict], str]:
+        """Las compras que statement registra desde `epoch` (segundos del
+        servidor). Para que una autorización de UNA orden no se use dos
+        veces."""
+        return await self.statement(action_type="buy", date_from=int(epoch), limit=limite)
