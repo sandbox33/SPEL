@@ -385,7 +385,10 @@ class Ejecutor:
 
     def cerrar(self, trade: Trade, *, evidencia_extra: Optional[str] = None) -> dict:
         """La fila de cierre con lo último que se vio del contrato."""
-        poc = trade.ultimo_poc or {"contract_type": trade.orden.contract_type}
+        # Lo que Deriv no mande se completa con lo que se pidió, nunca al revés:
+        # el parser tolera claves faltantes hasta que la parte B lo fije.
+        poc = {"contract_type": trade.orden.contract_type,
+               "underlying_symbol": trade.orden.underlying_symbol, **(trade.ultimo_poc or {})}
         outcome, evidencia = deducir_outcome(poc, venta_propia=trade.venta_propia)
         if outcome is None:
             outcome, evidencia = Outcome.DESCONOCIDO.value, "no se observó el cierre del contrato"

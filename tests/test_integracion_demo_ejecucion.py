@@ -591,6 +591,25 @@ async def test_sin_cierre_observado_es_desconocido(tmp_path):
     assert len(venta) == 1 and "SellNotAvailable" in venta[0]["evidencia"]
 
 
+async def test_un_contrato_sin_contract_type_ni_simbolo_se_cierra_igual(tmp_path):
+    class _Escueto(_Falso):
+        def _poc(self, p):
+            d = super()._poc(p)
+            for k in ("contract_type", "underlying_symbol"):
+                d["proposal_open_contract"].pop(k)
+            return d
+    _, _, registro, _, conexion = _armar(tmp_path, _Escueto())
+    dormir, reloj = _reloj()
+    async with conexion as c:
+        e = Ejecutor(c, registro, _CTX)
+        trade = await e.comprar(_ORDEN)
+        cierre = await e.seguir_hasta_cierre(trade, vender_a_los_s=60, cada_s=5,
+                                             esperar_cierre_s=30, dormir=dormir,
+                                             reloj_s=reloj)
+    assert cierre["outcome"] == "sell_tiempo"
+    assert cierre["commission_modelada"] == pytest.approx(0.02), "κ del símbolo pedido"
+
+
 async def test_no_se_sigue_un_trade_que_no_abrio(tmp_path):
     _, _, registro, _, conexion = _armar(tmp_path)
     async with conexion as c:
