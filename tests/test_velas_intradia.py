@@ -209,7 +209,7 @@ async def test_deriv_baja_escribe_y_registra_el_calendario(monkeypatch):
     assert leer_velas("frxXAUUSD", M5)["epoch"].to_list() == epocas[:-1]
     (linea,) = vi._leer_filas(vi.ruta_calendario())
     assert linea["horario"]["trading_days"][0] == "Sun"
-    assert linea["horario"]["open"] == ["00:00:00", "22:00:00"]
+    assert linea["horario"]["aperturas"] == ["00:00:00", "22:00:00"]
     assert linea["sha256"] == res["calendario"]["sha256"]
     import hashlib
     assert hashlib.sha256(linea["crudo"].encode()).hexdigest() == linea["sha256"]
@@ -261,7 +261,7 @@ async def test_deriv_una_revision_no_sobrescribe():
 def test_horario_de():
     h = vi.horario_de(_TT)
     assert h["mercado"] == "Commodities" and h["submercado"] == "Metals"
-    assert h["close"] == ["21:00:00", "23:59:59"] and h["events"][0]["descrip"].startswith("Closes")
+    assert h["cierres"] == ["21:00:00", "23:59:59"] and h["events"][0]["descrip"].startswith("Closes")
     assert vi.horario_de(_TT, "frxXPTUSD") is None
     assert vi.horario_de({}) is None
 

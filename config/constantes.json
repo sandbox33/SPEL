@@ -1768,6 +1768,111 @@
       "notas": "Una medición vieja y una nueva tienen que poder distinguirse sin mirar el commit."
     },
     {
+      "nombre": "HORA_LIMITE",
+      "modulo": "tools.concordancia_xauusd",
+      "categoria": "parametro",
+      "valor": 12,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin del 06-oct-2026 (4), punto 3: la ventana de ruptura termina a las 12:00 de Londres.",
+      "usado_en": [
+        "tools.concordancia_xauusd.ancla_y_limite"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "N_PEORES",
+      "modulo": "tools.concordancia_xauusd",
+      "categoria": "parametro",
+      "valor": 20,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin del 06-oct-2026 (4), punto 3: si la compuerta no se cumple, los 20 peores días.",
+      "usado_en": [
+        "tools.concordancia_xauusd.peores_dias"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "PERCENTILES",
+      "modulo": "tools.concordancia_xauusd",
+      "categoria": "parametro",
+      "valor": [
+        50,
+        90,
+        99
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin del 06-oct-2026 (4), punto 3: p50, p90 y p99 de |Δhigh| y |Δlow|.",
+      "usado_en": [
+        "tools.concordancia_xauusd._pct"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "UMBRAL_COMPUERTA",
+      "modulo": "tools.concordancia_xauusd",
+      "categoria": "parametro",
+      "valor": 0.9,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin del 06-oct-2026 (4), punto 3: misma dirección y misma vela en ≥ 90 % de los días con ruptura en alguna fuente. Fijada antes de medir.",
+      "usado_en": [
+        "tools.concordancia_xauusd.concordancia"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "VELAS_DEL_RANGO",
+      "modulo": "tools.concordancia_xauusd",
+      "categoria": "parametro",
+      "valor": 3,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin del 06-oct-2026 (4), punto 3: el rango son las 3 velas M5 desde el ancla.",
+      "usado_en": [
+        "tools.concordancia_xauusd.rango_del_dia",
+        "tools.concordancia_xauusd.primera_ruptura",
+        "tools.concordancia_xauusd.rangos_de_apertura"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "ZONA_ANCLA",
+      "modulo": "tools.concordancia_xauusd",
+      "categoria": "etiqueta",
+      "valor": "Europe/London",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin del 06-oct-2026 (4), punto 3: ancla 08:00 Europe/London con zoneinfo (la misma de 5c en la 3b).",
+      "usado_en": [
+        "tools.concordancia_xauusd.ancla_y_limite"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "_DIAS_SEMANA",
+      "modulo": "tools.concordancia_xauusd",
+      "categoria": "etiqueta",
+      "valor": [
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri",
+        "Sat",
+        "Sun"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Los nombres de día de trading_times.trading_days (esquema oficial de Deriv, commit 54e3538), en el orden de datetime.weekday().",
+      "usado_en": [
+        "tools.concordancia_xauusd.franja"
+      ],
+      "notas": ""
+    },
+    {
       "nombre": "DEFAULT_SEED",
       "modulo": "tools.heartbeat",
       "categoria": "parametro",

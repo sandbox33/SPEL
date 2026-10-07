@@ -68,7 +68,6 @@ import json
 import math
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
-from zoneinfo import ZoneInfo
 
 import numpy as np
 import pytest
@@ -83,6 +82,7 @@ from tests.test_deriv_endpoints_live import (
     texto_libre,
 )
 from tests.test_deriv_sonda2_live import profundidad
+from tools.concordancia_xauusd import rangos_de_apertura  # noqa: F401 -- portada (brief 06-oct-2026 (4))
 from tests.test_deriv_sonda3_live import _CanalPausado
 from tests.test_fuentes_sonda3_live import (
     OUTPUTSIZE_TWELVEDATA,
@@ -286,39 +286,6 @@ def comparar_bases(deriv: dict[int, dict], td: dict[int, dict], *,
 
 
 # ═══ 5c ═══════════════════════════════════════════════════════════════════
-
-def rangos_de_apertura(velas_m5: dict[int, dict], zona: str, hora: int, minuto: int,
-                       *, n: int = VELAS_DEL_RANGO) -> tuple[list[dict], int]:
-    """Por cada día local entre la primera y la última vela: el rango de las
-    n velas M5 que empiezan en el ancla. Lee SOLO esas n velas: ni un
-    precio de después. Devuelve (días con rango, días sin las n velas). Un
-    ancla fuera de la serie (antes de la primera vela, o con la tercera vela
-    después de la última) no cuenta como faltante."""
-    if not velas_m5:
-        return [], 0
-    tz = ZoneInfo(zona)
-    desde = datetime.fromtimestamp(min(velas_m5), tz).date()
-    hasta = datetime.fromtimestamp(max(velas_m5), tz).date()
-    primera, ultima = min(velas_m5), max(velas_m5)
-    dias, faltan = [], 0
-    d = desde
-    while d <= hasta:
-        ancla = int(datetime(d.year, d.month, d.day, hora, minuto, tzinfo=tz).timestamp())
-        epocas = [ancla + k * GRANULARIDAD_5C for k in range(n)]
-        if ancla < primera or epocas[-1] > ultima:
-            pass   # fuera de la serie: ni día ni faltante
-        elif all(e in velas_m5 for e in epocas):
-            vs = [velas_m5[e] for e in epocas]
-            alto = max(float(v["high"]) for v in vs)
-            bajo = min(float(v["low"]) for v in vs)
-            precio = float(vs[0]["open"])
-            dias.append({"fecha": d.isoformat(), "ancla": ancla,
-                         "rango_fraccion": (alto - bajo) / precio})
-        else:
-            faltan += 1
-        d += timedelta(days=1)
-    return dias, faltan
-
 
 def distancia_stop_out(m: int, kappa: float) -> float:
     """1/m − κ (decision-log 2026-10-05, d)."""

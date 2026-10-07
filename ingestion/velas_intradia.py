@@ -198,15 +198,16 @@ async def ingerir_td(adapter: TwelveDataAdapter, *, write: bool,
 
 def horario_de(datos: dict, simbolo: str = SIMBOLO_DERIV) -> Optional[dict]:
     """El horario de un símbolo dentro de una respuesta de `trading_times`:
-    días, aperturas, cierres y eventos, tal cual vienen. None si no está."""
+    días, aperturas (`times.open`), cierres (`times.close`) y eventos, tal
+    cual vienen. None si no está."""
     for m in (datos.get("trading_times") or {}).get("markets") or []:
         for sm in m.get("submarkets") or []:
             for s in sm.get("symbols") or []:
                 if s.get("underlying_symbol", s.get("symbol")) == simbolo:
                     t = s.get("times") or {}
                     return {"mercado": m.get("name"), "submercado": sm.get("name"),
-                            "trading_days": s.get("trading_days"), "open": t.get("open"),
-                            "close": t.get("close"), "settlement": t.get("settlement"),
+                            "trading_days": s.get("trading_days"), "aperturas": t.get("open"),
+                            "cierres": t.get("close"), "settlement": t.get("settlement"),
                             "events": s.get("events")}
     return None
 
@@ -311,7 +312,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     for b in bloques:
         texto = json.dumps(b, ensure_ascii=False)
         assert key not in texto, "la key llegó al informe: no se publica"
-        publicar(f"DATOS {b['fuente'].upper()}", b)
+        publicar(f"DESCARGA {b['fuente'].upper()}", b)
     malos = [b for b in bloques if b.get("n_invalidas") or b.get("no_escrito") or b.get("error")]
     return 1 if malos else 0
 
