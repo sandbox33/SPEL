@@ -2085,3 +2085,98 @@ de TwelveData.
 `wss://ws.derivws.com/websockets/v3`: `InvalidStatus: server rejected WebSocket connection: HTTP
 520` en el handshake, otra vez con el App ID válido.
 
+
+---
+
+## 2026-10-06 — `integracion_demo/`: ejecución y registro demo para Deriv Multipliers, sin estrategia
+
+**Fuente:** brief del Admin del 06-oct-2026 (3). Precondición verificada: el PR #31 está fusionado
+en `main` (merge `a84778b`, 07-oct-2026 00:53 UTC); la rama sale de ahí.
+
+### Decisiones del Admin
+
+- **a) El acta del 21-sep sigue.** `core/execution_costs.py` y `core/trade_ledger.py` no se tocan.
+  Su condición de reversión no se cumple: los multiplicadores de Deriv cobran una comisión única,
+  no taker/maker ni funding. El registro demo es un módulo nuevo, `integracion_demo/registro.py`,
+  que **porta** el patrón de escritura y lectura de `trade_ledger.py` —con la línea de origen
+  citada en cada comentario— y no lo copia ni lo importa.
+- **b) Formato JSONL.** Sin Parquet ni pyarrow.
+- **c) Sin cierre parcial.** El trailing por `contract_update` solo existe como regla de un
+  pre-registro sellado; moverlo a favor reduce riesgo (DG-7).
+- **d) `R_usd` = el `stop_loss` confirmado en la respuesta de Deriv**, no el solicitado ni el
+  stake. La comisión se registra aparte.
+- **e) Squeeze-to-Expansion: descartada como prioridad; no suma a N.** Verificado por búsqueda en
+  el repo: no hay pre-registro, código ni documento que la nombre, así que no hay nada que
+  retirar. Capital de referencia: DG-2 (100 USD), sin cambios.
+- **Parte B, autorizada en el brief:** UNA orden en la cuenta demo —frxXAUUSD, MULTUP, stake
+  mínimo, ×100, `stop_loss` 0,10 USD, sin TP, `sell` a los 60 s si sigue abierta—, con
+  `GET /accounts` y balance antes y después, entre el 07-oct-2026 00:00 y el 16-oct-2026 23:59 UTC.
+  El test (`tests/test_integracion_demo_orden_live.py`) va en `live-tests.yml` con
+  `workflow_dispatch`; lo dispara el Admin.
+
+### Lo que se construyó
+
+- `integracion_demo/otp.py`: `emitir_otp_demo`, `otp_de`, `motivo_para_no_conectar`, `elegir_demo`,
+  `leer_cuentas` y el enmascarado, **movidos** desde las sondas §0.A-2 y §0.A-3 sin cambiar su
+  cuerpo; las sondas los importan de ahí y sus tests no cambiaron. Nuevo: `url_demo_nueva`, un OTP
+  y la URL solo si es `/ws/demo`.
+- `conexion.py`: un OTP nuevo por conexión y por cada intento de reconexión, backoff 1-2-4-8-16 s;
+  un pedido a la vez, emparejado por `req_id`; ningún mensaje se reintenta solo; el `ping` de
+  aplicación es un parámetro, y el socket se abre sin el ping de protocolo de `websockets` para
+  que el cierre por inactividad se pueda medir.
+- `ejecucion.py`: lista blanca de los ocho mensajes del brief, con las claves de su esquema
+  oficial (commit 54e3538) y sin `subscribe` ni `passthrough`; `buy` solo con `parameters`,
+  MULTUP/MULTDOWN y `limit_order.stop_loss` > 0.
+- `registro.py`: JSONL append-only, `row_hash = sha256(prev_hash + fila canónica)`, crudo aparte.
+- `reconciliar.py`: cruza con `profit_table` y `statement` y agrega una fila; nunca edita.
+- Guardas AST (`tests/test_guarda_integracion_demo.py`) y 59 + 10 + 15 mutantes, todos atrapados
+  después de reforzar dos tests.
+
+### Interpretaciones (lo que el brief no fija)
+
+1. **Dos columnas más** que la lista del punto 3d: `evento` (envío, compra, seguimiento,
+   actualización, venta, cierre, rechazo, no enviada, sin respuesta, reconciliación) y
+   `evidencia` (la del outcome, y la de la marca de reconciliación). Las filas de eventos
+   intermedios llevan `outcome` nulo; las terminales lo exigen.
+2. **Outcome.** Un `sell` propio confirmado da `sell_tiempo` o `sell_manual`. Si no, se compara el
+   `exit_spot` con los niveles que Deriv devolvió (`stop_loss`, `stop_out` y `take_profit`), y
+   entra el ÚNICO que cruzó. Si no cruzó ninguno o cruzó más de uno, el outcome es `desconocido`.
+   Deriv no documenta un campo que diga qué cerró el contrato.
+3. **Un `buy` sin respuesta no se reintenta:** queda `sin_respuesta` / `desconocido` y lo resuelve
+   la reconciliación, que busca compras en `statement` a ±120 s del envío.
+4. **`contract_update`** exige el sha256 de un pre-registro y un `stop_loss` menor que el
+   confirmado. Quitar el SL (`null`) se rechaza siempre.
+5. **Dónde vive el registro:** `<stream TRADE_LEDGER>/demo/`, un subdirectorio y no un stream
+   nuevo: `tests/test_persistence.py` fija el conjunto exacto de streams. En el fallback local
+   lanza, como `trade_ledger.py`. Agregar lee la cola del archivo (la cadena lo necesita) y se
+   niega a escribir sobre un registro roto.
+6. **La cadena no detecta que se borre la ÚLTIMA fila.** Para eso existe `Registro.cabeza`
+   (`seq` y `row_hash`), que el informe de la parte B publica.
+7. **Reconciliación:** montos iguales a menos de medio centavo; la comisión no aparece en
+   `profit_table` ni en `statement`, así que no se reconcilia.
+8. **Parte B:** el balance sale de `GET /accounts`, porque el mensaje `balance` no está en la lista
+   blanca; el stake mínimo, de `validation_params.stake.min` de una cotización a 1 USD.
+   "Una sola orden" se lee como una por autorización: si `statement` ya muestra una compra desde
+   el inicio de la ventana, no compra. El job `orden_demo` es aparte del de sondas y no corre dos
+   veces en paralelo.
+9. **Guarda de mensajes de orden:** fuera de `integracion_demo/` no hay excepción en el código; en
+   `tests/` solo los seis archivos listados, que prueban el rechazo o hacen de Deriv.
+
+### Retirado
+
+- **La entrada `live` de `tests/test_deriv_cotizacion_real_live.py`.** La autorización del canal
+  real era de un solo uso y se usó el 06-oct, pero el test seguía activo hasta el 09-oct: un
+  despacho de las sondas antes de esa fecha habría pedido un segundo OTP real. Las funciones y sus
+  tests offline quedan.
+
+### Pendiente
+
+- **El parser de `proposal_open_contract` se fija con el informe de la parte B.** Hasta entonces
+  tolera claves faltantes y guarda todo lo crudo.
+- `integracion_demo` no está en los paquetes que recorre `tests/test_registro_constantes.py`, así
+  que sus constantes no entran a `config/constantes.json`. No se editó ese test.
+- **Para que el Admin lo resuelva, sin elegir:** CLAUDE.md dice que las sondas en `tests/` pueden
+  pedir OTP y cotizar, "nunca comprar", y que las órdenes demo salen "solo desde
+  `integracion_demo/`". La parte B es un test en `tests/` que compra, aunque el `buy` lo arma, lo
+  valida y lo envía `integracion_demo/ejecucion.py`. Se escribió así porque el brief lo ordena
+  explícitamente; si la regla tiene que nombrar este caso, va en un PR de gobernanza.
