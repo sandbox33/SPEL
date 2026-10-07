@@ -318,6 +318,53 @@ async def test_el_ping_es_un_parametro(tmp_path):
     assert falso2.de_tipo("ping") == [], "sin intervalo no hay ping"
 
 
+async def test_cerrar_termina_aunque_el_ping_se_trague_la_cancelacion(tmp_path):
+    """En Python 3.11, asyncio.wait_for se traga una cancelación que llega
+    con la respuesta ya lista. El ping puede no enterarse del cancel(), y
+    el cierre igual tiene que terminar."""
+    _, _, _, _, conexion = _armar(tmp_path, intervalo_ping_s=0.001)
+
+    async def pedir_que_traga(payload):
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            return "", ""
+    conexion.pedir = pedir_que_traga
+    await conexion.__aenter__()
+    await asyncio.sleep(0.02)
+    cierre = asyncio.ensure_future(conexion.__aexit__(None, None, None))
+    await asyncio.wait({cierre}, timeout=2)
+    termino = cierre.done()
+
+    async def rompe(payload):                 # limpieza: que el ping termine igual
+        raise RuntimeError("fin del test")
+    conexion.pedir = rompe
+    conexion._latido.cancel()
+    await asyncio.wait({conexion._latido, cierre}, timeout=2)
+    assert termino, "el cierre quedó esperando al ping para siempre"
+
+
+async def test_cerrar_no_se_traga_la_cancelacion_de_quien_cierra(tmp_path):
+    _, _, _, _, conexion = _armar(tmp_path)
+    await conexion.__aenter__()
+    fin = asyncio.Event()
+
+    async def inmortal():
+        while not fin.is_set():
+            try:
+                await asyncio.sleep(0.01)
+            except asyncio.CancelledError:
+                pass
+    conexion._latido = asyncio.ensure_future(inmortal())
+    cierre = asyncio.ensure_future(conexion.__aexit__(None, None, None))
+    await asyncio.sleep(0.02)
+    cierre.cancel()
+    await asyncio.wait({cierre}, timeout=1)
+    fin.set()
+    await conexion._latido
+    assert cierre.cancelled(), "la cancelación de quien cierra se perdió"
+
+
 async def test_medir_el_cierre_por_inactividad(tmp_path):
     class _Cierra(_Falso):
         async def recv(self):

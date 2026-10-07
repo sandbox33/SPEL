@@ -91,6 +91,9 @@ class ConexionDemo:
         self._ws: Any = None
         self._req_id = 0
         self._latido: Optional[asyncio.Task] = None
+        #: Se prende al cerrar: el ping sale de su bucle aunque la
+        #: cancelación se pierda (ver `__aexit__`).
+        self._cerrando = False
         #: Cuántos OTP se pidieron y cuántas conexiones se abrieron.
         self.n_otps = 0
         self.n_conexiones = 0
@@ -107,12 +110,15 @@ class ConexionDemo:
         return self
 
     async def __aexit__(self, *exc: Any) -> None:
+        # En Python 3.11, `asyncio.wait_for` se traga una cancelación que
+        # llega cuando la respuesta ya está (corregido en 3.12): el ping
+        # puede no enterarse del `cancel()`. Por eso, además, la bandera.
+        # Y se espera con `asyncio.wait`, que no lanza lo de la tarea ni se
+        # traga la cancelación de quien cierra.
+        self._cerrando = True
         if self._latido is not None:
             self._latido.cancel()
-            try:
-                await self._latido
-            except (asyncio.CancelledError, Exception):   # noqa: BLE001
-                pass
+            await asyncio.wait({self._latido})
         await self._descartar("cierre pedido")
 
     @property
@@ -191,7 +197,7 @@ class ConexionDemo:
                     f"{next(iter(payload))} (req_id {req_id}): {type(exc).__name__}") from exc
 
     async def _latir(self) -> None:
-        while True:
+        while not self._cerrando:
             await asyncio.sleep(self.intervalo_ping_s)
             if self._lock.locked():
                 continue
