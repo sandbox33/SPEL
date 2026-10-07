@@ -84,7 +84,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, Callable, Optional
 
 import httpx
 import pytest
@@ -99,6 +99,15 @@ from ingestion.sonda_instrumentos import (
     seleccionar,
 )
 from core.preregistro_h1 import REJILLA_H1, historia_requerida
+from integracion_demo.otp import (  # noqa: F401 -- portados (brief 06-oct-2026 (3))
+    BASE_REST,
+    NOTA_401,
+    Getter,
+    _get_httpx,
+    _limpiador,
+    enmascarar_id,
+    enmascarar_ids,
+)
 from ingestion.velas import GRANULARIDAD_DIARIA
 from tests.test_deriv_endpoints_live import (
     _EXTRACTO,
@@ -106,9 +115,6 @@ from tests.test_deriv_endpoints_live import (
     _http_de,
     texto_libre,
 )
-
-#: [INTERPRETACIÓN] Ver el docstring: el host del ws/public verificado.
-BASE_REST = "https://api.derivws.com"
 
 #: Las ÚNICAS rutas REST que la sonda puede pedir, y solo con GET.
 RUTAS_REST_PERMITIDAS: frozenset[str] = frozenset({
@@ -129,29 +135,6 @@ UMBRALES_VELAS_BTC: dict[str, int] = {
     "H3 completo (condición de parada, ítem 8)": UMBRAL_ADMIN_VELAS_BTC,
     "H1 completo": historia_requerida(max(REJILLA_H1)),
 }
-
-#: Qué dice el informe ante un 401 en la parte autenticada. El token no
-#: tiene fecha de vencimiento conocida (decision-log 2026-10-01): un 401 se
-#: lee como posible vencimiento, no como un fallo del código.
-NOTA_401 = ("posible vencimiento del DERIV_API_TOKEN: su fecha de vencimiento es "
-            "DESCONOCIDA (decision-log 2026-10-01). No es un fallo de código.")
-
-#: GET async: (url, headers) -> (status HTTP, headers de la respuesta, cuerpo).
-Getter = Callable[[str, dict], Awaitable[tuple[int, dict, str]]]
-
-
-def enmascarar_id(cuenta: str) -> str:
-    """Los dígitos de un account_id, tapados. Queda el prefijo de letras,
-    que dice la clase de cuenta y no la cuenta."""
-    return re.sub(r"\d", "*", str(cuenta))
-
-
-def enmascarar_ids(texto: str) -> str:
-    """Toda tira de 4 o más dígitos, tapada: así se ve un account_id o un
-    loginid dentro de un mensaje de error. Lo que queda (códigos, palabras)
-    dice por qué falló."""
-    return re.sub(r"\d{4,}", lambda m: "*" * len(m.group()), texto)
-
 
 #: Headers con "expir" en el nombre que NO hablan del token. `Expires` es la
 #: cabecera HTTP de caché (RFC 9111 §5.3): en la sonda 2 vino con una fecha
@@ -184,22 +167,7 @@ def vencimiento_expuesto(headers: dict, datos: Any) -> dict:
     return out
 
 
-def _limpiador(secretos: tuple[str, ...]) -> Callable[[str], str]:
-    def limpiar(texto: str) -> str:
-        for s in secretos:
-            if s:
-                texto = texto.replace(s, "***")
-        return texto
-    return limpiar
-
-
 # ═══ e) REST ══════════════════════════════════════════════════════════════
-
-async def _get_httpx(url: str, headers: dict) -> tuple[int, dict, str]:
-    async with httpx.AsyncClient(timeout=TIMEOUT_RESPUESTA_S) as cliente:
-        r = await cliente.get(url, headers=headers)
-        return r.status_code, dict(r.headers), r.text
-
 
 async def sondear_rest(*, token: str, app_id: str, get: Getter = _get_httpx) -> dict:
     """Las dos rutas de solo lectura, UN pedido cada una: sin reintentos.

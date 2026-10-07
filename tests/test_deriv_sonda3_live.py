@@ -82,33 +82,37 @@ no se confirma, es el resultado y sale verde.
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import math
-from typing import Any, Awaitable, Callable, Optional
-from urllib.parse import parse_qs, urlsplit
+from typing import Any, Callable, Optional
 
-import httpx
 import pytest
 
-from ingestion.deriv_ws import TIMEOUT_RESPUESTA_S
 from ingestion.sonda_instrumentos import CONTROL_POSITIVO, codigo, es_sintetico, seleccionar
+from integracion_demo.otp import (  # noqa: F401 -- portados (brief 06-oct-2026 (3))
+    BASE_REST,
+    ENDPOINT_DEMO,
+    NOTA_401,
+    RUTA_CUENTAS,
+    RUTA_OTP,
+    CuentaNoDemoError,
+    Getter,
+    Poster,
+    _get_httpx,
+    _limpiador,
+    _post_httpx,
+    elegir_demo,
+    emitir_otp_demo,
+    leer_cuentas,
+    motivo_para_no_conectar,
+    otp_de,
+)
 from tests.test_deriv_endpoints_live import (
     ENDPOINT_PUBLICO_NUEVO,
     _http_de,
     texto_libre,
 )
-from tests.test_deriv_sonda2_live import (
-    BASE_REST,
-    NOTA_401,
-    Getter,
-    _Canal,
-    _get_httpx,
-    _limpiador,
-    enmascarar_id,
-    enmascarar_ids,
-    profundidad,
-)
+from tests.test_deriv_sonda2_live import _Canal, profundidad
 
 #: Familias de contratos que el brief pide listar.
 FAMILIAS: dict[str, frozenset[str]] = {
@@ -138,20 +142,9 @@ MAX_PAGINAS_INTRADIA = 300
 #: [INTERPRETACIÓN] Pausa entre pedidos del WS, en segundos.
 PAUSA_ENTRE_PEDIDOS_S = 0.25
 
-#: La única ruta REST de escritura que esta sonda puede usar.
-RUTA_OTP = "/trading/v1/options/accounts/{account_id}/otp"
-RUTA_CUENTAS = "/trading/v1/options/accounts"
-
-#: El canal demo, derivado del público: misma base, último tramo `demo`.
-ENDPOINT_DEMO = ENDPOINT_PUBLICO_NUEVO.rsplit("/", 1)[0] + "/demo"
-
 #: Redondeo de las comisiones (centavos): cada cotización puede estar hasta
 #: medio centavo lejos de la proporción exacta.
 _TOLERANCIA_COMISION_USD = 0.01
-
-#: POST async: (url, headers) -> (status, headers de la respuesta, cuerpo).
-Poster = Callable[[str, dict], Awaitable[tuple[int, dict, str]]]
-
 
 class _CanalPausado(_Canal):
     """El canal de la sonda 2 con una pausa antes de cada pedido. La lista
@@ -376,109 +369,6 @@ async def intradia(canal: _Canal, simbolos: list[str]) -> list[dict]:
 
 
 # ═══ 3. Cuenta demo, OTP y /ws/demo ═══════════════════════════════════════
-
-async def _post_httpx(url: str, headers: dict) -> tuple[int, dict, str]:
-    async with httpx.AsyncClient(timeout=TIMEOUT_RESPUESTA_S) as cliente:
-        r = await cliente.post(url, headers=headers)
-        return r.status_code, dict(r.headers), r.text
-
-
-def _headers(token: str, app_id: str) -> dict:
-    return {"Authorization": f"Bearer {token}", "Deriv-App-ID": app_id}
-
-
-async def leer_cuentas(*, token: str, app_id: str, get: Getter = _get_httpx
-                       ) -> tuple[dict, list[dict]]:
-    """GET /accounts, un solo pedido. Devuelve el informe publicable (IDs
-    tapados) y las cuentas crudas, que no salen de esta prueba."""
-    limpiar = _limpiador((token, app_id))
-    informe: dict[str, Any] = {"ok": False}
-    try:
-        status, _, cuerpo = await get(BASE_REST + RUTA_CUENTAS, _headers(token, app_id))
-    except Exception as exc:   # noqa: BLE001
-        informe["error"] = limpiar(f"{type(exc).__name__}: {exc}")
-        return informe, []
-    informe["http"] = status
-    informe["sha256"] = hashlib.sha256(cuerpo.encode("utf-8")).hexdigest()
-    if status != 200:
-        informe["error"] = enmascarar_ids(limpiar(cuerpo[:400]))
-        if status == 401:
-            informe["nota"] = NOTA_401
-        return informe, []
-    try:
-        cuentas = json.loads(cuerpo).get("data")
-    except (json.JSONDecodeError, AttributeError):
-        cuentas = None
-    if not isinstance(cuentas, list):
-        informe["error"] = "200 sin `data` como lista"
-        return informe, []
-    informe["ok"] = True
-    informe["cuentas"] = [{"account_id": enmascarar_id(c.get("account_id", "")),
-                           "account_type": c.get("account_type"), "status": c.get("status")}
-                          for c in cuentas]
-    return informe, cuentas
-
-
-def elegir_demo(cuentas: list[dict]) -> Optional[dict]:
-    """La primera cuenta demo activa, o None. Nada que no diga demo."""
-    demo = [c for c in cuentas if c.get("account_type") == "demo"
-            and c.get("status") == "active" and c.get("account_id")]
-    return demo[0] if demo else None
-
-
-class CuentaNoDemoError(RuntimeError):
-    """Se pidió un OTP para una cuenta que /accounts no dice demo."""
-
-
-async def emitir_otp_demo(cuenta: dict, *, token: str, app_id: str,
-                          post: Poster = _post_httpx) -> tuple[dict, Optional[str]]:
-    """UN OTP para la cuenta demo. Lanza, sin tocar la red, si la cuenta no
-    es demo: la guarda no depende de quien llama. Devuelve el informe y la
-    URL, que no va al informe porque lleva el OTP."""
-    if cuenta.get("account_type") != "demo":
-        raise CuentaNoDemoError(f"account_type {cuenta.get('account_type')!r}: "
-                                f"solo se emite OTP para demo")
-    limpiar = _limpiador((token, app_id))
-    ruta = RUTA_OTP.format(account_id=cuenta["account_id"])
-    informe: dict[str, Any] = {"ok": False,
-                               "cuenta": enmascarar_id(cuenta["account_id"])}
-    try:
-        status, _, cuerpo = await post(BASE_REST + ruta, _headers(token, app_id))
-    except Exception as exc:   # noqa: BLE001
-        informe["error"] = enmascarar_ids(limpiar(f"{type(exc).__name__}: {exc}"))
-        return informe, None
-    informe["http"] = status
-    if status != 200:
-        informe["error"] = enmascarar_ids(limpiar(cuerpo[:400]))
-        if status == 401:
-            informe["nota"] = NOTA_401
-        return informe, None
-    try:
-        url = (json.loads(cuerpo).get("data") or {}).get("url")
-    except (json.JSONDecodeError, AttributeError):
-        url = None
-    if not url:
-        informe["error"] = "200 sin `data.url`"
-        return informe, None
-    informe["ok"] = True
-    return informe, url
-
-
-def otp_de(url: str) -> Optional[str]:
-    return (parse_qs(urlsplit(url).query).get("otp") or [None])[0]
-
-
-def motivo_para_no_conectar(url: str) -> Optional[str]:
-    """None si la URL es la de /ws/demo, con OTP; si no, por qué no se
-    conecta. Lo único que se compara es esquema, host y ruta."""
-    u, demo = urlsplit(url), urlsplit(ENDPOINT_DEMO)
-    if (u.scheme, u.hostname, u.path.rstrip("/")) != (demo.scheme, demo.hostname, demo.path):
-        return (f"la URL del OTP no es la de /ws/demo: {u.scheme}://{u.hostname}{u.path} "
-                f"(se esperaba {demo.scheme}://{demo.hostname}{demo.path})")
-    if not otp_de(url):
-        return "la URL del OTP no trae el parámetro `otp`"
-    return None
-
 
 # ═══ Diferencias entre ws/public y ws/demo ════════════════════════════════
 
