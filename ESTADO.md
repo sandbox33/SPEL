@@ -14,7 +14,7 @@
 
 **Commit de referencia:** `a84778b` (merge del PR #31).
 
-**Tests:** **1538** recolectados en `tests/`, en 51 archivos, medido con
+**Tests:** **1539** recolectados en `tests/`, en 51 archivos, medido con
 `pytest --collect-only -q tests/` el 07-oct-2026 sobre esta rama. Más 74 en `research/tests/`, que no
 bloquean.
 
@@ -57,7 +57,7 @@ Eso no reabre Fase 1 ni cambia su resultado; ordena el código para que coincida
 
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-**1538 recolectados en `tests/`, en 51 archivos**, contados con `pytest --collect-only -q`
+**1539 recolectados en `tests/`, en 51 archivos**, contados con `pytest --collect-only -q`
 el 07-oct-2026 sobre la rama de `integracion_demo/`, no copiados de ningún documento. Sin credenciales
 se saltan 6, cada uno por su propio `skipif`: el test `live` de TwelveData, el guardián de
 secretos de `tests/test_sources.py`, las dos sondas de endpoints de Deriv, la 3b de TwelveData y
@@ -97,7 +97,7 @@ corridas seguidas sin intermitencia.
 | `execution/circuit_breaker.py` + `execution_guard.py` | Guardrails duros — congelados hasta F4 | 14 + 17 | ✅ |
 | `governance/persistence.py` + `secrets.py` | 5 streams (TRADE_LEDGER desde el PR #25), SecretKey único | 19 + 10 | ✅ |
 | `governance/estado.py` + `tests/test_estado_al_dia.py` | Control anti-desfase de este archivo (DG-6) | 16 | ✅ |
-| `integracion_demo/otp.py` + `conexion.py` | OTP solo para la cuenta que `GET /accounts` dice demo, URL solo `/ws/demo`, un OTP nuevo por conexión, reconexión con backoff, ping como parámetro | 104 (con `ejecucion.py`) | ✅ offline; 🟡 nunca conectó en vivo |
+| `integracion_demo/otp.py` + `conexion.py` | OTP solo para la cuenta que `GET /accounts` dice demo, URL solo `/ws/demo`, un OTP nuevo por conexión, reconexión con backoff, ping como parámetro | 105 (con `ejecucion.py`) | ✅ offline; 🟡 nunca conectó en vivo |
 | `integracion_demo/ejecucion.py` | Lista blanca de ocho mensajes; `buy` solo MULTUP/MULTDOWN con `stop_loss`; un `buy` sin respuesta no se reintenta | ídem | ✅ offline; 🟡 la parte B no corrió |
 | `integracion_demo/registro.py` + `reconciliar.py` | Registro demo JSONL con cadena de hashes y crudo aparte (porta `trade_ledger.py`, no lo importa); reconciliación con `profit_table` y `statement` | 73 | ✅ offline; 🟡 parser de `proposal_open_contract` sin fijar |
 | `tests/test_integracion_demo_orden_live.py` | Parte B: UNA orden demo, 07..16-oct-2026, job `orden_demo` de `live-tests.yml` | 13 | 🟡 escrito, no disparado |

@@ -2129,7 +2129,8 @@ en `main` (merge `a84778b`, 07-oct-2026 00:53 UTC); la rama sale de ahí.
   MULTUP/MULTDOWN y `limit_order.stop_loss` > 0.
 - `registro.py`: JSONL append-only, `row_hash = sha256(prev_hash + fila canónica)`, crudo aparte.
 - `reconciliar.py`: cruza con `profit_table` y `statement` y agrega una fila; nunca edita.
-- Guardas AST (`tests/test_guarda_integracion_demo.py`) y 59 + 10 + 15 mutantes, todos atrapados
+- Guardas AST (`tests/test_guarda_integracion_demo.py`) y 86 mutantes (59 de la lógica, 10 de las
+  guardas, 15 de la parte B y 2 del cierre tolerante), todos atrapados
   después de reforzar dos tests.
 
 ### Interpretaciones (lo que el brief no fija)
