@@ -155,16 +155,12 @@ Poster = Callable[[str, dict], Awaitable[tuple[int, dict, str]]]
 
 class _CanalPausado(_Canal):
     """El canal de la sonda 2 con una pausa antes de cada pedido. La lista
-    blanca de deriv_ws sigue en `_Canal.pedir`."""
+    blanca de deriv_ws sigue en `_Canal`; la pausa la aplica
+    `CanalPublico.pedir` (ingestion/deriv_publico.py), adonde se portó."""
 
     def __init__(self, ws: Any, pausa_s: float = PAUSA_ENTRE_PEDIDOS_S) -> None:
         super().__init__(ws)
         self.pausa_s = pausa_s
-
-    async def pedir(self, payload: dict) -> tuple[dict, Optional[dict]]:
-        if self.pausa_s:
-            await asyncio.sleep(self.pausa_s)
-        return await super().pedir(payload)
 
 
 # ═══ 1. Contratos ═════════════════════════════════════════════════════════

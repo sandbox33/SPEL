@@ -1029,6 +1029,51 @@
       "notas": "XAUUSD entró el 06-oct-2026 con la respuesta real de la sonda §0.A-3b (earliest_timestamp 5min 2020-03-16 01:10:00 UTC, sha256 c6250399d925f4aea07c9a0ce8b528bcf33b44a1cbf90a2b575655401dbab3cf) y la autorización del Admin del 06-oct-2026 (4)."
     },
     {
+      "nombre": "ENDPOINT_PUBLICO",
+      "modulo": "ingestion.deriv_publico",
+      "categoria": "etiqueta",
+      "valor": "wss://api.derivws.com/trading/v1/options/ws/public",
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Canal público nuevo de Deriv, verificado DISPONIBLE (decision-log 2026-10-01). Vivía en tests/test_deriv_endpoints_live.py como ENDPOINT_PUBLICO_NUEVO.",
+      "usado_en": [
+        "ingestion.deriv_publico.CanalPublico",
+        "ingestion.velas_intradia.ingerir_deriv"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "MENSAJES_PUBLICOS",
+      "modulo": "ingestion.deriv_publico",
+      "categoria": "etiqueta",
+      "valor": [
+        "active_symbols",
+        "ticks_history",
+        "time",
+        "trading_times"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin del 06-oct-2026 (4): lista blanca de solo lectura del canal público para la ingesta intradía; trading_times para el calendario (punto 2).",
+      "usado_en": [
+        "ingestion.deriv_publico.validar_publico"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "_EXTRACTO",
+      "modulo": "ingestion.deriv_publico",
+      "categoria": "parametro",
+      "valor": 400,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Caracteres de una respuesta no JSON que van al informe; el mismo valor que las sondas §0.A-2 y §0.A-3.",
+      "usado_en": [
+        "ingestion.deriv_publico.CanalPublico.pedir"
+      ],
+      "notas": ""
+    },
+    {
       "nombre": "MENSAJES_PERMITIDOS",
       "modulo": "ingestion.deriv_ws",
       "categoria": "etiqueta",
