@@ -10,17 +10,18 @@
 > Este archivo se lee primero en cada chat nuevo. Frente a un chat que lo contradiga sin
 > evidencia, gana el archivo; frente al código, gana el código.
 
-**Última actualización:** 06 oct 2026 — merge de `main` en la rama del PR #31, después de la sonda §0.A-3b.
+**Última actualización:** 07 oct 2026 — velas M5 del oro y concordancia TwelveData–Deriv (brief del Admin del 06-oct-2026 (4)), en la rama `feature/xauusd-concordancia-td-deriv`.
 
-**Commit de referencia:** `2d5dd35` (merge del PR #35).
+**Commit de referencia:** `a84778b` (merge del PR #31).
 
-**Tests:** **1315** recolectados en `tests/`, en 47 archivos, medido con
-`pytest --collect-only -q tests/` sobre la rama del PR #31 después del merge de `main`. Más 74 en `research/tests/`, que no
+**Tests:** **1423** recolectados en `tests/`, en 52 archivos, medido con
+`pytest --collect-only -q tests/` el 07-oct-2026 sobre esta rama. Más 74 en `research/tests/`, que no
 bloquean.
 
-Desfase: **ninguno**. El commit de referencia es el merge del PR #35, el último de `main`, y
-esta actualización entra con el merge de `main` en la rama del PR #31, que sigue abierta y en
-pausa. Los PRs #33 y #34 siguen abiertos. `tests/test_estado_al_dia.py` falla si hay **más
+Desfase: **ninguno**. El commit de referencia es el merge del PR #31, el último de `main`.
+Esta actualización entra con el PR de las velas M5 del oro; el PR #36 (`integracion_demo/`)
+también cambia este encabezado, y el que se fusione segundo resuelve el conflicto. Los PRs
+#33 y #34 siguen abiertos y en pausa. `tests/test_estado_al_dia.py` falla si hay **más
 de 3 PRs fusionados** desde el commit de referencia de arriba (DG-6).
 
 
@@ -57,10 +58,11 @@ Eso no reabre Fase 1 ni cambia su resultado; ordena el código para que coincida
 
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-**1315 recolectados en `tests/`, en 47 archivos**, contados con `pytest --collect-only -q`
-el 06-oct-2026 sobre la rama del PR #31, no copiados de ningún documento. Sin credenciales se saltan 2: el test
-`live` de TwelveData y el guardián de secretos de `tests/test_sources.py`, los dos por su
-propio `skipif`.
+**1423 recolectados en `tests/`, en 52 archivos**, contados con `pytest --collect-only -q`
+el 07-oct-2026 sobre la rama de las velas M5 del oro, no copiados de ningún documento. Sin
+credenciales se saltan 6, cada uno por su propio `skipif`: el test `live` de TwelveData, el
+guardián de secretos de `tests/test_sources.py`, las dos sondas de endpoints de Deriv, la 3b de
+TwelveData y la cotización en el canal real.
 
 **Más 74 en `research/tests/`, que NO corren en el job que bloquea** — son los tests del
 código retirado (ver la sección de `research/` más abajo). Mezclarlos en una sola cifra
@@ -84,6 +86,10 @@ corridas seguidas sin intermitencia.
 | `tools/verificar_siembra.py` | Compara BTC/XAU sembrados contra la serie medida | 14 | ✅ verde contra la siembra real (corrido el 29-sep, ver decision-log) |
 | `ingestion/deriv_ws.py` | Sesión de solo lectura con Deriv: `entorno` obligatorio, `real` con permiso aparte, lista blanca de siete mensajes | 29 | 🟡 habla con el endpoint legacy, muerto desde el 01-oct (HTTP 520): falta migrar al WS público |
 | `ingestion/sonda_instrumentos.py` + `.github/workflows/sonda.yml` | Contratos, multiplicadores, stake y comisión de BTC y oro, desde la API, siete días | 19 + 6 | 🟡 usa `deriv_ws.py`, así que depende de la misma migración |
+| `ingestion/velas_intradia.py` + `.github/workflows/velas_intradia.yml` | Velas M5 del oro en `data`: TwelveData XAU/USD 5min desde 2020-03-16 y Deriv frxXAUUSD M5 por `/ws/public`, con el patrón de `velas.py`; horario de `trading_times` crudo con sha256 | 26 + 6 | 🟡 offline; el workflow no corrió |
+| `ingestion/deriv_publico.py` + `ingestion/limitador.py` | Canal público de Deriv y paginación de velas, y el limitador de TwelveData, portados de las sondas | (en los de arriba) | ✅ |
+| `tools/concordancia_xauusd.py` | Rango de apertura 08:00 Londres y primera ruptura hasta las 12:00 por fuente, filtro de calendario, métricas y compuerta del 90 %; ningún desenlace (guarda AST + serie espía) | 38 + 24 | 🟡 sin datos reales todavía |
+| `ingestion/adapters.py::TwelveDataAdapter.fetch_pagina` | XAU/USD en el mapa (evidencia 3b, autorización del 06-oct (4)); página con `start/end_date` y cierre por la hora del servidor | 14 | ✅ offline |
 | `ingestion/velas.py` + `.github/workflows/velas.yml` | Velas diarias de BTC y oro en la rama `data`, profundidad usable, `leer_velas()` en polars | 33 + 6 | 🟡 ídem; además, Deriv entrega 365 días de historia (sonda §0.A-2) |
 | `core/preregistro_h1.py` + `research/preregistro_h1.md` | Reglas del experimento H1, fijadas antes del backtest | 26 | 🟡 dos cláusulas PENDIENTES del Admin |
 | `ingestion/kappa_deriv.py` | κ = comisión/nocional de MULTUP por activo, máximo medido en la cuenta real (sonda §0.A-3b, decision-log 06-oct) | 6 | ✅ dato medido, sin consumidor todavía |
@@ -504,11 +510,12 @@ salvedad que hay que resolver **antes** de revertir.
 
 ## ▶️ PRÓXIMO PASO CONCRETO
 
-**Esperar el brief del Admin.** La sonda §0.A-3b corrió el 06-oct (run 37404371657) y sus
-resultados están en el decision-log de la rama del PR #31. Quedan abiertas, para decidir:
-la migración de `ingestion/deriv_ws.py` al WS público nuevo, de la que depende todo el PR
-#31 (la legacy está muerta desde el 01-oct), y el brief de la batería multi-estrategia
-(DG-8), que fija el nombre de su paquete.
+**El Admin dispara `SPEL velas intradía del oro`** (`velas_intradia.yml`). Baja la historia
+M5 del oro de TwelveData y de Deriv a la rama `data`, y publica los cuatro bloques del informe
+(datos, calendario, concordancia y compuerta). Con eso se cierra la pregunta de las 33.605
+contra 23.160 velas, y la compuerta del 90 % dice si TwelveData sirve como historia del ORB
+del oro. Siguen abiertas la migración de `ingestion/deriv_ws.py` al WS público y el brief de
+la batería multi-estrategia (DG-8).
 
 *(Lo que estaba acá —"decidir qué mide el éxito de Fase 2"— lo contestan los
 pre-registros de la Serie H —Sharpe neto fuera de muestra, PSR, DSR y la comparación contra
