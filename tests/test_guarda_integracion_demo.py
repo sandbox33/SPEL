@@ -39,6 +39,7 @@ ARCHIVOS_DE_TEST_PERMITIDOS: frozenset[Path] = frozenset({
     Path("tests/test_deriv_ws.py"),
     Path("tests/test_deriv_sonda3_live.py"),
     Path("tests/test_deriv_cotizacion_real_live.py"),
+    Path("tests/test_velas_intradia.py"),
     # Prueban integracion_demo y hacen de Deriv.
     Path("tests/test_integracion_demo_ejecucion.py"),
     Path("tests/test_integracion_demo_registro.py"),
