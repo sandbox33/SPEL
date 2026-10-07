@@ -28,7 +28,20 @@ on:
   # Manual, a propósito. Cada corrida consume cuota real del plan gratuito
   # de los proveedores, así que se dispara cuando alguien quiere la
   # respuesta, no en cada push.
+  #
+  # `objetivo` elige UN job: `sondas` (los tests `live` de siempre) u
+  # `orden_demo` (la parte B del brief del Admin del 06-oct-2026 (3): la
+  # primera orden en la cuenta demo). Nunca los dos en la misma corrida,
+  # así una sonda no puede disparar una orden ni al revés.
   workflow_dispatch:
+    inputs:
+      objetivo:
+        description: "sondas (tests live) u orden_demo (parte B, 07..16-oct-2026)"
+        type: choice
+        options:
+          - sondas
+          - orden_demo
+        default: sondas
 
   # Semanal, cuando haya un motivo para gastar cuota sin que nadie lo pida.
   # Comentado y no borrado porque la decisión ya está pensada y el día que
@@ -42,6 +55,7 @@ on:
 
 jobs:
   live:
+    if: inputs.objetivo != 'orden_demo'
     runs-on: ubuntu-latest
 
     # A nivel de JOB, no de step: los tests live son varios y van a ser más,
@@ -57,11 +71,10 @@ jobs:
       # OpenAPI oficial exige en /accounts y en /otp. No autoriza ninguna
       # cuenta por sí solo. El informe lo enmascara.
       DERIV_APP_ID: ${{ secrets.DERIV_APP_ID }}
-      # La sonda §0.A-3b (tests/test_deriv_cotizacion_real_live.py) lo
-      # manda como Bearer a GET /accounts y a dos POST de OTP: UNO para la
-      # cuenta demo y UNO para la real, este último con la autorización de
-      # un solo uso del Admin (decision-log 2026-10-05), solo para cotizar y
-      # solo entre el 05 y el 09-oct-2026. Ninguna compra. El informe no lo
+      # La sonda §0.A-3b lo mandaba como Bearer a GET /accounts y a dos POST
+      # de OTP (demo y real). Su entrada `live` del canal real se retiró el
+      # 07-oct: la autorización era de un solo uso y se usó el 06-oct. Hoy
+      # ningún test de este job pide un OTP real ni compra. El informe no lo
       # incluye: el test falla si aparece.
       DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
       # Le dice al guardián de tests/test_sources.py que en ESTE entorno la
@@ -91,3 +104,41 @@ jobs:
       # silencio.
       - name: Correr solo los tests live
         run: python -m pytest tests/ -m live -v
+
+  # La parte B del brief del Admin del 06-oct-2026 (3): UNA orden demo
+  # (frxXAUUSD, MULTUP, stake mínimo, ×100, stop_loss 0,10 USD, sell a los
+  # 60 s), solo entre el 07 y el 16-oct-2026 23:59 UTC; fuera de esa ventana
+  # el test se salta solo. Si statement ya registra una compra en la ventana,
+  # no compra. Lo dispara el Admin, nadie más.
+  orden_demo:
+    if: inputs.objetivo == 'orden_demo'
+    runs-on: ubuntu-latest
+    # Dos despachos seguidos no corren en paralelo: el segundo espera y, al
+    # ver la compra del primero en statement, no compra.
+    concurrency:
+      group: orden-demo
+      cancel-in-progress: false
+    timeout-minutes: 20
+
+    # Solo lo que la orden usa. SPEL_ORDEN_DEMO es el permiso que el test
+    # exige; no es un secreto, y no está en el job de sondas.
+    env:
+      DERIV_APP_ID: ${{ secrets.DERIV_APP_ID }}
+      DERIV_API_TOKEN: ${{ secrets.DERIV_API_TOKEN }}
+      SPEL_ORDEN_DEMO: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Instalar dependencias de desarrollo (solo para tests)
+        run: pip install -r requirements-dev.txt
+
+      - name: Parte B, primera orden demo
+        run: python -m pytest tests/test_integracion_demo_orden_live.py -m live -v
