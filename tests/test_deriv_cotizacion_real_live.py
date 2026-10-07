@@ -77,12 +77,9 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from governance.secrets import SecretKey, load_secret
-from ingestion.adapters import DerivAdapter
 from ingestion.deriv_ws import TIMEOUT_RESPUESTA_S
 from ingestion.sonda_instrumentos import CONTROL_POSITIVO, codigo, seleccionar
 from tests.test_deriv_endpoints_live import (
-    _SOLO_EN_LIVE_TESTS,
     ENDPOINT_PUBLICO_NUEVO,
     _http_de,
     texto_libre,
@@ -114,7 +111,6 @@ from tests.test_sonda3b_live import (
     ANCLAS_5C,
     DIAS_ULTIMO_ANIO,
     GRANULARIDAD_5C,
-    _publicar,
     mecanica_rango,
     rangos_de_apertura,
 )
@@ -555,23 +551,12 @@ async def _abrir_real(pila: AsyncExitStack, sesion: SesionReal, real: Optional[d
     canales["real"] = canal
 
 
-@pytest.mark.live
-@_SOLO_EN_LIVE_TESTS
-async def test_live_sonda_3b_canales_y_rango(capsys):
-    if not en_ventana(datetime.now(timezone.utc)):
-        pytest.skip("fuera de la ventana de la autorización (05-oct 00:00 .. 09-oct 23:59 UTC)")
-    app_id = load_secret(SecretKey.DERIV_APP_ID, required=False)
-    token = load_secret(SecretKey.DERIV_API_TOKEN, required=False)
-    assert app_id, "SPEL_EXPECT_SECRETS=1 pero DERIV_APP_ID no llegó al job"
-    assert token, "SPEL_EXPECT_SECRETS=1 pero DERIV_API_TOKEN no llegó al job"
-    informe, secretos = await sondear(token=token, app_id=app_id,
-                                      abrir=DerivAdapter._default_connector)
-    texto = texto_libre(informe)
-    for secreto in secretos:
-        if secreto:
-            assert secreto not in texto, "un secreto llegó al informe: no se publica"
-    _publicar(capsys, informe)
-    assert informe["publico"]["handshake"]["ok"], "el WS público, registrado DISPONIBLE, no abrió"
+# La entrada `live` se retiró el 07-oct-2026: la autorización del canal real
+# era de UN solo uso (decision-log 2026-10-05) y se usó el 06-oct (run
+# 37404371657). Su ventana sigue abierta hasta el 09-oct, y el workflow de
+# tests live ahora también lleva la orden demo (brief del Admin del 06-oct
+# (3)): dejarla habría permitido un segundo OTP real con solo despacharlo.
+# Las funciones y sus tests offline quedan.
 
 
 # ═══ Offline ══════════════════════════════════════════════════════════════
