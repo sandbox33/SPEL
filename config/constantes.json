@@ -1484,6 +1484,155 @@
       "notas": ""
     },
     {
+      "nombre": "CORTES_DE_FONDO",
+      "modulo": "ingestion.velas_intradia",
+      "categoria": "etiqueta",
+      "valor": [
+        "la página no retrocedió",
+        "respuesta vacía",
+        "se llegó a la epoch 0"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Los cortes de profundidad() que significan que se llegó al fondo de la serie: solo entonces la primera descarga es contigua.",
+      "usado_en": [
+        "ingestion.velas_intradia.ingerir_deriv"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "GRANULARIDAD_M5",
+      "modulo": "ingestion.velas_intradia",
+      "categoria": "parametro",
+      "valor": 300,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief 06-oct-2026 (4): velas M5.",
+      "usado_en": [
+        "ingestion.velas_intradia.ingerir_td",
+        "ingestion.velas_intradia.ingerir_deriv"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "INICIO_TD",
+      "modulo": "ingestion.velas_intradia",
+      "categoria": "parametro",
+      "valor": "2020-03-16 00:00:00",
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Día del earliest_timestamp de XAU/USD 5min en TwelveData (2020-03-16 01:10:00 UTC, sonda §0.A-3b, run 37404371657, sha256 c6250399d925f4aea07c9a0ce8b528bcf33b44a1cbf90a2b575655401dbab3cf). Decision-log 2026-10-06, punto f.",
+      "usado_en": [
+        "ingestion.velas_intradia.ingerir_td"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "LLAMADAS_POR_MINUTO_TD",
+      "modulo": "ingestion.velas_intradia",
+      "categoria": "parametro",
+      "valor": 7,
+      "evidencia": "legacy_citado",
+      "afecta_resultado": true,
+      "fuente": "El tope por minuto de la sonda §0.A-3b (LLAMADAS_POR_MINUTO_3B), que el brief 06-oct-2026 (4) pide respetar.",
+      "usado_en": [
+        "ingestion.velas_intradia.ingerir_td"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "MAX_PAGINAS_DERIV",
+      "modulo": "ingestion.velas_intradia",
+      "categoria": "parametro",
+      "valor": 300,
+      "evidencia": "legacy_citado",
+      "afecta_resultado": true,
+      "fuente": "El tope de páginas M5 de la sonda §0.A-3 (MAX_PAGINAS_INTRADIA): 300 páginas de 5000 velas M5 son más de 14 años.",
+      "usado_en": [
+        "ingestion.velas_intradia.ingerir_deriv"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "PAUSA_DERIV_S",
+      "modulo": "ingestion.velas_intradia",
+      "categoria": "parametro",
+      "valor": 0.25,
+      "evidencia": "legacy_citado",
+      "afecta_resultado": true,
+      "fuente": "La pausa entre pedidos del WS de la sonda §0.A-3 (PAUSA_ENTRE_PEDIDOS_S).",
+      "usado_en": [
+        "ingestion.velas_intradia.ingerir_deriv"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "SERIE_TD",
+      "modulo": "ingestion.velas_intradia",
+      "categoria": "etiqueta",
+      "valor": "td_XAUUSD",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief 06-oct-2026 (4): metrics/velas/td_XAUUSD/300.jsonl.",
+      "usado_en": [
+        "ingestion.velas_intradia.ingerir_td"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "SIMBOLO_DERIV",
+      "modulo": "ingestion.velas_intradia",
+      "categoria": "etiqueta",
+      "valor": "frxXAUUSD",
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Símbolo del oro en Deriv según active_symbols (sondas §0.A-2 a §0.A-3b, decision-log 2026-10-05 y 2026-10-06).",
+      "usado_en": [
+        "ingestion.velas_intradia.ingerir_deriv",
+        "ingestion.velas_intradia.horario_de"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "SIMBOLO_TD",
+      "modulo": "ingestion.velas_intradia",
+      "categoria": "etiqueta",
+      "valor": "XAUUSD",
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Símbolo del proyecto para XAU/USD en TwelveDataAdapter (mapa del adapter, 06-oct-2026 (4)).",
+      "usado_en": [
+        "ingestion.velas_intradia.descargar_td"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "TIMEFRAME_TD",
+      "modulo": "ingestion.velas_intradia",
+      "categoria": "etiqueta",
+      "valor": "5m",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief 06-oct-2026 (4): 5min.",
+      "usado_en": [
+        "ingestion.velas_intradia.descargar_td"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "TOPE_CREDITOS_TD",
+      "modulo": "ingestion.velas_intradia",
+      "categoria": "parametro",
+      "valor": 300,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "[INTERPRETACIÓN] Tope de créditos de TwelveData por corrida: la historia completa son unas 95 páginas de 5000; deja margen y corta antes de vaciar la cuota diaria si algo pagina de más.",
+      "usado_en": [
+        "ingestion.velas_intradia.ingerir_td"
+      ],
+      "notas": ""
+    },
+    {
       "nombre": "DEFAULT_CYCLE_ASSETS",
       "modulo": "orchestration.cycle",
       "categoria": "etiqueta",

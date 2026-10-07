@@ -650,12 +650,14 @@ class PaginaTwelveData:
         pedido. Es como termina la paginación hacia atrás (decision-log
         2026-10-05, f), no un error.
     abiertas_descartadas: cuántas velas se sacaron por no haber cerrado.
+    hora_servidor: la cabecera Date, en segundos UTC (None en una vacía).
     """
     velas: pd.DataFrame
     sha256: str
     creditos: dict
     vacia: bool
     abiertas_descartadas: int
+    hora_servidor: Optional[int] = None
 
 
 class TwelveDataAdapter(BaseAdapter):
@@ -883,7 +885,8 @@ class TwelveDataAdapter(BaseAdapter):
                                          symbol=symbol, now_utc=ahora)
         validate_ohlcv_schema(cerradas, source=self.source_name, symbol=symbol,
                               require_closed=True, granularity_s=granularity, now_utc=ahora)
-        return PaginaTwelveData(cerradas, sha, creditos, False, len(df) - len(cerradas))
+        return PaginaTwelveData(cerradas, sha, creditos, False, len(df) - len(cerradas),
+                                int(ahora.timestamp()))
 
     def _to_dataframe(self, body: dict, *, timeframe: str, symbol: str) -> pd.DataFrame:
         values = body.get("values")

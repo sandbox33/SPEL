@@ -88,6 +88,7 @@ async def test_la_vela_abierta_se_decide_con_la_hora_del_servidor():
     assert [str(t) for t in p.velas["timestamp"]] == [
         "2026-10-06 10:00:00+00:00", "2026-10-06 10:05:00+00:00"]
     assert p.vacia is False
+    assert p.hora_servidor == 1791281550, "Tue, 06 Oct 2026 10:12:30 GMT"
 
 
 async def test_sin_cabecera_date_no_se_decide_nada():
