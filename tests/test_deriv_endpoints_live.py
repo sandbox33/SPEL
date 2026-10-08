@@ -73,12 +73,14 @@ from websockets.datastructures import Headers
 from websockets.http11 import Response
 
 from ingestion.adapters import DERIV_MAX_COUNT, DERIV_WS_ENDPOINT, DerivAdapter
+from ingestion.deriv_publico import ENDPOINT_PUBLICO
 from ingestion.deriv_ws import TIMEOUT_RESPUESTA_S, nombre_del_mensaje
 from ingestion.sonda_instrumentos import codigo, es_sintetico
 from ingestion.source_registry import EndpointState, load_registry
 from tests.deriv_falso import DerivFalso
 
-ENDPOINT_PUBLICO_NUEVO = "wss://api.derivws.com/trading/v1/options/ws/public"
+#: Portado a ingestion/deriv_publico.py (brief del Admin del 06-oct-2026 (4)).
+ENDPOINT_PUBLICO_NUEVO = ENDPOINT_PUBLICO
 
 #: Caracteres de la respuesta cruda que van al informe por mensaje.
 _EXTRACTO = 400

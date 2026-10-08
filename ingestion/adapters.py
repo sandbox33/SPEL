@@ -35,11 +35,13 @@ from __future__ import annotations
 
 import abc
 import asyncio
+import hashlib
 import json
 import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Optional
 
@@ -592,15 +594,16 @@ TWELVEDATA_ENDPOINT = "https://api.twelvedata.com/time_series"
 #: ("EUR/USD"), el del proyecto no ("EURUSD") — la barra es un detalle del
 #: proveedor y muere en este mapa, no viaja al resto del sistema.
 #:
-#: XAU/USD queda AFUERA a propósito: no se pudo confirmar que esté incluido
-#: en el plan gratuito. Un símbolo que el plan rechaza degrada la cadena
-#: entera en runtime por algo que se sabía de antemano — y "probablemente
-#: esté" no es evidencia. Entra cuando haya una respuesta real que lo
-#: confirme, no antes.
+#: XAU/USD quedó AFUERA hasta tener una respuesta real que confirmara que el
+#: plan lo cubre. La trajo la sonda §0.A-3b (run 37404371657, 06-oct-2026,
+#: decision-log de esa fecha, punto f): /earliest_timestamp de XAU/USD 5min
+#: = 2020-03-16 01:10:00 UTC (sha256 c6250399…) y páginas de 5000 filas en
+#: 2021 y 2024. Entró con la autorización del Admin del 06-oct-2026 (4).
 _TWELVEDATA_SYMBOL_MAP: dict[str, str] = {
     "EURUSD": "EUR/USD",
     "BTCUSD": "BTC/USD",
     "AAPL":   "AAPL",
+    "XAUUSD": "XAU/USD",
 }
 
 #: Traducción de los timeframes del proyecto al vocabulario de TwelveData.
@@ -627,6 +630,34 @@ _TWELVEDATA_GRANULARITY_SECONDS: dict[str, int] = {
 #: una CONVENCIÓN (el día de mercado), no el instante real del evento —
 #: exactamente lo que `timestamp_is_convention` existe para marcar.
 _INTERVALOS_SIN_TIMEZONE: frozenset[str] = frozenset({"1d"})
+
+#: TwelveData: `outputsize` acepta hasta 5000 por petición según su doc.
+#: Medido en el sondeo de profundidad (2026-09-03) y en las páginas de la
+#: sonda §0.A-3b. Vivía en tools/provider_coverage.py; se movió acá cuando el
+#: adapter empezó a paginar, para que el tope sea uno solo.
+TWELVEDATA_MAX_OUTPUTSIZE = 5000
+
+
+@dataclass(frozen=True)
+class PaginaTwelveData:
+    """Una página de `time_series`, con lo que hace falta para rastrearla.
+
+    velas: solo las CERRADAS según la hora del servidor de TwelveData (la
+        cabecera HTTP `Date` de esa respuesta), ordenadas ascendente.
+    sha256: del cuerpo crudo.
+    creditos: las cabeceras de créditos que mande la API, tal cual.
+    vacia: la API contestó 404 "data not found": no hay velas en el rango
+        pedido. Es como termina la paginación hacia atrás (decision-log
+        2026-10-05, f), no un error.
+    abiertas_descartadas: cuántas velas se sacaron por no haber cerrado.
+    hora_servidor: la cabecera Date, en segundos UTC (None en una vacía).
+    """
+    velas: pd.DataFrame
+    sha256: str
+    creditos: dict
+    vacia: bool
+    abiertas_descartadas: int
+    hora_servidor: Optional[int] = None
 
 
 class TwelveDataAdapter(BaseAdapter):
@@ -671,8 +702,12 @@ class TwelveDataAdapter(BaseAdapter):
         return {"Authorization": f"apikey {self._api_key}"}
 
     async def _get(self, params: dict[str, Any]) -> dict:
+        return (await self._get_con_cabeceras(params))[0]
+
+    async def _get_con_cabeceras(self, params: dict[str, Any]) -> tuple[dict, str, dict]:
         """Un solo lugar donde el transporte HTTP se traduce al vocabulario
-        de excepciones del módulo. Nadie más en esta clase toca httpx."""
+        de excepciones del módulo. Nadie más en esta clase toca httpx.
+        Devuelve (cuerpo parseado, texto crudo, cabeceras)."""
         import httpx
 
         client = self._client
@@ -684,7 +719,7 @@ class TwelveDataAdapter(BaseAdapter):
                 TWELVEDATA_ENDPOINT, params=params, headers=self._headers(),
             )
             try:
-                return resp.json()
+                return resp.json(), resp.text, dict(resp.headers)
             except (ValueError, json.JSONDecodeError) as exc:
                 # HTTP 200 con cuerpo que no es JSON: pasa con páginas de
                 # error de un proxy o WAF intermedio. No es un fallo de
@@ -797,6 +832,61 @@ class TwelveDataAdapter(BaseAdapter):
             require_closed=True, granularity_s=granularity,
         )
         return df
+
+    async def fetch_pagina(
+        self, symbol: str, timeframe: str, *,
+        end_date: Optional[str] = None, start_date: Optional[str] = None,
+        outputsize: int = TWELVEDATA_MAX_OUTPUTSIZE,
+    ) -> PaginaTwelveData:
+        """UNA página de `time_series` entre `start_date` y `end_date`
+        ("YYYY-MM-DD HH:MM:SS", en UTC para el intradía): las `outputsize`
+        velas más recientes del rango, que es lo que la sonda §0.A-3b usó
+        para paginar hacia atrás. Mismas reglas que `fetch_ohlcv` (símbolo
+        mapeado, timezone=UTC en el intradía, key en el header), con dos
+        diferencias: el cierre de vela se decide con la hora del SERVIDOR
+        (cabecera `Date` de la respuesta), nunca con el reloj local, y un
+        404 "data not found" es una página vacía, no un error."""
+        if symbol not in _TWELVEDATA_SYMBOL_MAP:
+            raise ValueError(
+                f"Símbolo '{symbol}' no está en el mapeo verificado de "
+                f"TwelveData. Soportados: {sorted(self.SUPPORTED_SYMBOLS)}.")
+        if timeframe not in _TWELVEDATA_INTERVALS:
+            raise ValueError(f"Timeframe '{timeframe}' no reconocido. "
+                             f"Soportados: {sorted(self.SUPPORTED_TIMEFRAMES)}.")
+        if not 0 < outputsize <= TWELVEDATA_MAX_OUTPUTSIZE:
+            raise ValueError(f"outputsize fuera de (0, {TWELVEDATA_MAX_OUTPUTSIZE}]: {outputsize}")
+        granularity = _TWELVEDATA_GRANULARITY_SECONDS[timeframe]
+        params: dict[str, Any] = {"symbol": _TWELVEDATA_SYMBOL_MAP[symbol],
+                                  "interval": _TWELVEDATA_INTERVALS[timeframe],
+                                  "outputsize": outputsize}
+        if timeframe not in _INTERVALOS_SIN_TIMEZONE:
+            params["timezone"] = "UTC"
+        if start_date:
+            params["start_date"] = start_date
+        if end_date:
+            params["end_date"] = end_date
+
+        body, texto, cabeceras = await self._get_con_cabeceras(params)
+        sha = hashlib.sha256(texto.encode("utf-8")).hexdigest()
+        creditos = {k: v for k, v in cabeceras.items() if "credit" in k.lower()}
+        mensaje = str(body.get("message", "")).lower()
+        if body.get("code") == 404 and "plan" not in mensaje and "data" in mensaje:
+            return PaginaTwelveData(pd.DataFrame(), sha, creditos, True, 0)
+        self._raise_if_error(body, symbol=symbol)
+
+        fecha = next((v for k, v in cabeceras.items() if k.lower() == "date"), None)
+        if not fecha:
+            raise AdapterDataError(
+                f"[{self.source_name}] respuesta sin cabecera Date: no hay hora del "
+                f"servidor con la que decidir qué vela cerró")
+        ahora = pd.Timestamp(parsedate_to_datetime(fecha)).tz_convert("UTC")
+        df = self._to_dataframe(body, timeframe=timeframe, symbol=symbol)
+        cerradas = drop_unclosed_candles(df, granularity, source=self.source_name,
+                                         symbol=symbol, now_utc=ahora)
+        validate_ohlcv_schema(cerradas, source=self.source_name, symbol=symbol,
+                              require_closed=True, granularity_s=granularity, now_utc=ahora)
+        return PaginaTwelveData(cerradas, sha, creditos, False, len(df) - len(cerradas),
+                                int(ahora.timestamp()))
 
     def _to_dataframe(self, body: dict, *, timeframe: str, symbol: str) -> pd.DataFrame:
         values = body.get("values")

@@ -2181,3 +2181,105 @@ en `main` (merge `a84778b`, 07-oct-2026 00:53 UTC); la rama sale de ahí.
   `integracion_demo/`". La parte B es un test en `tests/` que compra, aunque el `buy` lo arma, lo
   valida y lo envía `integracion_demo/ejecucion.py`. Se escribió así porque el brief lo ordena
   explícitamente; si la regla tiene que nombrar este caso, va en un PR de gobernanza.
+
+---
+
+## 2026-10-07 — Velas M5 del oro de TwelveData y Deriv, y concordancia de su rango de apertura
+
+**Fuente:** brief del Admin del 06-oct-2026 (4). Rama nueva desde `main` (`a84778b`). Nada se
+disparó: el workflow `velas_intradia.yml` lo corre el Admin.
+
+### Contradicción reportada y resuelta por el Admin
+
+El brief pedía `TwelveDataAdapter` para XAU/USD con la paginación de la 3b. El código lo impedía:
+el adapter dejaba XAU/USD fuera de su mapa "hasta que una respuesta real lo confirme", no
+paginaba (una sola página, sin `start_date` ni `end_date`), y
+`tests/test_twelvedata_adapter.py::test_simbolo_no_mapeado_es_value_error` fijaba la exclusión.
+Se reportó antes de tocar nada. El Admin autorizó editar el adapter y ese test. Al reportarlo
+se nombró también `tests/test_adapters.py:363`; era un error: ese test es de `DerivAdapter` y no
+se tocó.
+
+- XAUUSD entra al mapa con la respuesta real de la sonda §0.A-3b (run 37404371657,
+  `earliest_timestamp` XAU/USD 5min 2020-03-16 01:10:00 UTC, sha256 `c6250399…`).
+- `fetch_pagina`: una página entre `start_date` y `end_date`, `timezone=UTC` en el intradía,
+  cierre de vela por la cabecera `Date` de TwelveData (nunca el reloj del runner), y el 404
+  "data not found" como página vacía.
+- El test de símbolo no mapeado pasa a XAGUSD. El tope de 5000 filas se movió de
+  `tools/provider_coverage.py` al adapter (`TWELVEDATA_MAX_OUTPUTSIZE`), para que haya uno solo.
+
+### Portado de las sondas, sin reescribir
+
+- `ingestion/deriv_publico.py`: el canal, `profundidad` y `desalineadas` de la sonda §0.A-2, y la
+  pausa de la §0.A-3. El canal toma la lista blanca como parámetro: las sondas conservan la de
+  `deriv_ws`, y la ingesta usa una propia de solo lectura (`time`, `active_symbols`,
+  `trading_times`, `ticks_history`).
+- `ingestion/limitador.py`: el `Limitador` de la sonda §0.A-3.
+- `tools/concordancia_xauusd.py::rangos_de_apertura`: el de 5c.
+- Las sondas importan los cuatro de ahí; sus tests no cambiaron.
+
+### Interpretaciones (lo que el brief no fija)
+
+1. **Inicio de TwelveData:** 2020-03-16 00:00 UTC. **Tope por corrida:** 300 créditos, para unas
+   95 páginas.
+2. **Solo se escribe una descarga contigua.** Se pagina hacia atrás. Si se corta antes de llegar
+   a lo ya guardado (o al fondo, la primera vez), no se escribe nada de esa fuente: el append
+   puro no podría llenar el hueco después.
+3. **Calendario:** `trading_times` de la fecha del servidor, guardado crudo con su sha256 en
+   `metrics/calendario/frxXAUUSD/trading_times.jsonl`. Ese horario se aplica a todos los días.
+   Las franjas:
+   - **Fin de semana:** día fuera de `trading_days`, viernes desde el primer cierre, o domingo
+     antes de abrir.
+   - **Pausa diaria:** fuera de los tramos en un día hábil.
+   - **Feriado:** dentro del horario, pero en un día sin ninguna vela de Deriv, dentro del tramo
+     de fechas que Deriv cubre.
+4. **Ventana de ruptura:** velas que empiezan al terminar el rango y cierran a las 12:00 de
+   Londres a más tardar. Una vela que falta se salta.
+5. **Fracción de d:** |Δ| / (high − low) del rango de **Deriv**. "Una rompe y la otra no" se mide
+   sobre los días con ruptura en alguna fuente (la base de la compuerta), y también sobre todos
+   los días comunes.
+6. **Los 20 peores días:** primero los de dirección distinta o ruptura de una sola fuente; después
+   los de misma dirección y otra vela. Cada fuente lista sus velas solo hasta SU vela de ruptura.
+7. **La guarda de desenlaces** (`tests/test_guarda_desenlaces.py`) aplica el vocabulario a los
+   cuatro módulos nuevos. La regla de "precios solo en los lectores" aplica al módulo del ORB: la
+   ingesta lee todas las velas para guardarlas, y eso no es calcular un ORB.
+
+### Mutantes
+
+41 sobre la lógica nueva, más 5 de un segundo pase. Todos atrapados salvo uno, **equivalente**:
+empezar la ventana de ruptura en el ancla. El cierre de una vela del rango no puede salir del
+rango, porque la ingesta rechaza toda vela con OHLC incoherente. Cuatro sobrevivían por tests
+flojos y se reforzaron. Uno destapó una regla de más (el sábado era fin de semana aunque
+`trading_days` lo incluyera), que se corrigió.
+
+### Pendiente
+
+- Correr el workflow (lo dispara el Admin). El informe publica cuatro bloques de una línea:
+  datos, calendario, concordancia y compuerta.
+- El PR #36 (`integracion_demo/`) y este agregan entradas al final de este archivo y cambian el
+  encabezado de ESTADO.md. El que se fusione segundo tiene un conflicto de texto en esos dos
+  archivos.
+
+---
+
+## 2026-10-07 — Merge de `main` (PR #36) en el PR #37, y un cierre de conexión que podía colgarse
+
+**Fuente:** brief del Admin del 07-oct-2026.
+
+- **Merge, sin rebase.** `main` (con el PR #36) se trajo a la rama del #37 con un merge. Los
+  conflictos de este archivo y de ESTADO.md se resolvieron conservando lo de los dos PRs, en
+  orden cronológico.
+- **Guarda de mensajes de orden.** `tests/test_velas_intradia.py` entra a
+  `ARCHIVOS_DE_TEST_PERMITIDOS`, bajo "Prueban que la lista blanca de solo lectura los rechaza":
+  su `{"buy": "1"}` prueba que la lista blanca pública lo rechaza. Nada más de la guarda cambió.
+- **Defecto encontrado al verificar, y corregido.** La suite se colgaba de forma intermitente
+  en `test_el_ping_es_un_parametro`. `ConexionDemo` (PR #36) tenía dos fallas al cerrar con ping
+  activo:
+  1. En Python 3.11, `asyncio.wait_for` se traga una cancelación que llega con la respuesta ya
+     lista (corregido en 3.12). El bucle del ping no terminaba nunca.
+  2. `__aexit__` atrapaba `CancelledError` al esperar al ping, y con eso se tragaba también la
+     cancelación de quien cerraba.
+
+  Ahora el bucle sale por una bandera que prende `__aexit__`, y el cierre espera con
+  `asyncio.wait`. Fuera de pytest se colgaba en la primera iteración; con el arreglo, 3000
+  aperturas y cierres pasan sin cuelgue. La parte B corre sin ping y no estaba expuesta. Lleva
+  dos tests deterministas y tres mutantes atrapados.

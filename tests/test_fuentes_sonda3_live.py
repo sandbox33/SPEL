@@ -50,7 +50,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import time
 from datetime import date, timedelta
 from typing import Any, Awaitable, Callable, Optional
 
@@ -64,6 +63,7 @@ from ingestion.adapters import (
     _TWELVEDATA_INTERVALS,
     TWELVEDATA_ENDPOINT,
 )
+from ingestion.limitador import Limitador as _LimitadorBase
 from tests.test_deriv_sonda2_live import _limpiador
 
 #: 5. Símbolos e intervalos de TwelveData.
@@ -115,30 +115,13 @@ async def _get_httpx(url: str, params: dict, headers: dict) -> tuple[int, dict, 
 
 # ═══ 5. TwelveData ════════════════════════════════════════════════════════
 
-class Limitador:
-    """A lo sumo `por_minuto` llamadas en cualquier ventana de 60 s, y no
-    más de `tope_creditos` en total, a 1 crédito por llamada."""
+class Limitador(_LimitadorBase):
+    """El de ingestion/limitador.py, adonde se portó (brief del Admin del
+    06-oct-2026 (4)), con los valores de esta sonda por defecto."""
 
     def __init__(self, por_minuto: int = LLAMADAS_POR_MINUTO_TWELVEDATA,
-                 tope_creditos: int = TOPE_CREDITOS_TWELVEDATA, *,
-                 reloj: Callable[[], float] = time.monotonic,
-                 dormir: Callable[[float], Awaitable[None]] = asyncio.sleep) -> None:
-        self.por_minuto, self.tope = por_minuto, tope_creditos
-        self.reloj, self.dormir = reloj, dormir
-        self.marcas: list[float] = []
-        self.creditos = 0
-
-    async def turno(self) -> bool:
-        """True si se puede llamar (y lo cuenta); False si se agotó el tope."""
-        if self.creditos >= self.tope:
-            return False
-        ahora = self.reloj()
-        recientes = [t for t in self.marcas if ahora - t < 60]
-        if len(recientes) >= self.por_minuto:
-            await self.dormir(60 - (ahora - recientes[0]))
-        self.marcas.append(self.reloj())
-        self.creditos += 1
-        return True
+                 tope_creditos: int = TOPE_CREDITOS_TWELVEDATA, **kw) -> None:
+        super().__init__(por_minuto, tope_creditos, **kw)
 
 
 def resumir_valores(valores: list[dict]) -> dict:

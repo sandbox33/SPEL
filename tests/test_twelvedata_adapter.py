@@ -384,11 +384,13 @@ def test_key_vacia_es_value_error():
 
 
 async def test_simbolo_no_mapeado_es_value_error():
-    """XAUUSD entra acá a propósito: no se pudo confirmar que el plan
-    gratuito lo cubra, así que no está en el mapa. 'Probablemente esté' no
-    es evidencia."""
+    """Un símbolo sin una respuesta real que confirme que el plan lo cubre no
+    está en el mapa: 'probablemente esté' no es evidencia. Hasta el
+    06-oct-2026 este test usaba XAUUSD; entró al mapa con la respuesta real
+    de la sonda §0.A-3b y la autorización del Admin del 06-oct-2026 (4), y
+    el test pasó a XAGUSD, que sigue sin ninguna."""
     with pytest.raises(ValueError, match="no está en el mapeo verificado"):
-        await adapter_con(RESPUESTA_EURUSD_1DAY).fetch_ohlcv("XAUUSD", "1d", 2)
+        await adapter_con(RESPUESTA_EURUSD_1DAY).fetch_ohlcv("XAGUSD", "1d", 2)
 
 
 async def test_timeframe_no_soportado_es_value_error():
