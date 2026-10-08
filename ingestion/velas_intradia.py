@@ -29,6 +29,26 @@ serie), lo bajado es un bloque suelto: escribirlo dejaría un hueco que el
 append puro no puede llenar después. Entonces no se escribe nada de esa
 fuente, y el informe lo dice.
 
+══ CUÁNDO UNA PÁGINA VACÍA DE TWELVEDATA ES EL FONDO ══
+
+Brief del Admin del 07-oct-2026 (6). El fondo de la paginación llega como
+una página vacía (el 400 "No data is available on the specified dates", o
+el 404 "data not found"), pero una página vacía también puede ser espuria a
+mitad de la historia. Darla por el fondo dejaría un hueco. Por eso cierra la
+descarga como completa SOLO si:
+  · la página anterior trajo menos filas que el `outputsize` (llegó al
+    inicio de la historia), contando las filas que devolvió la API ANTES de
+    sacar la vela abierta; o
+  · el `end_date` pedido ya es <= `desde`.
+Si no, es un error y no se escribe nada. Una vacía en el PRIMER pedido (no
+hay página anterior) cierra como completa sin velas: no hay nada bajado que
+pueda quedar suelto (decisión del Admin del 08-oct-2026).
+
+Por la misma razón, una página que trae velas pero NINGUNA nueva (la API
+repitió una ventana ya bajada en vez de respetar el `end_date`) es un error
+a partir de la segunda página. Antes se daba por el fondo ("sin velas
+nuevas").
+
 ══ CIERRE DE VELA ══
 
 Con la hora del servidor de cada fuente: la `time` de Deriv, y la
@@ -66,7 +86,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from governance.persistence import PersistenceStream, stream_path  # noqa: E402
 from governance.secrets import SecretKey, load_secret  # noqa: E402
-from ingestion.adapters import AdapterException, DerivAdapter, TwelveDataAdapter  # noqa: E402
+from ingestion.adapters import (  # noqa: E402
+    TWELVEDATA_MAX_OUTPUTSIZE,
+    AdapterException,
+    DerivAdapter,
+    TwelveDataAdapter,
+)
 from ingestion.deriv_publico import ENDPOINT_PUBLICO, CanalPublico, profundidad  # noqa: E402
 from ingestion.limitador import Limitador  # noqa: E402
 from ingestion.velas import (  # noqa: E402
@@ -127,14 +152,32 @@ def _ultima_guardada(serie: str) -> Optional[int]:
 
 # ═══ TwelveData ═══════════════════════════════════════════════════════════
 
+def vacia_cierra_la_descarga(filas_previa: Optional[int], end_date: str, desde: int,
+                             outputsize: int = TWELVEDATA_MAX_OUTPUTSIZE) -> Optional[str]:
+    """Por qué una página vacía es el fondo de la serie, o None si no lo es
+    (y entonces la descarga es un error). Ver el docstring del módulo.
+    `filas_previa` son las filas que DEVOLVIÓ la API en la página anterior
+    (abiertas incluidas); None si no hubo página anterior."""
+    if filas_previa is None:
+        return "la primera página vino vacía: no hay velas nuevas desde la última guardada"
+    if filas_previa < outputsize:
+        return (f"la página anterior trajo {filas_previa} filas, menos que el outputsize "
+                f"({outputsize}): se llegó al inicio de la historia")
+    if _epoch_de(end_date) <= desde:
+        return "el end_date pedido ya es <= desde"
+    return None
+
+
 async def descargar_td(adapter: TwelveDataAdapter, *, desde: int, hasta: int,
-                       limitador: Limitador) -> tuple[list[dict], dict]:
+                       limitador: Limitador,
+                       outputsize: int = TWELVEDATA_MAX_OUTPUTSIZE) -> tuple[list[dict], dict]:
     """Pagina hacia atrás desde `hasta` hasta `desde`, como la 3b: las dos
     fechas en cada pedido. `hasta` es solo el borde del primer pedido; qué
     vela cerró lo decide la cabecera Date. Devuelve (velas crudas, resumen).
     `resumen["completo"]` dice si se llegó a `desde` (o al fondo)."""
     velas: dict[int, dict] = {}
     paginas: list[dict] = []
+    filas_previa: Optional[int] = None
     fin = _fmt(hasta)
     res: dict[str, Any] = {"desde": _fmt(desde), "completo": False, "hora_servidor": None,
                            "abiertas_descartadas": 0, "creditos_api": None}
@@ -143,44 +186,63 @@ async def descargar_td(adapter: TwelveDataAdapter, *, desde: int, hasta: int,
             res["corte"] = f"tope de {limitador.tope} créditos: la descarga quedó incompleta"
             break
         try:
-            p = await adapter.fetch_pagina(SIMBOLO_TD, TIMEFRAME_TD,
-                                           start_date=_fmt(desde), end_date=fin)
+            p = await adapter.fetch_pagina(SIMBOLO_TD, TIMEFRAME_TD, start_date=_fmt(desde),
+                                           end_date=fin, outputsize=outputsize)
         except AdapterException as exc:
             paginas.append({"end_date": fin, "error": f"{type(exc).__name__}: {exc}"})
             res["corte"] = "error"
             break
-        paginas.append({"end_date": fin, "sha256": p.sha256, "filas": len(p.velas)})
+        paginas.append({"end_date": fin, "sha256": p.sha256, "filas": len(p.velas),
+                        "devueltas": p.filas_devueltas,
+                        **({"vacia": p.motivo} if p.vacia else {})})
         res["creditos_api"] = p.creditos or res["creditos_api"]
         res["abiertas_descartadas"] += p.abiertas_descartadas
         if p.hora_servidor is not None:
             res["hora_servidor"] = max(res["hora_servidor"] or 0, p.hora_servidor)
         if p.vacia:
-            res.update(corte="404 data not found: no hay más velas en el rango", completo=True)
+            por_que = vacia_cierra_la_descarga(filas_previa, fin, desde, outputsize)
+            if por_que is None:
+                res["corte"] = (f"página vacía ({p.motivo}) después de una página llena "
+                                f"({filas_previa} filas): puede ser espuria, y darla por el "
+                                f"fondo dejaría un hueco. Error.")
+            else:
+                res.update(corte=f"{p.motivo}; {por_que}", completo=True)
             break
         epocas = [int(t.timestamp()) for t in p.velas["timestamp"]] if len(p.velas) else []
         nuevas = 0
         for e, (_, fila) in zip(epocas, p.velas.iterrows()):
             nuevas += e not in velas
             velas[e] = {"epoch": e, **{k: float(fila[k]) for k in ("open", "high", "low", "close")}}
+        if not epocas and filas_previa is None:
+            res.update(corte="la primera página solo trajo velas abiertas: no hay velas "
+                             "cerradas nuevas", completo=True)
+            break
         if not epocas or not nuevas:
-            res.update(corte="sin velas nuevas", completo=True)
+            # Con start_date y end_date = primera vela anterior − 60 s, una
+            # página correcta nunca repite velas: si las repite, la API no
+            # respetó el end_date y no hay cómo saber si la descarga llegó a
+            # lo ya guardado. Darla por completa podría dejar un hueco.
+            res["corte"] = ("la página no trajo velas nuevas (la API repitió una ventana ya "
+                            "bajada): no se puede asegurar que la descarga sea contigua. Error.")
             break
         primera = min(epocas)
         if primera <= desde:
             res.update(corte="se llegó al inicio pedido", completo=True)
             break
+        filas_previa = p.filas_devueltas
         fin = _fmt(primera - 60)
     res.update(llamadas=len(paginas), paginas=paginas, velas=len(velas))
     return list(velas.values()), res
 
 
 async def ingerir_td(adapter: TwelveDataAdapter, *, write: bool,
-                     limitador: Optional[Limitador] = None) -> tuple[ReporteSimbolo, dict]:
+                     limitador: Optional[Limitador] = None,
+                     outputsize: int = TWELVEDATA_MAX_OUTPUTSIZE) -> tuple[ReporteSimbolo, dict]:
     lim = limitador or Limitador(LLAMADAS_POR_MINUTO_TD, TOPE_CREDITOS_TD)
     ultima = _ultima_guardada(SERIE_TD)
     desde = ultima + GRANULARIDAD_M5 if ultima is not None else _epoch_de(INICIO_TD)
     crudas, res = await descargar_td(adapter, desde=desde, hasta=int(time.time()),
-                                     limitador=lim)
+                                     limitador=lim, outputsize=outputsize)
     rep = ReporteSimbolo(SERIE_TD, Calendario.HABIL, corte=res.get("corte", ""))
     res["creditos_usados"] = lim.creditos
     if not res["completo"]:

@@ -19,7 +19,10 @@ import pytest
 
 from ingestion.adapters import (
     TWELVEDATA_MAX_OUTPUTSIZE,
+    TWELVEDATA_SIN_DATOS_400,
+    AdapterConnectionError,
     AdapterDataError,
+    AdapterException,
     TwelveDataAdapter,
 )
 
@@ -113,6 +116,72 @@ async def test_otro_404_sigue_siendo_error(mensaje):
     cuerpo = {"code": 404, "message": mensaje, "status": "error"}
     with pytest.raises(AdapterDataError):
         await _adapter(cuerpo).fetch_pagina("XAUUSD", "5m")
+
+
+#: El 400 del run 37721686439 (08-oct-2026), al pedir la página con
+#: end_date 2020-03-16 01:09 después de la última página de XAU/USD 5min. El
+#: log guarda el `code` y el mensaje LITERAL (el adapter los escribe como
+#: "error 400: <mensaje>"); el cuerpo JSON entero no quedó en el log. La
+#: clave "status" es la del sobre de error que mandan las demás respuestas
+#: de error de TwelveData de este archivo; la regla no depende de ella (ver
+#: test_el_400_sin_datos_no_depende_de_status).
+MENSAJE_400_RUN_37721686439 = ("No data is available on the specified dates. "
+                               "Try setting different start/end dates.")
+RESPUESTA_400_SIN_DATOS = {"code": 400, "message": MENSAJE_400_RUN_37721686439,
+                           "status": "error"}
+
+
+def test_el_prefijo_es_el_comienzo_del_mensaje_del_run():
+    assert MENSAJE_400_RUN_37721686439.startswith(TWELVEDATA_SIN_DATOS_400)
+    assert TWELVEDATA_SIN_DATOS_400 == "No data is available on the specified dates"
+
+
+@pytest.mark.parametrize("http", [400, 200])
+async def test_el_400_sin_datos_es_una_pagina_vacia(http):
+    """El log registra el code del cuerpo, no el status HTTP: se prueban
+    los dos."""
+    p = await _adapter(RESPUESTA_400_SIN_DATOS, status=http).fetch_pagina(
+        "XAUUSD", "5m", start_date="2020-03-16 00:00:00", end_date="2020-03-16 01:09:00")
+    assert p.vacia is True and p.velas.empty and p.filas_devueltas == 0
+    assert p.motivo == f"400: {MENSAJE_400_RUN_37721686439}"
+
+
+async def test_el_400_sin_datos_no_depende_de_status():
+    cuerpo = {k: v for k, v in RESPUESTA_400_SIN_DATOS.items() if k != "status"}
+    assert (await _adapter(cuerpo).fetch_pagina("XAUUSD", "5m")).vacia is True
+
+
+@pytest.mark.parametrize("mensaje", [
+    "Invalid **start_date** parameter",
+    "no data is available on the specified dates. Try setting different start/end dates.",
+    " No data is available on the specified dates.",
+    "Error: No data is available on the specified dates.",
+    "No data is available for XAU/USD on your plan",
+    "",
+])
+async def test_otro_400_sigue_siendo_error(mensaje):
+    cuerpo = {"code": 400, "message": mensaje, "status": "error"}
+    with pytest.raises(AdapterConnectionError):
+        await _adapter(cuerpo).fetch_pagina("XAUUSD", "5m")
+
+
+@pytest.mark.parametrize("code", [429, 401, 500, "400"])
+async def test_el_mensaje_sin_datos_con_otro_code_sigue_siendo_error(code):
+    cuerpo = {**RESPUESTA_400_SIN_DATOS, "code": code}
+    with pytest.raises(AdapterException):
+        await _adapter(cuerpo).fetch_pagina("XAUUSD", "5m")
+
+
+async def test_el_404_vacio_lleva_su_motivo():
+    cuerpo = {"code": 404, "message": "Data not found", "status": "error"}
+    assert (await _adapter(cuerpo).fetch_pagina("XAUUSD", "5m")).motivo == "404: Data not found"
+
+
+async def test_las_filas_devueltas_cuentan_la_vela_abierta():
+    """Una página llena cuya vela más reciente no cerró sigue siendo llena."""
+    p = await _adapter(XAU_5MIN).fetch_pagina("XAUUSD", "5m", outputsize=3)
+    assert len(p.velas) == 2 and p.abiertas_descartadas == 1
+    assert p.filas_devueltas == 3
 
 
 async def test_1day_no_lleva_timezone():

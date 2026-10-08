@@ -42,23 +42,36 @@ def _vela(e: int, base: float = 2650.0) -> dict:
     return {"epoch": e, "open": base, "high": base + 1, "low": base - 1, "close": base + 0.5}
 
 
+#: El motivo de la página vacía del run 37721686439 (ver
+#: tests/test_twelvedata_pagina.py, que prueba el 400 contra el adapter).
+_VACIA_400 = ("400: No data is available on the specified dates. "
+              "Try setting different start/end dates.")
+
+
 class _TDFalso:
     """La interfaz de TwelveDataAdapter.fetch_pagina sobre una serie fija.
-    Devuelve las `n` velas más recientes del rango, como la API."""
+    Devuelve las velas más recientes del rango, como la API: a lo sumo `n` y
+    a lo sumo el `outputsize` pedido. `vacias_en` son los números de pedido
+    (desde 0) que vuelven vacíos aunque haya velas: una vacía espuria."""
 
-    def __init__(self, epocas, *, hora, n=4):
+    def __init__(self, epocas, *, hora, n=4, vacias_en=(), sin_end_date_en=()):
         self.epocas = sorted(epocas)
         self.hora, self.n = hora, n
+        self.vacias_en = set(vacias_en)
+        #: Pedidos en que la API ignora el end_date y repite la ventana más reciente.
+        self.sin_end_date_en = set(sin_end_date_en)
         self.pedidos: list[dict] = []
 
     async def fetch_pagina(self, simbolo, tf, *, start_date=None, end_date=None, outputsize=5000):
         self.pedidos.append({"simbolo": simbolo, "tf": tf, "start_date": start_date,
-                             "end_date": end_date})
+                             "end_date": end_date, "outputsize": outputsize})
         ini = vi._epoch_de(start_date) if start_date else 0
         fin = vi._epoch_de(end_date) if end_date else 10**12
-        sel = [e for e in self.epocas if ini <= e <= fin][-self.n:]
-        if not sel:
-            return PaginaTwelveData(pd.DataFrame(), "sha-vacia", {}, True, 0)
+        if len(self.pedidos) - 1 in self.sin_end_date_en:
+            fin = 10**12
+        sel = [e for e in self.epocas if ini <= e <= fin][-min(self.n, outputsize):]
+        if not sel or len(self.pedidos) - 1 in self.vacias_en:
+            return PaginaTwelveData(pd.DataFrame(), "sha-vacia", {}, True, 0, motivo=_VACIA_400)
         cerradas = [e for e in sel if e + M5 <= self.hora]
         df = pd.DataFrame({"timestamp": pd.to_datetime(cerradas, unit="s", utc=True),
                            **{k: [_vela(e)[k] for e in cerradas]
@@ -149,6 +162,161 @@ async def test_td_sin_nada_nuevo_es_completa_y_no_escribe_nada(monkeypatch):
                                    limitador=_lim())
     assert res["completo"] is True and rep.nuevas == 0
     assert ruta_serie("td_XAUUSD", M5).read_bytes() == antes
+
+
+# ── Página vacía: ¿fondo o espuria? (brief del Admin del 07-oct-2026 (6)) ──
+
+async def test_td_vacia_tras_pagina_corta_es_completa(monkeypatch):
+    inicio = vi._epoch_de(vi.INICIO_TD)
+    epocas = [inicio + 70 * 60 + k * M5 for k in range(10)]
+    monkeypatch.setattr(vi.time, "time", lambda: epocas[-1] + 3 * M5)
+    td = _TDFalso(epocas, hora=epocas[-1] + 2 * M5, n=100)
+    rep, res = await vi.ingerir_td(td, write=True, limitador=_lim(), outputsize=4)
+    assert [p.get("devueltas") for p in res["paginas"]] == [4, 4, 2, 0]
+    assert res["paginas"][-1]["vacia"] == _VACIA_400
+    assert res["completo"] is True and "trajo 2 filas" in res["corte"]
+    assert res["corte"].startswith(_VACIA_400)
+    assert leer_velas("td_XAUUSD", M5)["epoch"].to_list() == epocas
+
+
+async def test_td_vacia_tras_pagina_llena_es_error_y_no_escribe(monkeypatch):
+    inicio = vi._epoch_de(vi.INICIO_TD)
+    epocas = [inicio + 70 * 60 + k * M5 for k in range(12)]
+    monkeypatch.setattr(vi.time, "time", lambda: epocas[-1] + 3 * M5)
+    td = _TDFalso(epocas, hora=epocas[-1] + 2 * M5, n=100, vacias_en={1})
+    rep, res = await vi.ingerir_td(td, write=True, limitador=_lim(), outputsize=4)
+    assert res["completo"] is False and "no_escrito" in res
+    assert "después de una página llena (4 filas)" in res["corte"]
+    assert len(td.pedidos) == 2
+    assert not ruta_serie("td_XAUUSD", M5).exists()
+
+
+async def test_td_vacia_tras_llena_con_su_vela_abierta_es_error(monkeypatch):
+    """La página llena trae 4 filas y la más reciente no cerró: quedan 3
+    cerradas, pero vino llena. Contar solo las cerradas la haría pasar
+    por corta y daría la vacía espuria por el fondo."""
+    inicio = vi._epoch_de(vi.INICIO_TD)
+    epocas = [inicio + 70 * 60 + k * M5 for k in range(12)]
+    monkeypatch.setattr(vi.time, "time", lambda: epocas[-1] + 3 * M5)
+    td = _TDFalso(epocas, hora=epocas[-1] + 100, n=100, vacias_en={1})
+    rep, res = await vi.ingerir_td(td, write=True, limitador=_lim(), outputsize=4)
+    assert res["paginas"][0]["filas"] == 3 and res["paginas"][0]["devueltas"] == 4
+    assert res["completo"] is False
+    assert not ruta_serie("td_XAUUSD", M5).exists()
+
+
+async def test_td_vacia_en_la_primera_pagina_es_completa_sin_velas(monkeypatch):
+    """Decisión del Admin del 08-oct: sin página anterior no hay nada bajado
+    que pueda quedar suelto."""
+    inicio = vi._epoch_de(vi.INICIO_TD)
+    epocas = [inicio + k * M5 for k in range(12)]
+    monkeypatch.setattr(vi.time, "time", lambda: epocas[-1] + 3 * M5)
+    td = _TDFalso(epocas, hora=epocas[-1] + 2 * M5, n=100, vacias_en={0})
+    rep, res = await vi.ingerir_td(td, write=True, limitador=_lim(), outputsize=4)
+    assert res["completo"] is True and rep.nuevas == 0
+    assert "primera página vino vacía" in res["corte"]
+
+
+async def test_td_una_ventana_repetida_a_mitad_es_error_y_no_escribe(monkeypatch):
+    inicio = vi._epoch_de(vi.INICIO_TD)
+    epocas = [inicio + 70 * 60 + k * M5 for k in range(12)]
+    monkeypatch.setattr(vi.time, "time", lambda: epocas[-1] + 3 * M5)
+    td = _TDFalso(epocas, hora=epocas[-1] + 2 * M5, n=100, sin_end_date_en={1})
+    rep, res = await vi.ingerir_td(td, write=True, limitador=_lim(), outputsize=4)
+    assert res["completo"] is False and "no trajo velas nuevas" in res["corte"]
+    assert len(td.pedidos) == 2
+    assert not ruta_serie("td_XAUUSD", M5).exists()
+
+
+async def test_td_primera_pagina_solo_con_la_vela_abierta_es_completa_sin_velas(monkeypatch):
+    inicio = vi._epoch_de(vi.INICIO_TD)
+    epocas = [inicio + k * M5 for k in range(4)]
+    monkeypatch.setattr(vi.time, "time", lambda: epocas[-1] + 10 * M5)
+    await vi.ingerir_td(_TDFalso(epocas, hora=epocas[-1] + M5), write=True, limitador=_lim())
+    nueva = epocas[-1] + M5                       # todavía abierta
+    td = _TDFalso(epocas + [nueva], hora=nueva + 100)
+    rep, res = await vi.ingerir_td(td, write=True, limitador=_lim())
+    assert res["completo"] is True and rep.nuevas == 0
+    assert "solo trajo velas abiertas" in res["corte"]
+    assert res["abiertas_descartadas"] == 1
+
+
+@pytest.mark.parametrize("filas_previa, fin_menos_desde, cierra", [
+    (None, 3600, True),       # primera página
+    (3, 3600, True),          # anterior corta
+    (0, 3600, True),
+    (4, 3600, False),         # anterior llena
+    (5, 3600, False),
+    (4, 0, True),             # end_date == desde
+    (4, -60, True),           # end_date < desde
+    (4, 1, False),            # end_date un segundo después de desde
+])
+def test_vacia_cierra_la_descarga(filas_previa, fin_menos_desde, cierra):
+    desde = vi._epoch_de("2020-03-16 00:00:00")
+    por_que = vi.vacia_cierra_la_descarga(filas_previa, vi._fmt(desde + fin_menos_desde),
+                                          desde, outputsize=4)
+    assert (por_que is not None) is cierra
+
+
+def test_por_defecto_se_compara_contra_el_outputsize_de_la_api():
+    from ingestion.adapters import TWELVEDATA_MAX_OUTPUTSIZE
+    desde = vi._epoch_de("2020-03-16 00:00:00")
+    fin = vi._fmt(desde + 3600)
+    assert vi.vacia_cierra_la_descarga(TWELVEDATA_MAX_OUTPUTSIZE - 1, fin, desde) is not None
+    assert vi.vacia_cierra_la_descarga(TWELVEDATA_MAX_OUTPUTSIZE, fin, desde) is None
+
+
+# ── El final del run 37721686439, con el adapter real y el 400 literal ──
+
+def _td_http(epocas: list[int], *, hora: int, vacias_en=()):
+    """Un TwelveDataAdapter real sobre un transporte falso que contesta como
+    time_series: las velas más recientes del rango, a lo sumo `outputsize`,
+    y el 400 literal del run cuando no hay ninguna (o en `vacias_en`)."""
+    import httpx
+
+    from email.utils import format_datetime
+    from ingestion.adapters import TwelveDataAdapter
+    from tests.test_twelvedata_pagina import RESPUESTA_400_SIN_DATOS
+    pedidos: list[dict] = []
+    fecha = format_datetime(datetime.fromtimestamp(hora, tz=timezone.utc), usegmt=True)
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        q = dict(req.url.params)
+        pedidos.append(q)
+        ini, fin = vi._epoch_de(q["start_date"]), vi._epoch_de(q["end_date"])
+        sel = [e for e in epocas if ini <= e <= fin][-int(q["outputsize"]):]
+        if not sel or len(pedidos) - 1 in set(vacias_en):
+            return httpx.Response(400, json=RESPUESTA_400_SIN_DATOS, headers={"Date": fecha})
+        valores = [{"datetime": vi._fmt(e), **{k: str(_vela(e)[k])
+                                               for k in ("open", "high", "low", "close")}}
+                   for e in reversed(sel)]
+        return httpx.Response(200, json={"meta": {"symbol": "XAU/USD"}, "values": valores,
+                                         "status": "ok"}, headers={"Date": fecha})
+    adapter = TwelveDataAdapter(api_key="K", client=httpx.AsyncClient(
+        transport=httpx.MockTransport(handler)))
+    return adapter, pedidos
+
+
+async def test_el_final_del_run_con_el_400_literal_cierra_completa(monkeypatch):
+    inicio = vi._epoch_de(vi.INICIO_TD)
+    epocas = [inicio + 70 * 60 + k * M5 for k in range(10)]   # desde 01:10, como el oro
+    monkeypatch.setattr(vi.time, "time", lambda: epocas[-1] + 3 * M5)
+    adapter, pedidos = _td_http(epocas, hora=epocas[-1] + 2 * M5)
+    rep, res = await vi.ingerir_td(adapter, write=True, limitador=_lim(), outputsize=4)
+    assert pedidos[-1]["end_date"] == vi._fmt(epocas[0] - 60), "01:09, como en el run"
+    assert res["completo"] is True and rep.nuevas == 10
+    assert res["corte"].startswith(_VACIA_400)
+    assert leer_velas("td_XAUUSD", M5)["epoch"].to_list() == epocas
+
+
+async def test_un_400_literal_tras_una_pagina_llena_no_escribe(monkeypatch):
+    inicio = vi._epoch_de(vi.INICIO_TD)
+    epocas = [inicio + 70 * 60 + k * M5 for k in range(10)]
+    monkeypatch.setattr(vi.time, "time", lambda: epocas[-1] + 3 * M5)
+    adapter, pedidos = _td_http(epocas, hora=epocas[-1] + 2 * M5, vacias_en={1})
+    rep, res = await vi.ingerir_td(adapter, write=True, limitador=_lim(), outputsize=4)
+    assert len(pedidos) == 2 and res["completo"] is False and "no_escrito" in res
+    assert not ruta_serie("td_XAUUSD", M5).exists()
 
 
 async def test_td_sin_write_no_escribe(monkeypatch):

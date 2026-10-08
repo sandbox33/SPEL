@@ -1,6 +1,6 @@
 {
   "schema_version": "1.1.0",
-  "actualizado": "2026-10-07",
+  "actualizado": "2026-10-08",
   "constantes": [
     {
       "nombre": "EPSILON_BREAKEVEN",
@@ -899,6 +899,19 @@
         "tools.provider_coverage.probe_twelvedata"
       ],
       "notas": ""
+    },
+    {
+      "nombre": "TWELVEDATA_SIN_DATOS_400",
+      "modulo": "ingestion.adapters",
+      "categoria": "etiqueta",
+      "valor": "No data is available on the specified dates",
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Comienzo del mensaje que TwelveData devuelve con code 400 en el cuerpo para un time_series sin velas entre start_date y end_date. Medido en la sonda §0.A-3b (5b, decision-log 2026-10-06, g) y en el run 37721686439 del 08-oct-2026: \"No data is available on the specified dates. Try setting different start/end dates.\".",
+      "usado_en": [
+        "ingestion.adapters.TwelveDataAdapter.fetch_pagina"
+      ],
+      "notas": "Se compara el comienzo del mensaje, exacto (brief del Admin del 07-oct-2026 (6)); cualquier otro 400 sigue siendo error."
     },
     {
       "nombre": "_DERIV_GRANULARITY_SECONDS",
