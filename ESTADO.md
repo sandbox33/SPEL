@@ -10,17 +10,17 @@
 > Este archivo se lee primero en cada chat nuevo. Frente a un chat que lo contradiga sin
 > evidencia, gana el archivo; frente al código, gana el código.
 
-**Última actualización:** 07 oct 2026 — merge de `main` (con el PR #36, `integracion_demo/`) en la rama del PR #37 (velas M5 del oro y concordancia TwelveData–Deriv).
+**Última actualización:** 08 oct 2026 — TwelveData: el 400 del fondo de la paginación y cuándo una página vacía es el fondo (brief del Admin del 07-oct-2026 (6)), en la rama `claude/create-claude-md-spel-lni9s9`.
 
-**Commit de referencia:** `b82c0cc` (merge del PR #36).
+**Commit de referencia:** `056055e` (merge del PR #37).
 
-**Tests:** **1649** recolectados en `tests/`, en 56 archivos, medido con
-`pytest --collect-only -q tests/` el 07-oct-2026 sobre la rama del PR #37 después del merge de
-`main`. Más 74 en `research/tests/`, que no bloquean.
+**Tests:** **1682** recolectados en `tests/`, en 56 archivos, medido con
+`pytest --collect-only -q tests/` el 08-oct-2026 sobre esta rama. Más 74 en `research/tests/`,
+que no bloquean.
 
-Desfase: **ninguno**. El commit de referencia es el merge del PR #36, el último de `main`, y
-esta actualización entra con el merge de `main` en la rama del PR #37. Los PRs #33 y #34
-siguen abiertos y en pausa. `tests/test_estado_al_dia.py` falla si hay **más
+Desfase: **ninguno**. El commit de referencia es el merge del PR #37, el último de `main`, y
+esta actualización entra con el PR del 400 de TwelveData. Los PRs #33 y #34 siguen abiertos y
+en pausa. `tests/test_estado_al_dia.py` falla si hay **más
 de 3 PRs fusionados** desde el commit de referencia de arriba (DG-6).
 
 
@@ -57,8 +57,8 @@ Eso no reabre Fase 1 ni cambia su resultado; ordena el código para que coincida
 
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-**1649 recolectados en `tests/`, en 56 archivos**, contados con `pytest --collect-only -q`
-el 07-oct-2026 sobre la rama del PR #37 después del merge de `main`, no copiados de ningún
+**1682 recolectados en `tests/`, en 56 archivos**, contados con `pytest --collect-only -q`
+el 08-oct-2026 sobre la rama del PR del 400 de TwelveData, no copiados de ningún
 documento. Sin credenciales se saltan 6, cada uno por su propio `skipif`: el test `live` de
 TwelveData, el guardián de secretos de `tests/test_sources.py`, las dos sondas de endpoints de
 Deriv, la 3b de TwelveData y la orden demo de la parte B.
@@ -85,10 +85,10 @@ corridas seguidas sin intermitencia.
 | `tools/verificar_siembra.py` | Compara BTC/XAU sembrados contra la serie medida | 14 | ✅ verde contra la siembra real (corrido el 29-sep, ver decision-log) |
 | `ingestion/deriv_ws.py` | Sesión de solo lectura con Deriv: `entorno` obligatorio, `real` con permiso aparte, lista blanca de siete mensajes | 29 | 🟡 habla con el endpoint legacy, muerto desde el 01-oct (HTTP 520): falta migrar al WS público |
 | `ingestion/sonda_instrumentos.py` + `.github/workflows/sonda.yml` | Contratos, multiplicadores, stake y comisión de BTC y oro, desde la API, siete días | 19 + 6 | 🟡 usa `deriv_ws.py`, así que depende de la misma migración |
-| `ingestion/velas_intradia.py` + `.github/workflows/velas_intradia.yml` | Velas M5 del oro en `data`: TwelveData XAU/USD 5min desde 2020-03-16 y Deriv frxXAUUSD M5 por `/ws/public`, con el patrón de `velas.py`; horario de `trading_times` crudo con sha256 | 26 + 6 | 🟡 offline; el workflow no corrió |
+| `ingestion/velas_intradia.py` + `.github/workflows/velas_intradia.yml` | Velas M5 del oro en `data`: TwelveData XAU/USD 5min desde 2020-03-16 y Deriv frxXAUUSD M5 por `/ws/public`, con el patrón de `velas.py`; horario de `trading_times` crudo con sha256; una página vacía de TwelveData es el fondo solo tras una página corta (brief 07-oct (6)) | 43 + 6 | 🟡 primer run el 08-oct (37721686439): Deriv escribió 69.462 velas M5; TwelveData no escribió nada por el 400 del fondo, que este PR reconoce |
 | `ingestion/deriv_publico.py` + `ingestion/limitador.py` | Canal público de Deriv y paginación de velas, y el limitador de TwelveData, portados de las sondas | (en los de arriba) | ✅ |
 | `tools/concordancia_xauusd.py` | Rango de apertura 08:00 Londres y primera ruptura hasta las 12:00 por fuente, filtro de calendario, métricas y compuerta del 90 %; ningún desenlace (guarda AST + serie espía) | 38 + 24 | 🟡 sin datos reales todavía |
-| `ingestion/adapters.py::TwelveDataAdapter.fetch_pagina` | XAU/USD en el mapa (evidencia 3b, autorización del 06-oct (4)); página con `start/end_date` y cierre por la hora del servidor | 14 | ✅ offline |
+| `ingestion/adapters.py::TwelveDataAdapter.fetch_pagina` | XAU/USD en el mapa (evidencia 3b, autorización del 06-oct (4)); página con `start/end_date` y cierre por la hora del servidor; vacías: el 404 "data not found" y el 400 "No data is available on the specified dates" (prefijo exacto) | 30 | ✅ offline |
 | `ingestion/velas.py` + `.github/workflows/velas.yml` | Velas diarias de BTC y oro en la rama `data`, profundidad usable, `leer_velas()` en polars | 33 + 6 | 🟡 ídem; además, Deriv entrega 365 días de historia (sonda §0.A-2) |
 | `core/preregistro_h1.py` + `research/preregistro_h1.md` | Reglas del experimento H1, fijadas antes del backtest | 26 | 🟡 dos cláusulas PENDIENTES del Admin |
 | `ingestion/kappa_deriv.py` | κ = comisión/nocional de MULTUP por activo, máximo medido en la cuenta real (sonda §0.A-3b, decision-log 06-oct) | 6 | ✅ dato medido, sin consumidor todavía |
@@ -514,16 +514,15 @@ salvedad que hay que resolver **antes** de revertir.
 
 ## ▶️ PRÓXIMO PASO CONCRETO
 
-Dos disparos del Admin, en el orden en que llegaron:
+**Fusionado este PR, el Admin vuelve a disparar `SPEL velas intradía del oro`**
+(`velas_intradia.yml`). La primera corrida (08-oct, run 37721686439) escribió Deriv, y
+TwelveData se cortó en el 400 del fondo sin escribir nada. Con la regla nueva, TwelveData baja
+la historia desde 2020 (unas 101 llamadas) y la concordancia publica sus cuatro bloques: datos,
+calendario, concordancia y compuerta. Con eso se cierra la pregunta de las 33.605 contra 23.160
+velas, y la compuerta del 90 % dice si TwelveData sirve como historia del ORB del oro.
 
-1. **La parte B (PR #36): `SPEL Live Tests` con `objetivo: orden_demo`**, entre el 07 y el
-   16-oct-2026 23:59 UTC. Su informe (una línea JSON en el log) fija el parser de
-   `proposal_open_contract`, la unidad de `commission` y el cierre del socket inactivo.
-2. **Las velas M5 del oro (PR #37): `SPEL velas intradía del oro`** (`velas_intradia.yml`).
-   Baja la historia M5 del oro de TwelveData y de Deriv a la rama `data` y publica los cuatro
-   bloques del informe (datos, calendario, concordancia y compuerta). Con eso se cierra la
-   pregunta de las 33.605 contra 23.160 velas, y la compuerta del 90 % dice si TwelveData sirve
-   como historia del ORB del oro.
+La parte B (PR #36) ya corrió: el 08-oct, run 37716067033, job `orden_demo` en verde. Su
+informe espera el brief que lo registre.
 
 Siguen abiertas la migración de `ingestion/deriv_ws.py` al WS público nuevo (la legacy está
 muerta desde el 01-oct) y el brief de la batería multi-estrategia (DG-8).
