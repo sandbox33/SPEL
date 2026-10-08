@@ -2283,3 +2283,87 @@ flojos y se reforzaron. Uno destapó una regla de más (el sábado era fin de se
   `asyncio.wait`. Fuera de pytest se colgaba en la primera iteración; con el arreglo, 3000
   aperturas y cierres pasan sin cuelgue. La parte B corre sin ping y no estaba expuesta. Lleva
   dos tests deterministas y tres mutantes atrapados.
+
+---
+
+## 2026-10-08 — TwelveData: con `start_date`, el fondo de la paginación llega como 400
+
+**Fuente:** brief del Admin del 07-oct-2026 (6). Run `37721686439` de *SPEL velas intradía del
+oro* (job `113130550645`, commit `056055e`, 08-oct-2026 03:13–03:29 UTC). Su log se leyó entero.
+
+### El hecho
+
+- **TwelveData no escribió nada.**
+  - 101 llamadas; 497.348 velas bajadas en memoria.
+  - La primera página (`end_date` 2026-10-08 03:13:44) trajo 5000 filas: 4999 cerradas y una abierta.
+  - La página con `end_date` 2020-03-26 13:49 trajo **2.349** filas (sha256
+    `ea7c316d65bb91de78a6585177c3c294703a8c3993fc39e37dd350ea493b6b19`). Son menos que el
+    `outputsize`: llegó al inicio de la historia.
+  - La siguiente (`end_date` 2020-03-16 01:09) volvió con `code` 400 y el mensaje literal
+    "No data is available on the specified dates. Try setting different start/end dates.".
+  - `fetch_pagina` solo reconocía como vacío el 404 "data not found", así que el corte quedó en
+    "error" con `completo=false`, y la regla anti-hueco no escribió nada.
+  - Cabeceras de créditos de la última respuesta: `api-credits-used` 2, `api-credits-left` 6,
+    `api-credits-request` 1.
+- **Deriv sí escribió.**
+  - 69.462 velas M5 de frxXAUUSD, del 2025-10-08 03:30 al 2026-10-08 03:20 UTC: 108 páginas, corte
+    "la página no retrocedió", sha256 del archivo
+    `4302c77183ea6c1c59e808ab4187ba47105d52a9db242fe8410b18be4465e9cc`.
+  - Horario de `trading_times` del 2026-10-08 (sha256
+    `1bda35267b35f88efee9a286a1320b1265c6a026763c0631b0f4580d327a4242`): lunes a viernes, tramos
+    00:00–21:00 y 22:00–23:59:59 tal como los devuelve (el esquema no declara la zona), y un
+    evento que dice que el viernes cierra a las 20:55. La serie no tiene velas en domingo
+    (medido sobre el archivo de la rama `data`, mismo sha256), consistente con ese horario.
+- **Concordancia:** "sin datos", porque no hubo velas de TwelveData.
+
+### Un error mío
+
+El 400 ya estaba registrado. La sonda §0.A-3b lo vio al paginar con `start_date` y `end_date`
+(5b, entrada del 2026-10-06, g): "La última página de cada serie […] devuelve 400 'No data is
+available on the specified dates', no 404". Al escribir `fetch_pagina` porté esa paginación,
+pero tomé la señal de fin del 404 "Data not found", que es como termina la paginación SIN
+`start_date` (entrada del 2026-10-05, f).
+
+### La regla
+
+1. **Adapter.** Un 400 es página vacía SOLO si el mensaje empieza exactamente con "No data is
+   available on the specified dates" (`TWELVEDATA_SIN_DATOS_400`, en el registro de constantes).
+   Cualquier otro 400 sigue siendo error. El 404 "data not found" no cambia. La página vacía
+   guarda el `code` y el mensaje literal.
+2. **Ingesta.** Una página vacía cierra la descarga de TwelveData como completa solo si se cumple
+   una de dos:
+   - la página anterior trajo menos filas que el `outputsize`;
+   - el `end_date` pedido ya es <= `desde`.
+
+   Si no se cumple ninguna, es error y no se escribe nada.
+3. **Decisión del Admin del 08-oct:** una página vacía en el PRIMER pedido, que no tiene página
+   anterior (por ejemplo, una corrida incremental sin velas nuevas), cierra como completa sin
+   velas. El test `test_td_sin_nada_nuevo_es_completa_y_no_escribe_nada` sigue igual.
+
+### Interpretaciones
+
+- **Las filas de la página anterior son las que devolvió la API, la vela abierta incluida.** La
+  primera página del run trajo 5000 filas y 4999 cerradas. Contando solo las cerradas, habría
+  pasado por corta, y una vacía espuria justo después habría dado la descarga por completa con
+  solo esas velas.
+- **La fixture del 400 tiene el `code` y el mensaje literal del log.** El adapter los escribe
+  como "error 400: <mensaje>". El cuerpo JSON entero no quedó en el log, y el status HTTP
+  tampoco. Por eso se prueba con HTTP 400 y 200, y con y sin la clave `status`.
+
+### Además, fuera del brief
+
+Una página que trae velas pero ninguna nueva cerraba la descarga como completa ("sin velas
+nuevas"). Con `start_date` y `end_date` = primera vela anterior − 60 s, una página correcta
+nunca repite velas: si las repite, la API ignoró el `end_date`, y darla por completa podría dejar
+el mismo hueco. Ahora es error desde la segunda página. Una primera página que solo trae la vela
+abierta sigue cerrando como completa sin velas. Va en un commit aparte.
+
+### Mutantes
+
+17, todos atrapados: 7 del adapter, 8 de la regla de la ingesta y 2 del caso de la ventana
+repetida.
+
+### Pendiente
+
+Volver a correr el workflow (lo dispara el Admin). TwelveData vuelve a empezar desde 2020, unas
+101 llamadas. Deriv sigue de forma incremental desde la última vela guardada.
