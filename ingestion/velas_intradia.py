@@ -44,6 +44,11 @@ Si no, es un error y no se escribe nada. Una vacía en el PRIMER pedido (no
 hay página anterior) cierra como completa sin velas: no hay nada bajado que
 pueda quedar suelto (decisión del Admin del 08-oct-2026).
 
+Por la misma razón, una página que trae velas pero NINGUNA nueva (la API
+repitió una ventana ya bajada en vez de respetar el `end_date`) es un error
+a partir de la segunda página. Antes se daba por el fondo ("sin velas
+nuevas").
+
 ══ CIERRE DE VELA ══
 
 Con la hora del servidor de cada fuente: la `time` de Deriv, y la
@@ -208,8 +213,17 @@ async def descargar_td(adapter: TwelveDataAdapter, *, desde: int, hasta: int,
         for e, (_, fila) in zip(epocas, p.velas.iterrows()):
             nuevas += e not in velas
             velas[e] = {"epoch": e, **{k: float(fila[k]) for k in ("open", "high", "low", "close")}}
+        if not epocas and filas_previa is None:
+            res.update(corte="la primera página solo trajo velas abiertas: no hay velas "
+                             "cerradas nuevas", completo=True)
+            break
         if not epocas or not nuevas:
-            res.update(corte="sin velas nuevas", completo=True)
+            # Con start_date y end_date = primera vela anterior − 60 s, una
+            # página correcta nunca repite velas: si las repite, la API no
+            # respetó el end_date y no hay cómo saber si la descarga llegó a
+            # lo ya guardado. Darla por completa podría dejar un hueco.
+            res["corte"] = ("la página no trajo velas nuevas (la API repitió una ventana ya "
+                            "bajada): no se puede asegurar que la descarga sea contigua. Error.")
             break
         primera = min(epocas)
         if primera <= desde:

@@ -54,10 +54,12 @@ class _TDFalso:
     a lo sumo el `outputsize` pedido. `vacias_en` son los números de pedido
     (desde 0) que vuelven vacíos aunque haya velas: una vacía espuria."""
 
-    def __init__(self, epocas, *, hora, n=4, vacias_en=()):
+    def __init__(self, epocas, *, hora, n=4, vacias_en=(), sin_end_date_en=()):
         self.epocas = sorted(epocas)
         self.hora, self.n = hora, n
         self.vacias_en = set(vacias_en)
+        #: Pedidos en que la API ignora el end_date y repite la ventana más reciente.
+        self.sin_end_date_en = set(sin_end_date_en)
         self.pedidos: list[dict] = []
 
     async def fetch_pagina(self, simbolo, tf, *, start_date=None, end_date=None, outputsize=5000):
@@ -65,6 +67,8 @@ class _TDFalso:
                              "end_date": end_date, "outputsize": outputsize})
         ini = vi._epoch_de(start_date) if start_date else 0
         fin = vi._epoch_de(end_date) if end_date else 10**12
+        if len(self.pedidos) - 1 in self.sin_end_date_en:
+            fin = 10**12
         sel = [e for e in self.epocas if ini <= e <= fin][-min(self.n, outputsize):]
         if not sel or len(self.pedidos) - 1 in self.vacias_en:
             return PaginaTwelveData(pd.DataFrame(), "sha-vacia", {}, True, 0, motivo=_VACIA_400)
@@ -211,6 +215,30 @@ async def test_td_vacia_en_la_primera_pagina_es_completa_sin_velas(monkeypatch):
     rep, res = await vi.ingerir_td(td, write=True, limitador=_lim(), outputsize=4)
     assert res["completo"] is True and rep.nuevas == 0
     assert "primera página vino vacía" in res["corte"]
+
+
+async def test_td_una_ventana_repetida_a_mitad_es_error_y_no_escribe(monkeypatch):
+    inicio = vi._epoch_de(vi.INICIO_TD)
+    epocas = [inicio + 70 * 60 + k * M5 for k in range(12)]
+    monkeypatch.setattr(vi.time, "time", lambda: epocas[-1] + 3 * M5)
+    td = _TDFalso(epocas, hora=epocas[-1] + 2 * M5, n=100, sin_end_date_en={1})
+    rep, res = await vi.ingerir_td(td, write=True, limitador=_lim(), outputsize=4)
+    assert res["completo"] is False and "no trajo velas nuevas" in res["corte"]
+    assert len(td.pedidos) == 2
+    assert not ruta_serie("td_XAUUSD", M5).exists()
+
+
+async def test_td_primera_pagina_solo_con_la_vela_abierta_es_completa_sin_velas(monkeypatch):
+    inicio = vi._epoch_de(vi.INICIO_TD)
+    epocas = [inicio + k * M5 for k in range(4)]
+    monkeypatch.setattr(vi.time, "time", lambda: epocas[-1] + 10 * M5)
+    await vi.ingerir_td(_TDFalso(epocas, hora=epocas[-1] + M5), write=True, limitador=_lim())
+    nueva = epocas[-1] + M5                       # todavía abierta
+    td = _TDFalso(epocas + [nueva], hora=nueva + 100)
+    rep, res = await vi.ingerir_td(td, write=True, limitador=_lim())
+    assert res["completo"] is True and rep.nuevas == 0
+    assert "solo trajo velas abiertas" in res["corte"]
+    assert res["abiertas_descartadas"] == 1
 
 
 @pytest.mark.parametrize("filas_previa, fin_menos_desde, cierra", [
