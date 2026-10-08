@@ -637,6 +637,16 @@ _INTERVALOS_SIN_TIMEZONE: frozenset[str] = frozenset({"1d"})
 #: adapter empezó a paginar, para que el tope sea uno solo.
 TWELVEDATA_MAX_OUTPUTSIZE = 5000
 
+#: El comienzo del mensaje con que TwelveData contesta, con `code` 400 en el
+#: cuerpo, un `time_series` sin velas entre `start_date` y `end_date`. Visto
+#: dos veces: en la sonda §0.A-3b al pasar el inicio del año (5b,
+#: decision-log 2026-10-06, g) y en el run 37721686439 del 08-oct-2026, al
+#: llegar al inicio de la historia de XAU/USD 5min: "No data is available on
+#: the specified dates. Try setting different start/end dates.". Se compara
+#: el COMIENZO, exacto: cualquier otro 400 sigue siendo un error (brief del
+#: Admin del 07-oct-2026 (6)).
+TWELVEDATA_SIN_DATOS_400 = "No data is available on the specified dates"
+
 
 @dataclass(frozen=True)
 class PaginaTwelveData:
@@ -646,11 +656,16 @@ class PaginaTwelveData:
         cabecera HTTP `Date` de esa respuesta), ordenadas ascendente.
     sha256: del cuerpo crudo.
     creditos: las cabeceras de créditos que mande la API, tal cual.
-    vacia: la API contestó 404 "data not found": no hay velas en el rango
-        pedido. Es como termina la paginación hacia atrás (decision-log
-        2026-10-05, f), no un error.
+    vacia: la API contestó que no hay velas en el rango pedido, con una de
+        las dos respuestas medidas: el 404 "Data not found" (al paginar SIN
+        `start_date`, decision-log 2026-10-05, f) o el 400 de
+        TWELVEDATA_SIN_DATOS_400 (al paginar CON `start_date` y `end_date`).
+        Si una página vacía cierra la paginación lo decide quien pagina
+        (ingestion/velas_intradia.py), no el adapter: una vacía también
+        puede ser espuria.
     abiertas_descartadas: cuántas velas se sacaron por no haber cerrado.
     hora_servidor: la cabecera Date, en segundos UTC (None en una vacía).
+    motivo: en una vacía, el `code` y el mensaje literal de la API.
     """
     velas: pd.DataFrame
     sha256: str
@@ -658,6 +673,15 @@ class PaginaTwelveData:
     vacia: bool
     abiertas_descartadas: int
     hora_servidor: Optional[int] = None
+    motivo: Optional[str] = None
+
+    @property
+    def filas_devueltas(self) -> int:
+        """Las filas que devolvió la API, ANTES de sacar las abiertas: es lo
+        que se compara contra el `outputsize` pedido para saber si la
+        página vino llena. Contar solo las cerradas haría pasar por corta
+        una página llena cuya vela más reciente todavía no cerró."""
+        return len(self.velas) + self.abiertas_descartadas
 
 
 class TwelveDataAdapter(BaseAdapter):
@@ -844,8 +868,10 @@ class TwelveDataAdapter(BaseAdapter):
         para paginar hacia atrás. Mismas reglas que `fetch_ohlcv` (símbolo
         mapeado, timezone=UTC en el intradía, key en el header), con dos
         diferencias: el cierre de vela se decide con la hora del SERVIDOR
-        (cabecera `Date` de la respuesta), nunca con el reloj local, y un
-        404 "data not found" es una página vacía, no un error."""
+        (cabecera `Date` de la respuesta), nunca con el reloj local, y las
+        dos respuestas medidas de "no hay velas en el rango" (el 404 "data
+        not found" y el 400 que empieza con TWELVEDATA_SIN_DATOS_400) son una
+        página vacía, no un error. Cualquier otro 400 o 404 lanza."""
         if symbol not in _TWELVEDATA_SYMBOL_MAP:
             raise ValueError(
                 f"Símbolo '{symbol}' no está en el mapeo verificado de "
@@ -869,9 +895,14 @@ class TwelveDataAdapter(BaseAdapter):
         body, texto, cabeceras = await self._get_con_cabeceras(params)
         sha = hashlib.sha256(texto.encode("utf-8")).hexdigest()
         creditos = {k: v for k, v in cabeceras.items() if "credit" in k.lower()}
-        mensaje = str(body.get("message", "")).lower()
-        if body.get("code") == 404 and "plan" not in mensaje and "data" in mensaje:
-            return PaginaTwelveData(pd.DataFrame(), sha, creditos, True, 0)
+        mensaje = str(body.get("message", ""))
+        if (body.get("code") == 404 and "plan" not in mensaje.lower()
+                and "data" in mensaje.lower()):
+            return PaginaTwelveData(pd.DataFrame(), sha, creditos, True, 0,
+                                    motivo=f"404: {mensaje}")
+        if body.get("code") == 400 and mensaje.startswith(TWELVEDATA_SIN_DATOS_400):
+            return PaginaTwelveData(pd.DataFrame(), sha, creditos, True, 0,
+                                    motivo=f"400: {mensaje}")
         self._raise_if_error(body, symbol=symbol)
 
         fecha = next((v for k, v in cabeceras.items() if k.lower() == "date"), None)
