@@ -38,11 +38,11 @@ jobs:
       # Historia completa, no superficial: tests/test_estado_al_dia.py (DG-6)
       # cuenta los merges desde el commit de referencia de ESTADO.md, y con un
       # clon superficial falla a propósito en vez de saltearse.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -76,9 +76,9 @@ jobs:
     runs-on: ubuntu-24.04
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
