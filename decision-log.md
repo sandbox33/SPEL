@@ -2484,3 +2484,84 @@ mantenimiento no cambia nada mientras el intervalo quede lejos del cierre por in
 
 No latir nunca, de dos formas (sin crear la tarea y con el bucle vacío); latir una sola vez;
 latir aunque no haya intervalo.
+
+## 2026-10-14 — Tarea C de la tanda del 14-oct: reintentos con Retry-After en la ingesta (issue #39)
+
+**Contexto:** brief del Admin del 14-oct-2026 (9), tarea C, e issue #39 (08-oct). Un 429 o un
+5xx transitorio de TwelveData cortaba la descarga de velas en "error" a la primera, sin escribir
+nada (la regla anti-hueco del PR #38).
+
+### Auditoría previa (lo que ya existía)
+
+- **`TwelveDataAdapter._raise_if_error`** traduce el `code` del cuerpo: 401 a
+  `AdapterAuthError`, 429 a `AdapterConnectionError`, 404 a `AdapterDataError` y cualquier otro a
+  `AdapterConnectionError`. No mira el status HTTP. Un 5xx con cuerpo HTML salía como
+  `AdapterDataError` ("no es JSON").
+- **`fetch_pagina`** no reintentaba. **`AdapterChain._fetch_con_reintentos_async`** reintenta
+  tres veces, con 2 y 4 s, cualquier `AdapterException` salvo la de autenticación, pero solo
+  envuelve `fetch_ohlcv`, no `fetch_pagina`.
+- **`Limitador`** (`ingestion/limitador.py`) cuenta créditos y aplica el tope por minuto, y
+  `descargar_td` le pide turno antes de cada página.
+
+### La regla
+
+1. **Se reintenta:** HTTP 429 o 500/502/503/504, sea el status HTTP o el `code` del cuerpo
+   (TwelveData manda errores con HTTP 200); timeouts y cortes de red (`httpx.TimeoutException`,
+   `NetworkError`, `RemoteProtocolError`).
+2. **No se reintenta nada más.** El 400 "No data is available…" sigue siendo la página vacía del
+   PR #38, sin reintento. Tampoco el 401, el 403, el 404, el 501 ni el 505, ni un error de red
+   que no es transitorio (`UnsupportedProtocol`, `LocalProtocolError`).
+3. **Espera:**
+   - la del `Retry-After`, en segundos o como fecha HTTP contra la cabecera `Date` del servidor
+     (contra el reloj de pared solo si falta `Date`);
+   - si no viene, 60 s para un 429 (issue #39) y backoff de 2, 4, 8… s con tope de 30 s para lo
+     demás.
+4. **Topes:** 3 reintentos y 180 s de espera sumada. Una espera que pasaría el tope no se hace:
+   se lanza en el acto.
+5. **Créditos:** cada reintento pide turno al mismo `Limitador` que cuenta las páginas, así que
+   consume crédito y respeta el tope por minuto. Si el limitador no da turno, se lanza.
+6. **Agotados los reintentos**, sale un `AdapterConnectionError` explícito con el motivo, los
+   reintentos y la espera sumada. `descargar_td` lo trata como cualquier error: corte "error" y
+   nada escrito. `descargar_td` no cambió.
+7. **Cada reintento deja una línea de log en JSON** (fuente, número, motivo, espera, origen de la
+   espera, espera acumulada), sin la key ni el mensaje del proveedor.
+
+### Interpretaciones
+
+- **Sin limitador, `fetch_pagina` no reintenta.** El brief pide que cada reintento consuma
+  crédito en el Limitador; sin limitador no hay dónde contarlo. Así, los tests existentes y
+  cualquier otro uso del adapter quedan como estaban. `velas_intradia.ingerir` le pasa al adapter
+  el mismo limitador que a la descarga.
+- **De los 5xx, solo 500, 502, 503 y 504.** 501 y 505 dicen que el servidor no soporta el pedido.
+- **Los valores (3, 180 s, 60 s, 2 s, 30 s) son provisionales**, sin evidencia: el issue deja el
+  número de reintentos "a confirmar". Están en el registro de constantes como
+  `provisional_sin_evidencia`.
+
+### Sin verificar
+
+- Que TwelveData mande `Retry-After`. No se llamó a la API (regla de la tanda), y su
+  documentación no se consultó.
+- **Qué 429 manda TwelveData cuando se acaban los créditos del día.** Si es el mismo 429 que el
+  del tope por minuto, el reintento gasta hasta 3 créditos y 180 s antes de cortar. Está
+  acotado, pero no sirve de nada en ese caso.
+
+### Dos implementaciones del concepto "reintento"
+
+`AdapterChain._fetch_con_reintentos_async` sigue con su reintento lineal propio para
+`fetch_ohlcv`. Es otra semántica: reintenta cualquier error de datos y después cae a otra fuente.
+No se tocó, porque el issue exige que los tests existentes pasen sin cambiar sus expectativas.
+Unificarlo con `ingestion/reintentos.py` queda pendiente de un brief.
+
+### Mutantes
+
+29, todos atrapados:
+- el parseo de `Retry-After`;
+- cada rama de la espera;
+- los dos topes y sus bordes;
+- el limitador y el sueño;
+- el log;
+- el conjunto de status;
+- el `code` frente al status HTTP;
+- la clasificación de red;
+- el camino sin limitador;
+- el cableado de la ingesta.
