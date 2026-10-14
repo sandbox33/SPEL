@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import time
 from pathlib import Path
 
 import pytest
@@ -307,15 +309,46 @@ async def test_la_conexion_valida_antes_del_socket(tmp_path):
     assert falso.enviados == []
 
 
+async def _esperar_pings(falso: _Falso, n: int, tope_s: float = 2.0) -> int:
+    """Espera hasta que el falso reciba `n` pings, con un tope. Devuelve
+    cuántos llegaron. Cada ping cuesta el intervalo MÁS lo que tarda el
+    pedido, y el pedido incluye el fsync del crudo (registro.py): con un
+    sleep fijo de 80 ms, un disco lento dejaba un solo ping (corrida
+    37729552559, intento 1)."""
+    limite = time.monotonic() + tope_s
+    while len(falso.de_tipo("ping")) < n and time.monotonic() < limite:
+        await asyncio.sleep(0.005)
+    return len(falso.de_tipo("ping"))
+
+
 async def test_el_ping_es_un_parametro(tmp_path):
     falso, _, _, _, conexion = _armar(tmp_path, intervalo_ping_s=0.01)
     async with conexion:
-        await asyncio.sleep(0.08)
-    assert len(falso.de_tipo("ping")) >= 2
+        llegaron = await _esperar_pings(falso, 2)
+    assert llegaron >= 2
     falso2, _, _, _, conexion2 = _armar(tmp_path / "b")
     async with conexion2:
         await asyncio.sleep(0.05)
     assert falso2.de_tipo("ping") == [], "sin intervalo no hay ping"
+
+
+async def test_el_ping_llega_aunque_guardar_el_crudo_tarde(tmp_path, monkeypatch):
+    """Lo que pasó en CI: si el fsync del crudo tarda 100 ms, en 80 ms cabe
+    un solo ping. Con el sleep fijo de antes esto fallaba siempre; esperando
+    hasta 2 pings (tope 2 s), pasa. Separa el criterio viejo del nuevo."""
+    fsync = os.fsync
+
+    def fsync_lento(fd):
+        fsync(fd)
+        time.sleep(0.1)
+    monkeypatch.setattr(os, "fsync", fsync_lento)
+    falso, _, _, _, conexion = _armar(tmp_path, intervalo_ping_s=0.01)
+    async with conexion:
+        await asyncio.sleep(0.08)
+        en_80_ms = len(falso.de_tipo("ping"))
+        llegaron = await _esperar_pings(falso, 2)
+    assert en_80_ms < 2, "el fsync lento no reprodujo la corrida de CI"
+    assert llegaron >= 2
 
 
 async def test_cerrar_termina_aunque_el_ping_se_trague_la_cancelacion(tmp_path):
