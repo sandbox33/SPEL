@@ -2367,3 +2367,74 @@ repetida.
 
 Volver a correr el workflow (lo dispara el Admin). TwelveData vuelve a empezar desde 2020, unas
 101 llamadas. Deriv sigue de forma incremental desde la última vela guardada.
+
+## 2026-10-14 — Tarea D de la tanda del 14-oct: runners en `ubuntu-24.04` y acciones en Node 24
+
+**Contexto:** brief del Admin del 14-oct-2026 (9), tarea D.
+
+### Los hechos, verificados
+
+- **Las anotaciones de los runs 38413375042 (GDELT, 13-oct) y 38628997322 (tests, 14-oct)**
+  traen dos avisos:
+  - "The ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026. For more
+    information, see https://github.com/actions/runner-images/issues/14748".
+  - "Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to
+    run on Node.js 24: actions/checkout@v4, actions/setup-python@v5".
+- **El log del job `orden_demo`** (run 37716067033, 08-oct) dice `Image: ubuntu-24.04`, versión
+  20261004.327.1, para un job con `runs-on: ubuntu-latest`. El runner es la versión 2.337.0.
+
+### Las versiones, verificadas en los repositorios oficiales
+
+Leídas con `git` sobre github.com/actions/checkout y github.com/actions/setup-python, el
+14-oct-2026. La API de releases no está habilitada en esta sesión, así que la fecha es la del
+commit de cada tag.
+
+| acción | versión | `runs.using` en su action.yml | tag (fecha del commit) | nota del cambio |
+|---|---|---|---|---|
+| checkout | v4 (v4.3.1) | node20 | 13-nov-2025 | — |
+| checkout | **v5.0.0** | **node24** | 11-ago-2025 | CHANGELOG: "Update actions checkout to use node 24" (PR #2226); README: "Checkout v5 now supports Node.js 24" |
+| checkout | v6.0.0 | node24 | 20-nov-2025 | CHANGELOG: "Persist creds to a separate file" (PR #2286) |
+| checkout | v7.0.0 | node24 | 17-jun-2026 | CHANGELOG: módulo ESM, bloquea checkout de forks en `pull_request_target` |
+| setup-python | v5 (v5.6.0) | node20 | 23-abr-2025 | — |
+| setup-python | **v6.0.0** | **node24** | 03-sep-2025 | commit del tag: "Upgrade to node 24 (#1164)" |
+| setup-python | v7.0.0 | node24 | 19-jul-2026 | — |
+
+### El cambio
+
+- `runs-on: ubuntu-24.04` en los 10 jobs de los 7 workflows.
+- `actions/checkout@v4` → `@v5` (15 usos) y `actions/setup-python@v5` → `@v6` (10 usos).
+- El diff de `.github/workflows/` son solo esas 35 líneas: sin cambios en triggers, crons,
+  secretos ni pasos.
+- `tests/test_workflows_runners.py` (23 tests) falla en tres casos:
+  - si un workflow usa `ubuntu-latest` o un job corre en otro runner;
+  - si checkout o setup-python vuelven a una mayor en Node 20, o se fijan por algo que no es `vN`;
+  - si aparece otra acción, cuyo Node habría que mirar.
+
+### Interpretación: "la versión mayor que soporte Node 24"
+
+Se lee como la **primera** versión mayor con Node 24: checkout v5 y setup-python v6. Las últimas
+(v7 y v7) también corren en Node 24, pero traen más cambios.
+- **checkout v6** guarda las credenciales en un archivo aparte, y cuatro workflows hacen push a
+  `data` con las credenciales que deja el checkout.
+- **setup-python v6.0.0** suma, entre v5.6.0 y v6.0.0, la entrada `pip-version` y lecturas
+  nuevas de `.python-version` y Pipfile. Ninguna aplica: todos los pasos fijan
+  `python-version: "3.12"`, y el repo no tiene esos archivos.
+
+Subir a v7 es otro PR, si el Admin lo quiere.
+
+### No verificado
+
+- El contenido del issue actions/runner-images#14748, más allá del texto del aviso.
+- Que todo corra igual en las versiones nuevas: ningún workflow corrió todavía en esta rama, y
+  la tanda prohíbe dispararlos. El primer run de `SPEL Tests` sobre el PR lo va a mostrar.
+
+### Mutantes
+
+7, todos atrapados:
+- un job de vuelta en `ubuntu-latest`;
+- otro en `ubuntu-22.04`;
+- `runs-on` como lista;
+- checkout@v4 en un solo job de `gdelt.yml`;
+- setup-python@v5;
+- checkout fijado por sha;
+- una acción nueva.
