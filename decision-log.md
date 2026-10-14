@@ -2565,3 +2565,90 @@ Unificarlo con `ingestion/reintentos.py` queda pendiente de un brief.
 - la clasificación de red;
 - el camino sin limitador;
 - el cableado de la ingesta.
+
+## 2026-10-14 — Tarea B de la tanda del 14-oct: la reconciliación de la parte B, DETENIDA
+
+**Contexto:** brief del Admin del 14-oct-2026 (9), tarea B. La regla de la tanda: si algo del
+brief contradice el código, los datos o el decision-log, la tarea se detiene, se reporta en un PR
+borrador y se pasa a la siguiente. **No se cambió código.** Este PR solo trae este informe y las
+filas de ESTADO.md que estaban mal (punto 4).
+
+### El informe de la parte B (run 37716067033, job `orden_demo`, 08-oct, `056055e`)
+
+Leído del log del job (el test lo imprime como una línea JSON). 1 passed en 124,73 s.
+
+- **Cuentas:** `GET /accounts` devolvió una demo (`DOT********`) y una real (`ROT********`),
+  las dos activas. OTP pedido para la demo; 1 OTP y 1 conexión.
+- **Orden:** MULTUP sobre frxXAUUSD, stake 1 (el mínimo que dio la cotización de sondeo),
+  multiplicador 100, stop loss 0,10 USD. Comisión cotizada 0,02 (float en `proposal`).
+  `contract_id` 16063879879, latencia del `buy` 288 ms.
+- **Cierre:** `sell` propio a los 62 s (`purchase_time` 1791425094, `sell_time` 1791425156),
+  outcome `sell_tiempo`, profit de Deriv −0,03 USD, r_multiple −0,3, `commission_usd` 0,02 igual a
+  la modelada (`cost_ratio` 1,0). En el contrato la comisión llegó como string ("0.02").
+- **Balance:** 10000,00 → 9999,97 USD.
+- **Registro:** íntegro, 6 filas (envío, compra, seguimiento, venta, cierre, reconciliación), cabeza
+  `bccd4fab…`.
+- **Reconciliación:** `reconciliado: ok`, sin problemas, con la nota "la comisión no aparece en
+  profit_table ni en statement: no se reconcilia".
+- **Esquema medido sobre todo lo crudo:** `commission` aparece solo en `proposal` y en
+  `proposal_open_contract`. Las respuestas crudas de `profit_table` (sha256 `6ee6140f…`) y
+  `statement` (`14d631ac…`) no la traen.
+- **Cierre por inactividad:** `cierre_inactivo_s` 59,705 s, con tope de 300 s.
+
+### Por qué se detuvo
+
+**1. El punto 2 contradice la DG-3 del 29-sep.** El brief pide que la reconciliación sea limpia
+solo si `reconciliado_profit` y `reconciliado_comision` son `ok`, y que una comisión que no se
+puede contrastar sea `no_verificable`, nunca `ok`.
+- La DG-3 del 29-sep (entrada "DG-3 reemplazada") dice "d) reconciliación demo sin
+  discrepancias". `governance/paso_a_real.py` lo implementa así:
+  `discrepancias_reconciliacion != 0` incumple d). Una comisión `no_verificable` no es una
+  discrepancia: con la DG-3 vigente, d) se cumple; con la regla del brief, no.
+- **La consecuencia la fijan los datos:** la comisión no aparece en `profit_table` ni en
+  `statement`. Lo dicen los esquemas oficiales (entrada del 06-oct, interpretación 7) y ahora
+  también las respuestas crudas de la parte B. Con la regla del brief, TODA operación tendría la
+  comisión `no_verificable`, d) no se cumpliría nunca, y toda hipótesis terminaría en
+  `VENCIDO_PASA_A_H2` a los 6 meses. Eso cambia el efecto de la decisión del 29-sep, y lo decide
+  el Admin.
+
+**2. El punto 1 choca con tests existentes que codifican el comportamiento viejo.** CLAUDE.md:
+"Si un test existente codifica el comportamiento viejo, repórtalo; no lo edites."
+- `tests/test_integracion_demo_registro.py::test_los_campos_del_brief_estan_todos` fija que las
+  columnas son las del brief del 06-oct (3) más `evento` y `evidencia`, y nada más. Dos columnas
+  nuevas lo rompen.
+- Cuatro tests del mismo archivo esperan `reconciliado == "ok"` en un trade cerrado cuya
+  comisión no se contrastó: `test_reconciliar_ok_agrega_una_linea_y_no_edita`,
+  `test_reconciliar_tolera_medio_centavo_y_no_mas`, `test_una_discrepancia_se_vuelve_a_reconciliar`
+  y `test_reconciliar_no_repite_un_ok`, que además fija que un `ok` no se vuelve a reconciliar.
+  Ese es justamente el comportamiento que el brief corrige.
+- Un quinto, `test_una_rechazada_con_una_compra_cerca_es_discrepancia`, espera `ok` para una
+  orden sin contrato y sin compras cerca. Ahí no hay comisión que contrastar, y el brief no dice
+  qué marca lleva: es otra decisión pendiente.
+
+### Lo que el Admin tiene que decidir
+
+- Si d) pasa a exigir comisión `ok`, cómo se contrasta la comisión. Sin un dato de Deriv que la
+  separe, d) queda inalcanzable. Si en cambio d) sigue siendo "sin discrepancias", con
+  `no_verificable` declarado aparte.
+- Autorizar la edición de los tests nombrados arriba, o el esquema de las columnas nuevas.
+
+### Punto 3: 59,7 s frente a ~122 s (solo diagnóstico)
+
+- **59,705 s** es `cierre_inactivo_s`: `ConexionDemo.medir_cierre_inactivo` empieza a contar
+  después de la última respuesta pedida (`statement`) y para cuando `recv` falla porque el
+  servidor cerró. Es el tiempo **sin ningún mensaje** hasta el cierre. El socket se abre sin el
+  ping de protocolo de `websockets` (`ping_interval=None`).
+- **122,465 s** es lo que da el `historial` de la conexión en el mismo informe: `conectada` en
+  `t_ms` 1791425094011 y `descartada` ("cierre por inactividad") en 1791425216476. Es la **vida
+  entera de la conexión**: cotización, compra, 62 s de seguimiento, venta, reconciliación y los
+  59,7 s de silencio.
+- Las dos cuadran: 1791425216,476 − 59,705 = 1791425156,771, menos de un segundo después del
+  `sell_time` (1791425156), que es cuando terminaron la venta y las dos consultas de la
+  reconciliación. El `historial` usa el reloj local y `sell_time` el del servidor.
+- **No encontré otro registro de ~122 s.** Busqué "122", "inactiv" y `cierre_inactivo` en el
+  decision-log, ESTADO.md y el código. Si la cifra del brief viene del `historial`, las dos cifras
+  no son dos mediciones del mismo fenómeno: miden cosas distintas.
+- **No verificado:**
+  - si Deriv cuenta la inactividad desde el último mensaje del cliente o desde el último del
+    servidor;
+  - si ~60 s es un límite fijo. Es una sola medición, y Deriv no lo documenta.
