@@ -332,6 +332,24 @@ async def test_con_limitador_el_mismo_429_se_recupera():
     assert len((await m.pagina()).velas) == 2
 
 
+async def test_la_ingesta_le_pasa_su_limitador_al_adapter(monkeypatch):
+    vistos = {}
+
+    class _TD:
+        def __init__(self, **kw):
+            vistos["adapter"] = kw.get("limitador")
+
+    async def ingerir_td(td, *, write, limitador):
+        vistos["descarga"] = limitador
+        raise RuntimeError("basta")
+    monkeypatch.setattr(vi, "TwelveDataAdapter", _TD)
+    monkeypatch.setattr(vi, "ingerir_td", ingerir_td)
+    with pytest.raises(RuntimeError, match="basta"):
+        await vi.ingerir(key="k", write=False)
+    assert isinstance(vistos["adapter"], Limitador)
+    assert vistos["adapter"] is vistos["descarga"]
+
+
 # ═══ El log ═══════════════════════════════════════════════════════════════
 
 async def test_cada_reintento_deja_un_log_estructurado_sin_la_key(caplog):
