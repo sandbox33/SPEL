@@ -703,6 +703,10 @@ class TwelveDataAdapter(BaseAdapter):
         api_key: str,
         client: Any = None,
         timeout_s: float = 10.0,
+        *,
+        limitador: Any = None,
+        dormir: Callable[[float], Awaitable[Any]] = asyncio.sleep,
+        reloj: Callable[[], float] = time.time,
     ) -> None:
         """
         api_key: se recibe por constructor, NO se lee de os.environ acá
@@ -715,12 +719,24 @@ class TwelveDataAdapter(BaseAdapter):
         client: httpx.AsyncClient inyectable — los tests pasan uno con
         MockTransport y nunca tocan la red. Si es None, cada llamada abre y
         cierra el suyo.
+
+        limitador: el `ingestion.limitador.Limitador` de la descarga. Con él,
+        `fetch_pagina` reintenta los 429, 5xx y cortes de red
+        (`ingestion/reintentos.py`), y cada reintento pide su turno al
+        limitador, así que consume crédito. Sin él no reintenta: un
+        reintento sin cuenta de créditos podría pasar la cuota.
+        dormir, reloj: la espera entre reintentos y el reloj de pared (solo
+        para un Retry-After con fecha y sin cabecera Date). Inyectables para
+        que los tests no duerman.
         """
         if not api_key:
             raise ValueError("TwelveDataAdapter requiere api_key no vacía")
         self._api_key = api_key
         self._client = client
         self._timeout_s = timeout_s
+        self._limitador = limitador
+        self._dormir = dormir
+        self._reloj = reloj
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"apikey {self._api_key}"}
@@ -729,9 +745,25 @@ class TwelveDataAdapter(BaseAdapter):
         return (await self._get_con_cabeceras(params))[0]
 
     async def _get_con_cabeceras(self, params: dict[str, Any]) -> tuple[dict, str, dict]:
+        """Devuelve (cuerpo parseado, texto crudo, cabeceras)."""
+        return self._parsear(await self._http_get(params))
+
+    def _parsear(self, resp: Any) -> tuple[dict, str, dict]:
+        try:
+            return resp.json(), resp.text, dict(resp.headers)
+        except (ValueError, json.JSONDecodeError) as exc:
+            # HTTP 200 con cuerpo que no es JSON: pasa con páginas de
+            # error de un proxy o WAF intermedio. No es un fallo de
+            # transporte (la conexión funcionó), es contenido inválido.
+            raise AdapterDataError(
+                f"[{self.source_name}] respuesta no es JSON válido "
+                f"(HTTP {resp.status_code}): {exc}"
+            ) from exc
+
+    async def _http_get(self, params: dict[str, Any]) -> Any:
         """Un solo lugar donde el transporte HTTP se traduce al vocabulario
         de excepciones del módulo. Nadie más en esta clase toca httpx.
-        Devuelve (cuerpo parseado, texto crudo, cabeceras)."""
+        Devuelve la respuesta de httpx, ya leída."""
         import httpx
 
         client = self._client
@@ -739,19 +771,9 @@ class TwelveDataAdapter(BaseAdapter):
         if propio:
             client = httpx.AsyncClient(timeout=self._timeout_s)
         try:
-            resp = await client.get(
+            return await client.get(
                 TWELVEDATA_ENDPOINT, params=params, headers=self._headers(),
             )
-            try:
-                return resp.json(), resp.text, dict(resp.headers)
-            except (ValueError, json.JSONDecodeError) as exc:
-                # HTTP 200 con cuerpo que no es JSON: pasa con páginas de
-                # error de un proxy o WAF intermedio. No es un fallo de
-                # transporte (la conexión funcionó), es contenido inválido.
-                raise AdapterDataError(
-                    f"[{self.source_name}] respuesta no es JSON válido "
-                    f"(HTTP {resp.status_code}): {exc}"
-                ) from exc
         except httpx.TimeoutException as exc:
             raise AdapterConnectionError(
                 f"[{self.source_name}] timeout tras {self._timeout_s}s"
@@ -892,7 +914,7 @@ class TwelveDataAdapter(BaseAdapter):
         if end_date:
             params["end_date"] = end_date
 
-        body, texto, cabeceras = await self._get_con_cabeceras(params)
+        body, texto, cabeceras = await self._get_pagina(params)
         sha = hashlib.sha256(texto.encode("utf-8")).hexdigest()
         creditos = {k: v for k, v in cabeceras.items() if "credit" in k.lower()}
         mensaje = str(body.get("message", ""))
@@ -918,6 +940,55 @@ class TwelveDataAdapter(BaseAdapter):
                               require_closed=True, granularity_s=granularity, now_utc=ahora)
         return PaginaTwelveData(cerradas, sha, creditos, False, len(df) - len(cerradas),
                                 int(ahora.timestamp()))
+
+    async def _get_pagina(self, params: dict[str, Any]) -> tuple[dict, str, dict]:
+        """`_get_con_cabeceras` con reintentos si hay limitador (issue #39).
+        Se reintenta un 429 o un 500/502/503/504, sea el status HTTP o el
+        `code` del cuerpo (TwelveData manda errores con HTTP 200), y un
+        timeout o corte de red. Ningún otro error se reintenta: ni el 400
+        que cierra la paginación, ni un 401, ni un 404."""
+        if self._limitador is None:
+            return await self._get_con_cabeceras(params)
+        import httpx
+
+        from ingestion.reintentos import (
+            FalloTransitorio,
+            Transitorio,
+            es_status_reintentable,
+            reintentar,
+            segundos_de_retry_after,
+        )
+
+        async def una_vez() -> tuple[dict, str, dict]:
+            try:
+                resp = await self._http_get(params)
+            except AdapterConnectionError as exc:
+                causa = exc.__cause__
+                if isinstance(causa, (httpx.TimeoutException, httpx.NetworkError,
+                                      httpx.RemoteProtocolError)):
+                    raise FalloTransitorio(self.source_name, Transitorio(
+                        f"red: {type(causa).__name__}")) from exc
+                raise
+            try:
+                code = resp.json().get("code")
+            except (ValueError, AttributeError):
+                code = None
+            status = resp.status_code
+            if es_status_reintentable(status) or es_status_reintentable(code):
+                motivo = f"HTTP {status}" if es_status_reintentable(status) else f"code {code}"
+                fecha = resp.headers.get("date")
+                try:
+                    ahora = parsedate_to_datetime(fecha).timestamp() if fecha else self._reloj()
+                except (TypeError, ValueError):
+                    ahora = self._reloj()
+                raise FalloTransitorio(self.source_name, Transitorio(
+                    motivo, es_429=429 in (status, code),
+                    retry_after_s=segundos_de_retry_after(resp.headers.get("retry-after"),
+                                                          ahora_epoch=ahora)))
+            return self._parsear(resp)
+
+        return await reintentar(una_vez, fuente=self.source_name, turno=self._limitador.turno,
+                                dormir=self._dormir)
 
     def _to_dataframe(self, body: dict, *, timeframe: str, symbol: str) -> pd.DataFrame:
         values = body.get("values")
