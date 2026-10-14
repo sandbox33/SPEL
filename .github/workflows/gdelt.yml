@@ -85,7 +85,7 @@ permissions:
 jobs:
   ingesta:
     if: github.event_name == 'schedule' || inputs.modo == 'ingesta'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # El único job con escritura. La verificación no la necesita.
     permissions:
       contents: write
@@ -170,7 +170,7 @@ jobs:
 
   verificar_siembra:
     if: github.event_name == 'workflow_dispatch' && inputs.modo == 'verificar_siembra'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       SPEL_DRIVE_ROOT: ${{ github.workspace }}/data-store
     steps:

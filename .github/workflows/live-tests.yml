@@ -56,7 +56,7 @@ on:
 jobs:
   live:
     if: inputs.objetivo != 'orden_demo'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     # A nivel de JOB, no de step: los tests live son varios y van a ser más,
     # y repetir el bloque en cada step es la forma segura de que a uno se le
@@ -112,7 +112,7 @@ jobs:
   # no compra. Lo dispara el Admin, nadie más.
   orden_demo:
     if: inputs.objetivo == 'orden_demo'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Dos despachos seguidos no corren en paralelo: el segundo espera y, al
     # ver la compra del primero en statement, no compra.
     concurrency:

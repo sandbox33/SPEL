@@ -33,7 +33,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # Historia completa, no superficial: tests/test_estado_al_dia.py (DG-6)
       # cuenta los merges desde el commit de referencia de ESTADO.md, y con un
@@ -73,7 +73,7 @@ jobs:
   # El job `test` de arriba corre `pytest tests/`, así que no los colecta:
   # esto no los corre dos veces.
   research:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
