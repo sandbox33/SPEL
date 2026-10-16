@@ -10,7 +10,7 @@
 > Este archivo se lee primero en cada chat nuevo. Frente a un chat que lo contradiga sin
 > evidencia, gana el archivo; frente al código, gana el código.
 
-**Última actualización:** 16 oct 2026 — tanda A–D, tarea C: reintentos con Retry-After en `fetch_pagina` (issue #39), apilada sobre la tarea A (brief del Admin 9-R), en la rama `claude/tanda-c-reintentos`.
+**Última actualización:** 16 oct 2026 — brief del Admin 9-R, tareas 3 y 4: la implementación de DB-1/DB-2 quedó DETENIDA (la comisión cotizada no está en el registro) y el próximo paso se reescribió con la cola real; apilada sobre la tarea C, en la rama `claude/tanda-b-reconciliacion`.
 
 **Commit de referencia:** `ed70664` (merge del PR #43).
 
@@ -18,7 +18,7 @@
 `pytest --collect-only -q tests/` el 16-oct-2026 sobre esta rama. Más 74 en `research/tests/`,
 que no bloquean.
 
-Desfase: **ninguno**. El commit de referencia es el merge del PR #43 (tarea D), el último de `main`. Esta rama se apila sobre la del PR #40 (tarea A) y entra con el PR #42; el #41 (tarea B) se apila sobre esta. Los PRs #33 y #34 siguen abiertos y
+Desfase: **ninguno**. El commit de referencia es el merge del PR #43 (tarea D), el último de `main`. Esta rama se apila sobre las de los PRs #40 (tarea A) y #42 (tarea C), y entra con el PR #41. Los PRs #33 y #34 siguen abiertos y
 en pausa. `tests/test_estado_al_dia.py` falla si hay **más
 de 3 PRs fusionados** desde el commit de referencia de arriba (DG-6).
 
@@ -57,7 +57,7 @@ Eso no reabre Fase 1 ni cambia su resultado; ordena el código para que coincida
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
 **1769 recolectados en `tests/`, en 58 archivos**, contados con `pytest --collect-only -q`
-el 16-oct-2026 sobre la rama `claude/tanda-c-reintentos`, no copiados de ningún
+el 16-oct-2026 sobre la rama `claude/tanda-b-reconciliacion`, no copiados de ningún
 documento. Sin credenciales se saltan 6, cada uno por su propio `skipif`: el test `live` de
 TwelveData, el guardián de secretos de `tests/test_sources.py`, las dos sondas de endpoints de
 Deriv, la 3b de TwelveData y la orden demo de la parte B.
@@ -515,17 +515,20 @@ salvedad que hay que resolver **antes** de revertir.
 
 ## ▶️ PRÓXIMO PASO CONCRETO
 
-**Registrar la segunda corrida de `SPEL velas intradía del oro`** (`velas_intradia.yml`). El
-Admin la volvió a disparar el 14-oct sobre `6c1d29c` (run 38610611624, terminó en éxito); su
-informe —datos, calendario, concordancia y compuerta del 90 %— no está leído ni registrado y
-espera el brief que lo haga. La primera corrida (08-oct, run 37721686439) escribió Deriv, y
-TwelveData se cortó en el 400 del fondo sin escribir nada.
+**Brief 10 (gobernanza).** Cablea la condición d) de DG-3 con `no_verificable`
+(`governance/paso_a_real.py`) y registra la pausa de H-ORB-oro (D11). Antes, DB-2 necesita una
+decisión: la comisión cotizada no está en el registro de la demo, así que la tarea 3 del brief
+9-R quedó detenida (decision-log del 16-oct).
 
-La parte B (PR #36) ya corrió: el 08-oct, run 37716067033, job `orden_demo` en verde. Su
-informe espera el brief que lo registre.
+La cola, en orden:
 
-Siguen abiertas la migración de `ingestion/deriv_ws.py` al WS público nuevo (la legacy está
-muerta desde el 01-oct) y el brief de la batería multi-estrategia (DG-8).
+1. Brief 10, gobernanza.
+2. Tanda 11–13: H2, H3 y H1 v2.
+3. Brief 8: sonda de profundidad diaria.
+4. Después, la concordancia diaria y la migración de `ingestion/deriv_ws.py` al WS público nuevo
+   (la legacy está muerta desde el 01-oct).
+
+**H-ORB-oro: pausada (D11).** La registra el brief 10.
 
 *(Lo que estaba acá —"decidir qué mide el éxito de Fase 2"— lo contestan los
 pre-registros de la Serie H —Sharpe neto fuera de muestra, PSR, DSR y la comparación contra
