@@ -2652,3 +2652,74 @@ puede contrastar sea `no_verificable`, nunca `ok`.
   - si Deriv cuenta la inactividad desde el último mensaje del cliente o desde el último del
     servidor;
   - si ~60 s es un límite fijo. Es una sola medición, y Deriv no lo documenta.
+
+## 2026-10-16 — Brief 9-R, tarea 3 (DB-1, DB-2): auditoría de la comisión, y por qué se detiene
+
+**Contexto:** brief del Admin 9-R, tarea 3, con las decisiones DB-1 y DB-2 del 14-oct-2026:
+- columnas `reconciliado_profit` y `reconciliado_comision`;
+- `reconciliado_comision` es `ok` si "la comisión del contrato, la cotizada y la registrada
+  coinciden" a medio centavo;
+- `no_verificable` si falta alguno de los tres valores;
+- `no_verificable` nunca es `ok`.
+
+El punto 1 pide auditar antes dónde quedan hoy las tres. **No se cambió código.**
+
+### Auditoría: dónde está cada comisión hoy
+
+| comisión | dónde la recibe el código | qué guarda el registro |
+|---|---|---|
+| **del contrato** (`proposal_open_contract.commission`) | `registro.derivados_de_cierre(poc)` | la fila de `cierre`: `commission_cruda` = `str(poc["commission"])` y `commission_usd` = `num(...)` si la moneda es USD |
+| **cotizada** (`proposal.commission`) | `Ejecutor.cotizar` devuelve la respuesta entera; nadie la guarda en una fila | **nada**: solo la respuesta cruda en `crudo.jsonl`, sin `trade_uuid` ni enlace a la compra. En la parte B la lee el test live, no `integracion_demo/` |
+| **registrada** | — | no hay una tercera fuente. `commission_usd` y `commission_cruda` salen del mismo `poc`. `commission_modelada` es κ·nocional, el modelo, no un valor de Deriv |
+
+`reconciliar.py` solo recibe el registro, `profit_table` y `statement`, y en `profit_table` y
+`statement` no viene ninguna comisión (entrada del 14-oct).
+
+### La contradicción
+
+La regla `ok` de DB-2 compara tres valores, y el registro tiene uno:
+- **La cotizada no llega a la reconciliación por ningún camino.** Con el código de hoy, toda
+  operación real quedaría con la comisión `no_verificable`, y la parte B no podría dar `ok`
+  como pide el punto 6.
+- **"La registrada" no tiene un referente propio:** comparar `commission_cruda` con
+  `commission_usd` compara un valor consigo mismo.
+
+Para cumplir DB-2 hay que decidir un esquema que el brief no fija: dónde se registra la
+cotizada y cómo se enlaza con la compra (una o dos cotizaciones antes de cada `buy`; en la
+parte B hubo dos). Eso es elegir, y la regla de la tanda dice detenerse y reportar.
+
+### Propuesta para el Admin (no implementada)
+
+1. **`Ejecutor.comprar` recibe la comisión de la cotización que usó** y la escribe en la fila de
+   `envío`, en una columna nueva `commission_cotizada` (crudo, como string). Así queda junto al
+   `trade_uuid` y antes de la compra.
+2. **"Registrada" = `commission_usd`** de la fila de cierre (el valor con que el registro calcula
+   costos y `pnl_recalculado`). **"Del contrato" = `commission_cruda`.** Si el Admin entiende
+   otra cosa por "registrada" (por ejemplo, `commission_modelada`), la regla cambia: comparar
+   contra el modelo mide el costo contra κ, no la reconciliación.
+3. Con eso, el resto de DB-2 se implementa tal cual:
+   - Decimal para el string del contrato y para el float de la cotización;
+   - `no_aplica` sin contrato;
+   - `no_verificable` se vuelve a reconciliar;
+   - un `ok` no se repite.
+
+Hacerlo exige autorizar, además de los cinco tests nombrados, la columna nueva y el cambio de
+firma de `comprar` (y su uso en `tests/test_integracion_demo_orden_live.py`).
+
+### Punto 6
+
+El crudo de la parte B (run 37716067033) **no está** en el repo ni en la rama `data`:
+- `git ls-tree` de `data` no tiene nada de la demo;
+- `git log -S 16063879879` solo encuentra el decision-log;
+- el test live escribe el registro en un directorio temporal del runner, que "se pierde con el
+  job" (docstring de `tests/test_integracion_demo_orden_live.py`).
+
+No se reconstruyó. Lo que queda es el informe del log: la cotización trajo 0.02 como float y el
+contrato "0.02" como string.
+
+### Lo que sí se hizo en esta rama
+
+- El informe de la parte B y las filas corregidas de ESTADO.md del PR #41, rebasados sobre la
+  tarea C.
+- El "Próximo paso" de ESTADO.md reescrito con la cola del brief 9-R (tarea 4).
+- `governance/paso_a_real.py` no se tocó.
