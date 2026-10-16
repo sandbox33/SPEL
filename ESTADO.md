@@ -10,16 +10,17 @@
 > Este archivo se lee primero en cada chat nuevo. Frente a un chat que lo contradiga sin
 > evidencia, gana el archivo; frente al código, gana el código.
 
-**Última actualización:** 08 oct 2026 — TwelveData: el 400 del fondo de la paginación y cuándo una página vacía es el fondo (brief del Admin del 07-oct-2026 (6)), en la rama `claude/create-claude-md-spel-lni9s9`.
+**Última actualización:** 14 oct 2026 — tanda A–D del brief del Admin del 14-oct-2026 (9), tarea D: runners fijos en `ubuntu-24.04` y `checkout@v5` / `setup-python@v6` (Node 24), en la rama `claude/tanda-d-runners`.
 
-**Commit de referencia:** `056055e` (merge del PR #37).
+**Commit de referencia:** `6c1d29c` (merge del PR #38).
 
-**Tests:** **1682** recolectados en `tests/`, en 56 archivos, medido con
-`pytest --collect-only -q tests/` el 08-oct-2026 sobre esta rama. Más 74 en `research/tests/`,
+**Tests:** **1705** recolectados en `tests/`, en 57 archivos, medido con
+`pytest --collect-only -q tests/` el 14-oct-2026 sobre esta rama. Más 74 en `research/tests/`,
 que no bloquean.
 
-Desfase: **ninguno**. El commit de referencia es el merge del PR #37, el último de `main`, y
-esta actualización entra con el PR del 400 de TwelveData. Los PRs #33 y #34 siguen abiertos y
+Desfase: **ninguno**. El commit de referencia es el merge del PR #38, el último de `main`, y
+esta actualización entra con el PR de la tarea D. Las tareas A, B y C van en PRs aparte, cada
+uno desde `main`: los cuatro tocan este encabezado. Los PRs #33 y #34 siguen abiertos y
 en pausa. `tests/test_estado_al_dia.py` falla si hay **más
 de 3 PRs fusionados** desde el commit de referencia de arriba (DG-6).
 
@@ -57,8 +58,8 @@ Eso no reabre Fase 1 ni cambia su resultado; ordena el código para que coincida
 
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-**1682 recolectados en `tests/`, en 56 archivos**, contados con `pytest --collect-only -q`
-el 08-oct-2026 sobre la rama del PR del 400 de TwelveData, no copiados de ningún
+**1705 recolectados en `tests/`, en 57 archivos**, contados con `pytest --collect-only -q`
+el 14-oct-2026 sobre la rama de la tarea D, no copiados de ningún
 documento. Sin credenciales se saltan 6, cada uno por su propio `skipif`: el test `live` de
 TwelveData, el guardián de secretos de `tests/test_sources.py`, las dos sondas de endpoints de
 Deriv, la 3b de TwelveData y la orden demo de la parte B.
@@ -111,6 +112,7 @@ corridas seguidas sin intermitencia.
 | `config/constantes.json` | Registro de las 138 constantes de módulo, verificado contra el código en las dos direcciones | 30 | ✅ |
 | `tests/test_registro_linguistico*.py` | Español neutro: sin voseo en `.py` y en `.md` | 84 + 5 | ✅ |
 | `tools/heartbeat.py` + `.github/workflows/heartbeat.yml` | Trigger `schedule:` real — **desactivado a propósito**, ver Fase 6 | 19 | ✅ código, 🔴 apagado |
+| `.github/workflows/*.yml` (runners y acciones) | Los 10 jobs de los 7 workflows en `ubuntu-24.04` fijo, no `ubuntu-latest` (que migra a Ubuntu 26 desde el 19-oct); `actions/checkout@v5` y `actions/setup-python@v6`, las primeras mayores con `using: node24` | 23 | ✅ en la rama; 🟡 ningún run todavía con las versiones nuevas |
 
 `core/price_signals.py` ya no está en `core/`: se retiró a `research/` el 16-sep (PR #27),
 con sus tests. Ver la sección de `research/`.
