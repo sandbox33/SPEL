@@ -62,6 +62,7 @@ import dataclasses
 import importlib
 import json
 import pathlib
+import re
 from enum import Enum
 
 import pytest
@@ -436,6 +437,18 @@ def test_lo_que_no_afecta_el_resultado_es_solo_texto(registro):
         "comprobación que recalcula al detectar una versión vieja, "
         "actualiza el registro")
 
+
+def test_el_readme_dice_los_conteos_del_registro(registro):
+    """config/README.md cita cuántas constantes hay y cuántas no afectan el
+    resultado. El 17-oct-2026 decía 138 con el registro en 172: un número
+    escrito a mano que ningún test miraba."""
+    texto = " ".join((RAIZ / "config" / "README.md").read_text(encoding="utf-8").split())
+    total = len(registro["constantes"])
+    no_afectan = sum(1 for e in registro["constantes"] if not e["afecta_resultado"])
+    m = re.search(r"\*\*las (\d+) constantes de módulo\*\*", texto)
+    assert m and int(m.group(1)) == total, (m and m.group(1), total)
+    m = re.search(r"hoy son \*\*(\d+) de (\d+)\*\*", texto)
+    assert m and (int(m.group(1)), int(m.group(2))) == (no_afectan, total)
 
 # ═══ Las dos derivadas de tools/, verificadas de verdad ═══════════════════
 
