@@ -3811,3 +3811,50 @@ registra: no se corrió nunca.
 
 **Mutantes:** 19, todos atrapados. En la primera pasada sobrevivió uno, el signo de la asimetría,
 porque las series calculadas a mano eran simétricas. Se sumó una serie sesgada calculada a mano.
+
+## 2026-10-17 — Brief 11–13-B en H1 v2 (#45): P1 y P6
+
+**Fuente:** brief del Admin 11–13-B. Rama `feature/preregistro-h1-v2`, rebasada sobre el #33 nuevo.
+La entrada de la tarea 13, más arriba, describe el documento antes de P1 y P6.
+
+**El rebase.** Chocaron tres archivos:
+- el registro de ensayos: `h1-v2` va después de `h3-cartera`;
+- el decision-log: la entrada de la tarea 13 va al final;
+- `ESTADO.md`.
+
+`config/README.md` no chocó, pero quedó mal: los dos lados pasaban el conteo de 209 a 211, uno por
+las dos constantes de P3 y otro por las dos de H1 v2, y git se quedó con 211. Son 213. Se corrigió en
+el commit de H1 v2 con el conteo medido, que es lo que exige su test.
+
+**Lo aplicado** (`research/preregistro_h1_v2.md`):
+- la sección 1 dice la fuente de P1, y la propuesta de la tarea 13 deja de serlo;
+- la réplica en oro usa la serie del oro de D1, con la misma compuerta (sección 11);
+- el Sharpe anualizado de las compuertas dice **[INTERPRETACIÓN aprobada (P6)]** (sección 10);
+- la sección 9 dice que el auditor aceptó que v2 no sea más estricto en todos los casos;
+- las dos cláusulas de v1 se nombran sin la marca, y el documento no tiene ninguna.
+
+**P6, tal cual** (entrada de las resoluciones): "H1 v2 es menos estricto que v1 en el vector del
+brief 10 (PSR(0) 0,913 → 0,987). Se acepta: es una corrección de método, declarada antes de los
+datos." Un test verifica que este decision-log lo diga así.
+
+**Una interpretación nueva**, que el Admin aprueba al fusionar: si el brief 14 sale rojo para BTC,
+no hay veredicto, porque las compuertas son de la serie base (D12) y el oro es una réplica. Si sale
+rojo para el oro, no hay réplica.
+
+**El N de H1 v2 no cambia con P3.** Sigue siendo el de su sección 9: sus ensayos, agrupados por
+correlación, más los previos. No incluye la cartera de H3, que no corrió. P3 fija el N de H3, y ese
+sí incluye los de H1.
+
+**El registro de ensayos.** `h1-v2` apunta al sha256 nuevo. Es una línea de este PR, que no está en
+`main`.
+
+**Tests.**
+
+| línea vieja | línea nueva |
+|---|---|
+| `SHA256_PREREGISTRO = "7ffc6150…"` | `SHA256_PREREGISTRO = "95588ea6…"` |
+| — | 4 tests nuevos: ninguna marca de pendiente; la fuente de P1; P6 aprueba solo el anualizado; P6 acepta el cambio, en el documento y tal cual en el decision-log |
+
+Ningún test viejo cambió de criterio.
+
+**Mutantes:** 9, cada uno atrapado por su propio test y no solo por el sha256.
