@@ -67,7 +67,9 @@ def test_los_tres_previos_fallidos_y_la_concordancia():
 
 def test_la_concordancia_del_oro_no_suma_al_n():
     assert "concordancia-orb-oro" not in {e["id"] for e in en.que_cuentan()}
-    assert len(en.que_cuentan()) == 3
+    sembradas = en.leer()[:N_SEMBRADAS]
+    assert [e["id"] for e in sembradas if e["cuenta_en_n"]] == [
+        "previo-mascara-godel", "previo-proxy-transfer-entropy", "previo-ema-20-63"]
 
 
 # ═══ ENSAYOS_PREVIOS_FALLIDOS se deriva del registro ═══════════════════════
@@ -107,9 +109,10 @@ def test_lo_que_no_es_un_previo_fallido_que_cuenta_no_suma(registro, cambios):
 
 
 def test_que_cuentan_es_la_unica_fuente_del_n(registro):
+    antes = len(en.que_cuentan(registro))
     en.agregar(_entrada(id="h1-lookback-10", hipotesis="H1"), registro)
     assert [e["id"] for e in en.que_cuentan(registro)][-1] == "h1-lookback-10"
-    assert len(en.que_cuentan(registro)) == 4
+    assert len(en.que_cuentan(registro)) == antes + 1
 
 
 # ═══ Append-only ═══════════════════════════════════════════════════════════
@@ -166,9 +169,10 @@ def test_un_campo_de_mas_o_de_menos_no_entra(registro):
 
 
 def test_una_linea_rota_dice_donde(registro):
+    n = len(registro.read_bytes().splitlines())
     with registro.open("a", encoding="utf-8") as f:
         f.write("{no es json\n")
-    with pytest.raises(ValueError, match=r"ensayos\.jsonl:5"):
+    with pytest.raises(ValueError, match=rf"ensayos\.jsonl:{n + 1}\b"):
         en.leer(registro)
 
 
