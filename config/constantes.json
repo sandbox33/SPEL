@@ -2668,11 +2668,11 @@
       "valor": 756,
       "evidencia": "provisional_sin_evidencia",
       "afecta_resultado": true,
-      "fuente": "D11-u: H-ORB-oro se reabre con 756 días hábiles de M5 de Deriv. Decisión delegada por el Admin en el auditor el 14-oct-2026, registrada por el brief del Admin 10. La razón está en claude/SPEL_memo_traspaso_2026-10-14.md §2, que no está en el repo.",
+      "fuente": "D11-u: H-ORB-oro se reabre con 756 días hábiles de M5 de Deriv. Decisión delegada por el Admin en el auditor el 14-oct-2026, registrada por el brief del Admin 10; la razón, del brief 10-B (17-oct-2026): la de D1, sin 3 años de histórico no se valida nada, y Deriv da una ventana móvil de ~1 año (decision-log 2026-10-05: 365 días, en diario y en intradía), así que hay que acumular. Decision-log 2026-10-17.",
       "usado_en": [
         "governance.ensayos.h_orb_oro_se_puede_reabrir"
       ],
-      "notas": "Al 14-oct-2026 Deriv tiene 263 días comunes con TwelveData en la concordancia (data@bc2597a)."
+      "notas": "[INTERPRETACIÓN] 756 = 3 × 252 días hábiles. Al 14-oct-2026 Deriv tiene 263 días comunes con TwelveData en la concordancia (data@bc2597a)."
     }
   ]
 }
