@@ -2830,3 +2830,217 @@ condición queda explícita, tal como la escribe DB-2.
 
 Sigue sin crudo de la parte B en el repo ni en `data`, y no se reconstruyó. El test contra el
 falso fija que la parte B escribe y compara la cotizada.
+
+## 2026-10-17 — Brief 10: las decisiones del 14-oct que entran al registro, y las que faltan
+
+**Fuente que pide el brief:** `claude/SPEL_memo_traspaso_2026-10-14.md` §2 y
+`claude/SPEL_plan_y_briefs_2026-10-14.md` §2, con D1–D9 (respondidas por el Admin el 14-oct) y
+D11, D11-u, DB-1 y DB-2 (delegadas en el auditor).
+
+**Esos dos documentos no están al alcance de este PR.** Lo verifiqué así:
+- no están en el repo ni en ninguna rama (`git ls-tree` de todas las ramas remotas);
+- no están en el sistema de archivos;
+- la búsqueda en Google Drive no los encuentra.
+
+El brief prevé el caso ("El Admin te pega las tablas si no las ves"). Este punto queda
+**detenido en lo que depende de ellos**, y el resto sigue.
+
+| decisión | qué entra en este PR |
+|---|---|
+| D1, D4, D5, D6, D7, D8, D9 | **nada**: su contenido y su razón están solo en las tablas que faltan |
+| D2 | una entrada con lo que dice el brief 10, punto 4. La razón del Admin, pendiente |
+| D3 | una entrada con lo que dice el brief 10, punto 3. La razón, pendiente |
+| D11, D11-u | una entrada con lo que dice el brief 10. La razón del auditor, pendiente |
+| DB-1, DB-2 | ya registradas: entrada del 2026-10-17, "DB-1 y DB-2 implementadas". Se citan, no se repiten |
+
+## 2026-10-17 — D2 (14-oct): DG-3 cambia en a) y en d), y nombra la latencia
+
+**Fuente:** brief del Admin 10, punto 4. **Razón del Admin:** pendiente; está en el memo de
+traspaso §2, que no está en el repo.
+
+**Qué cambia respecto de la DG-3 del 29-sep:**
+- **a)** PSR ≥ 0,90 y DSR ≥ 0,90 se miden **solo sobre el backtest histórico**. Deja de ser la
+  serie combinada histórico + demo. El N es el del registro de ensayos (D3).
+- **b) y c)** no cambian.
+- **d)** exige **0 discrepancias y 0 no_verificables** (DB-1). Los dos se cuentan desde la marca
+  global `reconciliado` del registro demo.
+- **La latencia:** D2 la nombra, y no tiene umbral medido. No se inventó una constante: queda
+  pendiente sin número.
+
+**Auditoría previa de d).** `discrepancias_reconciliacion` llegaba a `paso_a_real.py` solo como
+un campo de `EvidenciaDemo`, que arma quien llama. En el repo no lo arma ningún código, solo los
+tests, y ninguna función lo contaba desde el registro.
+
+**Implementación** (`governance/paso_a_real.py` e `integracion_demo/reconciliar.py`):
+- `EvidenciaDemo.psr` y `.dsr` pasan a llamarse `psr_historico` y `dsr_historico`. Un llamador
+  que todavía piense en la serie combinada falla con TypeError en vez de pasarla en silencio.
+- `EvidenciaDemo.no_verificables_reconciliacion` es el campo nuevo, y llega por el mismo camino
+  que las discrepancias. d) se incumple si cualquiera de los dos es distinto de 0.
+- `reconciliar.conteo_de_marcas(directorio)` cuenta, por trade terminado, la marca global de su
+  **última** fila de reconciliación: ok, discrepancia, no_verificable y sin_reconciliar. Un trade
+  abierto no cuenta.
+- `Evaluacion.sin_evaluar = ("latencia",)` en cada veredicto: un APTO no cubre la latencia.
+- `governance/PRINCIPLES.md` #6, `CLAUDE.md` y `BLUEPRINT.md` dicen la DG-3 nueva, y
+  `tests/test_paso_a_real.py` verifica que ninguno diga "histórico + demo".
+
+**Tests de paso_a_real editados (autorizados por el brief).** No cambió ningún `assert`.
+Cambiaron las entradas, porque los campos se renombraron, y se sumaron casos:
+
+| línea vieja | línea nueva |
+|---|---|
+| `psr=PSR_MINIMO, dsr=DSR_MINIMO, inicio_demo=INICIO,` (`_BORDE`) | `psr_historico=PSR_MINIMO, dsr_historico=DSR_MINIMO, inicio_demo=INICIO,` |
+| `discrepancias_reconciliacion=0,` (`_BORDE`) | `discrepancias_reconciliacion=0, no_verificables_reconciliacion=0,` |
+| `({"psr": 0.8999}, "a")` y `({"dsr": 0.8999}, "a")` | `({"psr_historico": 0.8999}, "a")` y `({"dsr_historico": 0.8999}, "a")` |
+| — | `({"no_verificables_reconciliacion": 1}, "d")` (caso nuevo) |
+| `replace(_BORDE, psr=0.5, …)` (tres tests) | `replace(_BORDE, psr_historico=0.5, …)` |
+| — | `{"no_verificables_reconciliacion": -1}` (caso nuevo de evidencia imposible) |
+
+**Pendiente de decisión, no implementado:** un trade cerrado que todavía no tiene ninguna fila de
+reconciliación (`sin_reconciliar`) no entra en d). El brief cuenta discrepancias y
+no_verificables, y no dice nada de los trades sin reconciliar. `conteo_de_marcas` los informa
+aparte.
+
+## 2026-10-17 — D3 (14-oct): el registro único de ensayos
+
+**Fuente:** brief del Admin 10, punto 3. **Razón del Admin:** pendiente; está en el memo de
+traspaso §2.
+
+**Implementación:** `governance/ensayos.py` y `governance/ensayos.jsonl`.
+- **Formato:** append-only, una línea JSON por ensayo, con id, hipótesis, fecha, sha256 del
+  pre-registro, activo, estado, cuenta_en_n, fuente y nota.
+- **Siembra:**
+  - `previo-mascara-godel` (decision-log 2026-09-04);
+  - `previo-proxy-transfer-entropy` y `previo-ema-20-63` (decision-log 2026-09-06, acta de
+    `core/price_signals.py`).
+
+  Los tres son fallidos, con hipótesis "previa a la Serie H", sin pre-registro, y cuentan en el
+  N. A esos se suma `concordancia-orb-oro`, con `cuenta_en_n: false`: no es un ensayo de
+  trading, y su nota lo dice.
+- **`ENSAYOS_PREVIOS_FALLIDOS`** (`core/preregistro_h1.py`) pasa a ser
+  `previos_fallidos()`, derivado del registro. En `config/constantes.json` pasa de `parametro`
+  con valor 3 a `derivada`. `tests/test_ensayos.py` exige que valga 3 y que no vuelva a ser un
+  literal. **Es el único cambio en `core/preregistro_*`.** `research/preregistro_h1.md` no se
+  tocó, y su test de sha256 sigue igual.
+
+**Interpretaciones:**
+- "Activo" es el activo medido. Los tres previos se midieron sobre BTC y XAU, y así lo dice el
+  registro. El pre-registro de H1 los cuenta como "ensayos previos sobre BTC".
+- "Previos" son los de hipótesis "previa a la Serie H". Un fallido futuro de H2 o H3 no cambia el
+  N sellado de H1.
+- Lo sembrado queda fijado por sha256 (`f1da9722…`). Lo que se agregue va después.
+
+## 2026-10-17 — D11 y D11-u (14-oct, delegadas en el auditor): H-ORB-oro pausada, y cuándo se reabre
+
+**Fuente:** brief del Admin 10, punto 1. **Razón:** pendiente; está en el memo de traspaso §2.
+
+- **D11:** H-ORB-oro queda **pausada**. La compuerta de concordancia dio roja (entrada
+  siguiente).
+- **D11-u:** se reabre con **756 días hábiles de velas M5 de Deriv**
+  (`governance.ensayos.DIAS_HABILES_M5_DERIV_PARA_REABRIR_H_ORB_ORO`, y
+  `h_orb_oro_se_puede_reabrir`).
+- **Medido sobre la rama `data` en `bc2597a`:** Deriv tiene **263** días hábiles con velas M5,
+  del 2025-10-08 al 2026-10-14 (fechas UTC distintas con al menos una vela, todas de lunes a
+  viernes). Faltan 493.
+
+## 2026-10-17 — La compuerta de concordancia del oro, roja: 62,74 % contra el 90 %
+
+**Recalculado antes de escribir**, como pide el brief: `python tools/concordancia_xauusd.py`
+con `SPEL_DRIVE_ROOT` sobre un worktree de la rama `data` en `bc2597a` (el commit del run
+38610611624 del 14-oct). El tool no cambió desde `639b2fd`.
+
+| | |
+|---|---|
+| TwelveData `td_XAUUSD/300.jsonl` | 499.252 velas, 2020-03-16 01:10 → 2026-10-14 17:45 UTC, sha256 `368b1975…` |
+| Deriv `frxXAUUSD/300.jsonl` | 70.718 velas, 2025-10-08 03:30 → 2026-10-14 18:00 UTC, sha256 `79488b6a…` |
+| `trading_times` | del 2026-10-14, sha256 `4fe64afb…`; 30.214 velas de TwelveData fuera del horario de Deriv (26.842 de fin de semana, 2.544 de pausa diaria, 828 de feriado) |
+| días comunes / con ruptura en alguna | 263 / 263 |
+| **misma dirección y misma vela** | **62,74 %** (165 días) |
+| misma dirección | 92,02 % (242 días) |
+| una rompe y la otra no | 1,14 % (3 días) |
+| \|Δhigh\| p50 / p90 / p99 | 0,668 / 2,973 / 17,692 USD (en fracción de d: 0,077 / 0,282 / 2,119) |
+| \|Δlow\| p50 / p90 / p99 | 0,722 / 3,044 / 17,775 USD (en fracción de d: 0,088 / 0,256 / 2,105) |
+| umbral | 90 % → **compuerta roja** |
+
+Las dos cifras del auditor (62,74 % y 92,02 %) **coinciden**.
+
+Derivado de las mismas cuentas: rompen las dos fuentes en 260 días. En 18 rompen en dirección
+contraria, y en 77 en la misma dirección pero en otra vela.
+
+**Una precisión sobre el umbral.** El brief dice "umbral fijado por 639b2fd el 07-oct". El valor
+`UMBRAL_COMPUERTA = 0.90` entró en `ba857da` (07-oct, 03:17 UTC). `639b2fd`, tres minutos
+después y en el mismo PR #37, es el último cambio del tool, y cambia la regla del fin de semana,
+no el umbral. Los dos son anteriores al primer run con datos (08-oct). Así que el umbral se fijó
+antes de medir, que es lo que importa.
+
+La concordancia no es un ensayo de trading, así que **no suma al N**
+(`governance/ensayos.jsonl`, `concordancia-orb-oro`).
+
+## 2026-10-17 — Brief 10, puntos 2 y 5: la estadística del Sharpe y las constantes nuevas
+
+**`core/estadistica_sharpe.py`**, la única implementación. Solo usa `math` y
+`statistics.NormalDist`: nada de numpy, scipy ni torch.
+- `varianza_sharpe`: la σ² generalizada.
+- `psr`: σ evaluada en SR₀.
+- `min_trl`: z como parámetro.
+- `sr_estrella`: portado de `research/preregistro_h1.md` §9.
+- `dsr`: PSR(SR*).
+
+**La fórmula queda UNVERIFIED contra el paper.** `papers.ssrn.com` no resuelve desde este
+entorno, así que no se pudo leer ni SSRN 5520741 ni 5950754, y no hay página citada. Sí se
+contrastó contra el código de réplica de los autores (github.com/zoonek/2025-sharpe-ratio,
+`functions.py::sharpe_ratio_variance`, commit `6199ecb`, 05-feb-2026). Ahí:
+- a = 1 + 2ρ/(1−ρ), b = 1 + ρ/(1−ρ) + ρ²/(1−ρ²) y c = 1 + 2ρ²/(1−ρ²), que son algebraicamente
+  (1+ρ)/(1−ρ), (1+ρ+ρ²)/(1−ρ²) y (1+ρ²)/(1−ρ²);
+- γ₄ es la curtosis, no el exceso;
+- el PSR evalúa la varianza en SR₀.
+
+Su `test_numeric_example` usa el mismo vector del brief, con ρ = 0 y con ρ = 0,2. El código no
+se ejecutó: se leyó.
+
+**Tests contra el vector del brief** (ρ = 0,2, T = 24, SR̂ = 0,45570, z = Φ⁻¹(0,95)):
+- σ[0] = 0,2500, PSR(0) = 0,9658, MinTRL = 19,543;
+- σ[0,1] = 0,2770, PSR(0,1) = 0,9005, MinTRL = 39,369;
+- σ[SR̂] = 0,3795, fijado aparte: usar esa σ en el PSR daría 0,885.
+
+Con ρ = 0, los números coinciden con los tests de los autores: 0,329, 13,029, 0,987 y 0,939.
+
+**Para el Admin: H1 v1 sellado.** Con ρ = 0, la varianza es la de 2012 salvo T en vez de T−1, y
+un test lo fija. Pero el PSR sellado en `preregistro_h1.md` §9 evalúa la σ en el SR observado,
+no en SR₀. Con el vector y ρ = 0, el PSR(0) de H1 v1 da 0,913 y el de este módulo 0,987. **Este
+módulo no evalúa las compuertas de H1 v1 tal como están selladas.** El pre-registro no se tocó, y
+H1 v2 está en la cola.
+
+**Diferencias declaradas:**
+- El DSR no ajusta la varianza por el máximo de K ensayos, como sí hace el código de los
+  autores (`moments_Mk`). Se portó §9 tal cual.
+- `min_trl` lanza si SR̂ ≤ SR₀.
+- `sr_estrella` exige un N entero ≥ 2, porque con N = 1 Φ⁻¹(0) no existe.
+
+**Constantes nuevas en `config/constantes.json`:**
+- `core.estadistica_sharpe.EULER_MASCHERONI`: medido, verificado contra Σ1/k − ln n.
+- `governance.ensayos`:
+  - `RUTA_ENSAYOS` (derivada);
+  - `CAMPOS_ENSAYO`, `ESTADOS_ENSAYO` y `HIPOTESIS_PREVIA_A_LA_SERIE_H`;
+  - `DIAS_HABILES_M5_DERIV_PARA_REABRIR_H_ORB_ORO` = **756**, con fuente D11-u.
+- `core.preregistro_h1.ENSAYOS_PREVIOS_FALLIDOS` pasa a `derivada`.
+- Las fuentes de `PSR_MINIMO` y `DSR_MINIMO` de `governance.paso_a_real` citan D2.
+
+**Mutantes:** 56, todos atrapados.
+- 24 sobre la estadística del Sharpe:
+  - signo de γ₃, curtosis como exceso, el /4;
+  - cada coeficiente en ρ, T−1;
+  - σ en el observado;
+  - las ramas de MinTRL, de SR* y del DSR;
+  - Euler–Mascheroni;
+  - cada control de entrada.
+- 20 sobre el registro de ensayos:
+  - cada filtro de `previos_fallidos`;
+  - append-only, ids repetidos y cada control de validación;
+  - el 756 y su borde;
+  - el literal 3 en H1;
+  - lo sembrado.
+- 12 sobre DG-3 y d):
+  - cada mitad de a) y de d);
+  - la latencia;
+  - el conteo: primera marca, trades abiertos, sin reconciliar como ok;
+  - los tres documentos.
