@@ -718,6 +718,58 @@ def test_un_ok_viejo_sin_marca_de_comision_se_reconcilia_de_nuevo(tmp_path):
     assert [n["reconciliado"] for n in nuevas] == ["no_verificable"]
 
 
+# ── El mismo ok viejo, en el conteo de d) de DG-3 ──────────────────────────
+
+from integracion_demo.reconciliar import conteo_de_marcas, ok_vigente  # noqa: E402
+
+
+def test_un_ok_viejo_sin_marca_de_comision_cuenta_como_sin_reconciliar(tmp_path):
+    """`reconciliar` no lo toma por ok y lo reconcilia de nuevo; el conteo de
+    d) tampoco: hasta esa fila nueva, el trade está sin reconciliar. Antes
+    contaba como ok, y d) podía cumplirse con una comisión que nunca se
+    contrastó."""
+    _registro_v1(tmp_path, [*_V1_TRADE, {"evento": "reconciliacion", "trade_uuid": _U,
+                                         "reconciliado": "ok", "evidencia": "{}"}])
+    assert conteo_de_marcas(tmp_path) == {"ok": 0, "discrepancia": 0, "no_verificable": 0,
+                                          "sin_reconciliar": 1}
+    reconciliar(Registro(tmp_path), profit_table=_PT, statement=_ST)
+    assert conteo_de_marcas(tmp_path) == {"ok": 0, "discrepancia": 0, "no_verificable": 1,
+                                          "sin_reconciliar": 0}
+
+
+@pytest.mark.parametrize("fila, es_ok", [
+    ({"reconciliado": "ok", "reconciliado_comision": "ok"}, True),
+    ({"reconciliado": "ok", "reconciliado_comision": "no_aplica"}, True),
+    ({"reconciliado": "ok", "reconciliado_comision": None}, False),
+    ({"reconciliado": "ok"}, False),
+    ({"reconciliado": "discrepancia", "reconciliado_comision": "ok"}, False),
+    ({"reconciliado": "no_verificable", "reconciliado_comision": "no_verificable"}, False),
+    ({"reconciliado": "pendiente", "reconciliado_comision": None}, False),
+])
+def test_ok_vigente(fila, es_ok):
+    assert ok_vigente(fila) is es_ok
+
+
+def test_el_conteo_y_reconciliar_coinciden_en_lo_que_es_ok(tmp_path):
+    """Una sola definición de ok: lo que el conteo da por ok es justo lo que
+    `reconciliar` no vuelve a reconciliar. B es un ok sin la marca de la
+    comisión, escrito en un registro de SCHEMA_VERSION 2."""
+    r = Registro(tmp_path)
+    for u in "ABCDE":
+        r.agregar(evento="cierre", trade_uuid=u, contract_id=1, outcome="sl", evidencia="x")
+    r.agregar(evento="reconciliacion", trade_uuid="A", reconciliado="ok",
+              reconciliado_profit="ok", reconciliado_comision="ok", evidencia="{}")
+    r.agregar(evento="reconciliacion", trade_uuid="B", reconciliado="ok", evidencia="{}")
+    r.agregar(evento="reconciliacion", trade_uuid="C", reconciliado="discrepancia",
+              reconciliado_profit="discrepancia", reconciliado_comision="ok", evidencia="{}")
+    r.agregar(evento="reconciliacion", trade_uuid="D", reconciliado="no_verificable",
+              reconciliado_profit="ok", reconciliado_comision="no_verificable", evidencia="{}")
+    assert conteo_de_marcas(tmp_path) == {"ok": 1, "discrepancia": 1, "no_verificable": 1,
+                                          "sin_reconciliar": 2}
+    nuevas = reconciliar(r, profit_table=[], statement=[])
+    assert sorted(n["trade_uuid"] for n in nuevas) == ["B", "C", "D", "E"]
+
+
 # ── Lo que el registro acepta ──────────────────────────────────────────────
 
 def test_la_cotizada_se_guarda_cruda_como_str(tmp_path):
