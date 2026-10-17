@@ -3675,3 +3675,86 @@ sha256 del documento.
 | — | 5 tests nuevos: D7; D2 y DB-3 en la sección 12; las cifras de DG-3 iguales a las de `governance/paso_a_real.py`; el sizing; el registro |
 
 **Mutantes:** 13, cada uno atrapado por su propio test y no solo por el sha256.
+
+## 2026-10-17 — Brief 11–13-B en H3 (#33): P1 a P5
+
+**Fuente:** brief del Admin 11–13-B. Rama `feature/preregistro-h3`, rebasada sobre el #34 nuevo
+(`50f4c11`). La entrada de la tarea 12, más arriba, describe el documento antes de P1 a P5.
+
+**El rebase.** Chocaron tres archivos:
+- el registro de ensayos: `h3-cartera` va después de las dos líneas de H2, que cambiaron de
+  sha256;
+- el decision-log: la entrada de la tarea 12 va al final;
+- `ESTADO.md`.
+
+Se resolvieron a mano, sin perder nada de ninguno de los dos lados.
+
+**P3 en `governance/ensayos.py`:**
+- `HIPOTESIS_DE_ESTRATEGIA` = {previa a la Serie H, H1, H3} y `HIPOTESIS_QUE_NO_SON_ESTRATEGIA` =
+  {H2}, disjuntas;
+- `es_estrategia(e)` da la clase por la hipótesis;
+- `que_cuentan_en_el_dsr()` devuelve los que cuentan y son estrategias.
+
+Es un criterio y no un campo, porque un campo nuevo obligaría a reescribir las líneas sembradas,
+fijadas por sha256. `cuenta_en_n` no cambia en ninguna línea; cambia lo que dice el docstring.
+[INTERPRETACIÓN] Una hipótesis que cuenta sin estar clasificada hace fallar el conteo, en vez de
+sumar o restar en silencio. H-ORB-oro queda sin clasificar: su única línea no cuenta, y se
+clasifica cuando se reabra.
+
+**Para el Admin: el registro cuenta líneas, no ensayos.** `que_cuentan_en_el_dsr()`, como
+`que_cuentan()`, devuelve líneas. El registro dice que un ensayo que cambia de estado suma una línea
+nueva con otro id, y no tiene un campo que diga cuál reemplaza a cuál. El primer cambio de estado
+—`h1-v2` cuando H1 v2 corra, por ejemplo— dejaría dos líneas del mismo ensayo, y contarlas daría
+un N de más. Hoy no pasa: ninguno cambió de estado. Queda escrito en el docstring, sin código, y lo
+resuelve el PR que registre el primer cambio de estado.
+
+**En el documento** (`research/preregistro_h3.md`):
+- **P1 y P2, sección 2.**
+  - Los precios son las velas diarias de D1 que valide el brief 14, y un activo en rojo no corre.
+  - La regla de universo no cambia, y H3 queda bloqueada.
+  - Ya no hay tres salidas: no se reduce a K = 2.
+  - Está escrita la ruta de P2.
+  - El encabezado dice las dos cosas: H3 es la ruta principal (DG-5) y está bloqueada (P2).
+- **P3, sección 11.** El N son los ensayos de `que_cuentan_en_el_dsr()`, y los de H2 no suman.
+- **P4, sección 11.**
+  - La estadística es la de H1 v2, escrita completa: los momentos con `T`, el ρ de la serie y las
+    llamadas a `psr` y `dsr`.
+  - El cambio respecto de 2012 queda declarado con sus tres razones.
+  - Queda escrito que no es más estricto en todos los casos (0,913 → 0,987 con ρ = 0).
+- **P5, sección 12.** La zona gris es no concluyente y no va a demo. La zona gris de DG-3, el
+  forward de 6 meses como máximo de lo que avanzó, no cambia.
+
+**Una interpretación nueva en el documento**, que el Admin aprueba al fusionar: dejar afuera un
+activo en rojo en el brief 14 no es elegir por precios. La compuerta compara dos fuentes del mismo
+precio (D1) y no mira ninguna regla de H3.
+
+**En el módulo** (`core/preregistro_h3.py`): `ENSAYOS_PREVIOS_FALLIDOS` sale de
+`previos_fallidos()`, como el de H1 desde el brief 10. Era un 3 escrito a mano, justo lo que D3 vino
+a quitar. Sigue valiendo 3, y `N_INGENUO` sigue en 11. En `config/constantes.json` pasa a
+`derivada`.
+
+**El registro de ensayos.** `h3-cartera` apunta al sha256 nuevo. Su activo deja de decir
+"pendiente del Admin", y su nota dice que está bloqueada (P2). Es una línea de este PR, que no está
+en `main`.
+
+**Tests.** Cambian dos del #33, de este mismo PR, porque codificaban lo que P3 y P5 cambian:
+
+| test | línea vieja | línea nueva |
+|---|---|---|
+| — | `SHA256_PREREGISTRO = "40a05d96…"` | `SHA256_PREREGISTRO = "53a1d5a0…"` |
+| `test_el_paso_a_real_es_el_de_d2_y_db3` | `assert "**Con D2 no tiene camino a real:**" in s12` | se quita: P5 saca la zona gris de la demo, y la frase cae con ella |
+| `test_el_modulo_no_importa_nada_que_haga_un_backtest` | `assert importados <= {"__future__", "math"}` | `assert importados <= {"__future__", "math", "governance.ensayos"}` |
+
+Tests nuevos:
+- 8 en el de H3: ninguna marca de pendiente, P1, P2, P3, los previos desde el registro, P4, P5 y la
+  línea del registro;
+- 6 en `tests/test_ensayos.py`, con 9 casos, que separan el criterio viejo (todo lo que cuenta
+  suma al DSR) del de P3. De ese archivo, que está en `main`, solo se agregaron tests y un párrafo
+  del docstring: ninguno de los que había cambió.
+
+**Mutantes:** 28, todos atrapados.
+- 12 sobre la regla de P3: cada clase, H2 como estrategia, H-ORB-oro clasificada sin decirlo, una
+  hipótesis sin clasificar tomada como estrategia o como no, y el conteo sin el filtro o sin
+  `cuenta_en_n`. Los 6 de las clases, también sin el test que compara los conjuntos.
+- 16 sobre el documento, el módulo y el registro de H3, cada uno atrapado por su propio test y no
+  solo por el sha256.
