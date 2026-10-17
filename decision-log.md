@@ -3377,3 +3377,40 @@ asserts.
   - `reconciliar()` sin `ok_vigente`;
   - el conteo con la primera marca;
   - un trade sin fila contado como ok.
+
+## 2026-10-17 — Resoluciones del auditor (17-oct) a lo que el PR #44 dejó sin resolver
+
+**Fuente:** brief del Admin 11–13, tarea 0. Resuelven lo que el #44 reportó en las entradas de
+D1, D2, D4 y D8, y en el índice de los briefs 10 y 10-B.
+
+**D4-c, las fricciones de H-ORB-oro.** Son spread + slippage + la comisión κ medida: κ del oro
+vale 0,0002 del nocional (entrada del 2026-10-06, d). El swap no aplica: los multiplicadores
+cobran una comisión única, sin funding (decisión a) del Admin del 06-oct). **Es una corrección de
+hecho, no un cambio de criterio.** No lleva código, porque H-ORB-oro está pausada (D11).
+
+**D2-n, qué mide la demo.** La demo mide las fricciones de la demo. Que sirvan de proxy del
+deslizamiento real queda **UNVERIFIED** (entrada del 2026-09-25, "La demo valida integración, no
+ejecución"). c) de DG-3 se mantiene como está, y no cambia ningún criterio.
+
+**D8-r, los crons apagados.** Los crons de `velas.yml` y `sonda.yml` quedan apagados en GitHub.
+Los YAML y `tests/test_workflows_deriv.py::test_son_diarios` no se tocan: los reactiva el brief de
+migración de `ingestion/deriv_ws.py`. `ESTADO.md` lo dice en la fila de cada workflow.
+
+**D1-p, la profundidad de TwelveData.** La profundidad diaria ya está medida (entrada del
+2026-10-05, sonda §0.A-3 v2, f): BTC desde el 2017-08-28, 3.326 barras; XAU desde el 1979-12-26,
+12.288. **La sonda del brief 8 se cancela.** La métrica de coincidencia y la hora de corte las fija
+el brief 14, antes de bajar precios.
+
+**Interpretaciones confirmadas:**
+- la serie base de D12 es BTC;
+- "intermedio" en D5 es lo que ni avanza ni se rechaza;
+- 756 = 3 × 252 (D11-u).
+
+**D10 no existe:** la numeración del memo de traspaso saltó de D9 a D11.
+
+**Aplicado en este PR:**
+- `ESTADO.md`: D8-r en las filas de `velas.yml` y `sonda.yml`, y la cola sin la sonda del brief 8
+  (D1-p);
+- `config/constantes.json`: el 756 de D11-u deja de estar marcado como interpretación.
+
+D4-c y D2-n no llevan código.

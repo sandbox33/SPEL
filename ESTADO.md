@@ -94,13 +94,13 @@ corridas seguidas sin intermitencia.
 | `ingestion/frescura.py` | Alarma de la serie: rojo solo por hueco interno posterior a la marca de inicio | 18 | ✅ |
 | `tools/verificar_siembra.py` | Compara BTC/XAU sembrados contra la serie medida | 14 | ✅ verde contra la siembra real (corrido el 29-sep, ver decision-log) |
 | `ingestion/deriv_ws.py` | Sesión de solo lectura con Deriv: `entorno` obligatorio, `real` con permiso aparte, lista blanca de siete mensajes | 29 | 🟡 habla con el endpoint legacy, muerto desde el 01-oct (HTTP 520): falta migrar al WS público |
-| `ingestion/sonda_instrumentos.py` + `.github/workflows/sonda.yml` | Contratos, multiplicadores, stake y comisión de BTC y oro, desde la API, siete días | 19 + 6 | 🟡 usa `deriv_ws.py`, así que depende de la misma migración; 🔴 cron apagado por el Admin el 14-oct (D8) tras 7 corridas en rojo, aunque el YAML lo sigue declarando |
+| `ingestion/sonda_instrumentos.py` + `.github/workflows/sonda.yml` | Contratos, multiplicadores, stake y comisión de BTC y oro, desde la API, siete días | 19 + 6 | 🟡 usa `deriv_ws.py`, así que depende de la misma migración; 🔴 cron apagado en GitHub por el Admin el 14-oct (D8), tras 7 corridas en rojo. El YAML y `test_son_diarios` no se tocan: lo reactiva el brief de migración de `deriv_ws.py` (D8-r) |
 | `ingestion/velas_intradia.py` + `.github/workflows/velas_intradia.yml` | Velas M5 del oro en `data`: TwelveData XAU/USD 5min desde 2020-03-16 y Deriv frxXAUUSD M5 por `/ws/public`, con el patrón de `velas.py`; horario de `trading_times` crudo con sha256; una página vacía de TwelveData es el fondo solo tras una página corta (brief 07-oct (6)) | 43 + 6 | ✅ segundo run el 14-oct (38610611624, rama `data` en `bc2597a`): TwelveData 499.252 velas M5 desde 2020-03-16 y Deriv 70.718 desde 2025-10-08; el primero (08-oct) se había cortado en el 400 del fondo |
 | `ingestion/deriv_publico.py` + `ingestion/limitador.py` | Canal público de Deriv y paginación de velas, y el limitador de TwelveData, portados de las sondas | (en los de arriba) | ✅ |
 | `tools/concordancia_xauusd.py` | Rango de apertura 08:00 Londres y primera ruptura hasta las 12:00 por fuente, filtro de calendario, métricas y compuerta del 90 %; ningún desenlace (guarda AST + serie espía) | 38 + 24 | 🔴 compuerta roja con datos reales: 62,74 % contra 90 % (data@bc2597a, 14-oct) |
 | `ingestion/adapters.py::TwelveDataAdapter.fetch_pagina` | XAU/USD en el mapa (evidencia 3b, autorización del 06-oct (4)); página con `start/end_date` y cierre por la hora del servidor; vacías: el 404 "data not found" y el 400 "No data is available on the specified dates" (prefijo exacto) | 30 | ✅ offline |
 | `ingestion/reintentos.py` | Reintentos de `fetch_pagina` (issue #39): 429, 500/502/503/504 y cortes de red; espera del `Retry-After` o, si no viene, 60 s para un 429 y backoff 2·2ⁿ (tope 30 s); a lo sumo 3 reintentos y 180 s de espera; cada reintento consume un turno del `Limitador`; sin limitador no reintenta | 63 | ✅ offline; 🟡 ningún 429 ni 5xx real visto todavía; que TwelveData mande `Retry-After` no está verificado |
-| `ingestion/velas.py` + `.github/workflows/velas.yml` | Velas diarias de BTC y oro en la rama `data`, profundidad usable, `leer_velas()` en polars | 33 + 6 | 🟡 ídem; además, Deriv entrega 365 días de historia (sonda §0.A-2); 🔴 cron apagado por el Admin el 14-oct (D8) tras 7 corridas en rojo, aunque el YAML lo sigue declarando |
+| `ingestion/velas.py` + `.github/workflows/velas.yml` | Velas diarias de BTC y oro en la rama `data`, profundidad usable, `leer_velas()` en polars | 33 + 6 | 🟡 ídem; además, Deriv entrega 365 días de historia (sonda §0.A-2); 🔴 cron apagado en GitHub por el Admin el 14-oct (D8), tras 7 corridas en rojo. El YAML y `test_son_diarios` no se tocan: lo reactiva el brief de migración de `deriv_ws.py` (D8-r) |
 | `core/preregistro_h1.py` + `research/preregistro_h1.md` | Reglas del experimento H1, fijadas antes del backtest | 26 | 🟡 dos cláusulas PENDIENTES del Admin |
 | `ingestion/kappa_deriv.py` | κ = comisión/nocional de MULTUP por activo, máximo medido en la cuenta real (sonda §0.A-3b, decision-log 06-oct) | 6 | ✅ dato medido, sin consumidor todavía |
 | `ingestion/source_registry.py` | Registro versionado de cobertura por fuente | 34 | ✅ |
@@ -535,17 +535,17 @@ H1 v1 queda sellada con su fórmula de 2012.
 Antes de fusionarlos, el #34 se ajusta a D6 (rezago de 1 día secundario, horizontes 1, 5 y 22)
 y el #33 declara las velas del oro que ya están en `data` (D7). H1 v2 escribe D5 y D12.
 
-Para el Admin, sin resolver (decision-log 17-oct): D4 contra la decisión a) del 06-oct sobre
-las fricciones; la razón de D2 contra el 25-sep sobre el deslizamiento; y el cron de
-`velas.yml` y `sonda.yml`, apagado en GitHub pero no en el repo (D8).
+Lo que el #44 dejó para el Admin lo resolvió el auditor el 17-oct: D4-c, D2-n, D8-r y D1-p
+(decision-log).
 
 La cola, en orden:
 
 1. Tanda 11–13: H2, H3 y H1 v2.
-2. Brief 8: sonda de profundidad diaria (D1).
+2. Brief 14: la métrica de coincidencia y la hora de corte de D1, antes de bajar precios. La
+   sonda de profundidad del brief 8 se canceló: TwelveData ya está medida (D1-p).
 3. Después, la concordancia diaria (D1: coincidencia ≥ 90 % con el año de Deriv) y la migración
-   de `ingestion/deriv_ws.py` al WS público nuevo (la legacy está muerta desde el 01-oct, y es
-   el 520 que dejó en rojo a `velas.yml`).
+   de `ingestion/deriv_ws.py` al WS público nuevo. La legacy está muerta desde el 01-oct, y su
+   520 dejó en rojo a `velas.yml`; esa migración reactiva los dos crons (D8-r).
 
 **H-ORB-oro: pausada (D11)** hasta tener 756 días hábiles de M5 de Deriv (D11-u); ver el
 semáforo.

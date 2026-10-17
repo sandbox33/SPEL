@@ -2750,7 +2750,7 @@
       "usado_en": [
         "governance.ensayos.h_orb_oro_se_puede_reabrir"
       ],
-      "notas": "[INTERPRETACIÓN] 756 = 3 × 252 días hábiles. Al 14-oct-2026 Deriv tiene 263 días comunes con TwelveData en la concordancia (data@bc2597a)."
+      "notas": "756 = 3 × 252 días hábiles, confirmado por el auditor el 17-oct-2026 (decision-log). Al 14-oct-2026 Deriv tiene 263 días comunes con TwelveData en la concordancia (data@bc2597a)."
     }
   ]
 }
