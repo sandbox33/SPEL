@@ -3607,3 +3607,71 @@ Ningún test viejo cambió de criterio.
 - Holm y el MCS, sin aprobar;
 - tres interpretaciones que P6 no nombra, marcadas como aprobadas;
 - el registro, con el sha viejo.
+
+## 2026-10-17 — Tarea 12: H3 según D7 y D2, con tres pendientes del Admin
+
+**Fuente:** brief del Admin 11–13, tarea 12. Rama `feature/preregistro-h3` (PR #33), rebasada
+sobre la tarea 11 (`716bb8c`).
+
+**El rebase.** Los dos commits de H3 chocaban con la tarea 11 en `config/constantes.json` y
+`config/README.md`. Se resolvieron con lo de la tarea 11 más las 24 constantes de H3, y el
+README con los conteos medidos, que su test nuevo exige.
+
+**D7, verificado contra `data` antes de escribirlo.** El brief dice "Deriv desde el 08-oct,
+TwelveData desde el 14-oct, commit bc2597a", y coincide:
+- el M5 de Deriv entró el 08-oct en tres commits (`852e5ce`, `54f63fc` y `db491b4`), y siguió
+  el 14-oct;
+- el de TwelveData entró recién el 14-oct, en `bc2597a`, con las revisiones de Deriv.
+
+La sección 2 lo declara con lo medido: 70.718 y 499.252 velas, con sus rangos. Lo único que se
+calculó con esas velas es la concordancia del rango de apertura, y ninguna regla de H3. Se
+declara además el cruce EMA 20/63 del acta del 06-sep, una regla de tendencia previa sobre el
+data lake legacy que ya está en el registro.
+
+**D2 en la sección 12:**
+- a) va solo sobre el backtest histórico;
+- d) suma los no_verificables y los trades sin reconciliar (DB-3);
+- la latencia queda sin umbral;
+- cae la interpretación que pedía aprobar la compuerta de avanzar sobre histórico + demo.
+
+Queda escrita una consecuencia: una zona gris no tiene camino a real, porque a) no cambia con
+el forward. **Para el Admin:** el forward de una zona gris solo valida infraestructura, y al
+vencer pasa a H2. D5 trata lo intermedio de H1 v2 como no concluyente y sin demo, y H3 todavía
+lo manda a demo.
+
+**El sizing.** La sección 6 justifica el escalado por volatilidad frente al nocional igual por
+activo, con tres razones:
+- el riesgo lo pondría el activo más volátil;
+- el Sharpe mediría la composición, no la regla;
+- el sizing no mira el futuro.
+
+La versión sin escalar no se corre: sería otra variante.
+
+**Tres contradicciones, sin resolver.** Quedan como [PENDIENTE DEL ADMIN] en el documento, cada
+una con su propuesta:
+1. **La historia del universo** (sección 2). Deriv da 365 días y la rejilla mínima pide 766
+   barras; la sonda nunca escribió el universo (D8); y D1 cubre solo BTC y el oro. Hay tres
+   salidas: limitar H3 a K = 2, extender D1 a todo el universo o acumular velas de Deriv.
+2. **El N** (sección 11). D3 hace del registro la única fuente del N, y el registro ya tiene a
+   H2. La propuesta es contar los ensayos que cuentan y son estrategias, sin los de H2.
+3. **La estadística del Sharpe** (sección 11). El documento usa la de H1 v1: σ en el SR
+   observado y `T−1`. D5 pasa H1 v2 al módulo único, y con la de v1 H3 necesitaría una segunda
+   implementación. La propuesta es la de H1 v2.
+
+**Dos observaciones, sin cambio en la sección 8:**
+- dice que la unidad de `commission` se fija con las respuestas crudas, y ya se fijó: es un
+  monto (decision-log 2026-10-05, d);
+- su piso de 0,10 USD por contrato es una cota pesimista, porque la comisión medida no tiene
+  mínimo fijo (2026-10-05, c).
+
+**H3 en el registro de ensayos:** `h3-cartera`, pre-registrada, que cuenta en el N y apunta al
+sha256 del documento.
+
+**Tests.** El brief autoriza actualizar el de H3:
+
+| línea vieja | línea nueva |
+|---|---|
+| `SHA256_PREREGISTRO = "71826ed2…"` | `SHA256_PREREGISTRO = "40a05d96…"` |
+| — | 5 tests nuevos: D7; D2 y DB-3 en la sección 12; las cifras de DG-3 iguales a las de `governance/paso_a_real.py`; el sizing; el registro |
+
+**Mutantes:** 13, cada uno atrapado por su propio test y no solo por el sha256.
