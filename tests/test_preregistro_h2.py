@@ -24,7 +24,7 @@ DOC = RAIZ / "research" / "preregistro_h2.md"
 
 #: Si cambia, el documento cambió. Después de fusionado, eso es un
 #: experimento nuevo: preregistro_h2_v2.md, no una edición de este.
-SHA256_PREREGISTRO = "e4e1d7a2ac993c3944247c2bfdf9ebe0686a97a7cbc03b7c6068a930fc93b9b2"
+SHA256_PREREGISTRO = "7b2c5ceaa85b04db7d1b6fe6270752a568166de359a9ee35fc56cf17aa732790"
 
 
 def _texto() -> str:
@@ -48,6 +48,11 @@ def test_el_documento_no_usa_voseo():
     (pre.TOLERANCIA_ASOF_DIAS, "(`TOLERANCIA_ASOF_DIAS = 0`)", "0"),
     (pre.ALFA_DIEBOLD_MARIANO, "**Alfa fijado antes: 0,05.**", "0,05"),
     (pre.VENTANA_INICIAL_BARRAS, "arranca con **504** barras", "504"),
+    (pre.REZAGO_SECUNDARIO_DIAS_CALENDARIO, "`REZAGO_SECUNDARIO_DIAS_CALENDARIO = 1`", "1"),
+    (pre.PRUEBAS_POR_ACTIVO, "Por activo hay **6** pruebas", "6"),
+    (pre.NIVEL_MCS, "nivel **0,90**", "0,90"),
+    (pre.REPLICAS_MCS, "**10.000** réplicas", "10.000"),
+    (pre.SEMILLA_MCS, "semilla **20261017**", "20261017"),
 ])
 def test_cada_numero_del_modulo_esta_escrito_en_el_documento(valor, fragmento, escrito):
     assert fragmento in _texto(), fragmento
@@ -64,11 +69,12 @@ def test_las_ventanas_del_har_son_las_de_la_tabla(calendario, ventanas):
     assert fila in _texto(), fila
 
 
-def test_el_rezago_es_de_calendario_y_la_lectura_de_rezago_1_no_esta():
-    """Decisión del Admin del 29-sep: rezago 2 en días de calendario. La
-    lectura de rezago 1 se elimina del documento, no queda como opción."""
+def test_el_rezago_es_de_calendario_y_el_de_1_dia_es_secundario():
+    """Decisión del Admin del 29-sep: rezago 2 en días de calendario. D6
+    (14-oct) devuelve el de 1 día como secundario: ya no está descartado."""
     texto = " ".join(_texto().split())
-    assert "La lectura de rezago 1 queda descartada." in texto
+    assert "La lectura de rezago 1 queda descartada." not in texto
+    assert "**La lectura secundaria (D6)** usa la entropía de la fecha `t − 1`" in texto
     assert "Rezago 1, como dice el brief" not in texto
     assert "[PENDIENTE DEL ADMIN]** El brief pide" not in texto
     assert "el lunes usa la entropía del **sábado**" in texto
@@ -154,3 +160,77 @@ def test_el_modulo_no_trae_codigo_de_evaluacion():
     importados = {a.name for n in ast.walk(arbol) if isinstance(n, ast.Import) for a in n.names}
     importados |= {n.module for n in ast.walk(arbol) if isinstance(n, ast.ImportFrom)}
     assert importados <= {"__future__", "math", "datetime", "typing"}, importados
+
+
+# ═══ D6 (14-oct-2026): la secundaria, los horizontes, la familia y el MCS ═══
+
+def test_los_horizontes_son_los_del_documento():
+    fragmento = "**Horizontes (D6): `h` = 1, 5 y 22 barras del calendario del activo.**"
+    assert fragmento in " ".join(_texto().split())
+    assert pre.HORIZONTES == (1, 5, 22)
+
+
+def test_la_familia_son_los_rezagos_por_los_horizontes_y_no_un_literal():
+    """La secundaria cuenta en el N (D6): entra en la familia de Holm."""
+    assert pre.PRUEBAS_POR_ACTIVO == len(pre.REZAGOS_DIAS_CALENDARIO) * len(pre.HORIZONTES) == 6
+    arbol = ast.parse((RAIZ / "core" / "preregistro_h2.py").read_text(encoding="utf-8"))
+    asignacion = next(n for n in arbol.body if isinstance(n, ast.Assign)
+                      and [t.id for t in n.targets] == ["PRUEBAS_POR_ACTIVO"])
+    assert not isinstance(asignacion.value, ast.Constant)
+
+
+def test_la_primaria_es_t_menos_2_y_va_primero():
+    assert pre.REZAGOS_DIAS_CALENDARIO == (2, 1)
+    e = _diaria(date(2026, 9, 1), date(2026, 9, 30))
+    assert pre.fecha_de_entropia(date(2026, 9, 20), e) == date(2026, 9, 18)
+
+
+def test_la_secundaria_usa_t_menos_1_y_tampoco_rellena():
+    e = _diaria(date(2026, 9, 1), date(2026, 9, 30), sin={date(2026, 9, 14)})
+    assert pre.fecha_de_entropia(date(2026, 9, 20), e, rezago=1) == date(2026, 9, 19)
+    assert pre.fecha_de_entropia(date(2026, 9, 15), e, rezago=1) is None
+    assert pre.fecha_de_entropia(date(2026, 9, 16), e) is None
+
+
+@pytest.mark.parametrize("rezago", [0, 3, -1, True, None])
+def test_ningun_otro_rezago_vale(rezago):
+    """El 0 sería la entropía del mismo día; True contaría como 1."""
+    e = _diaria(date(2026, 9, 1), date(2026, 9, 30))
+    with pytest.raises(ValueError, match="rezago"):
+        pre.fecha_de_entropia(date(2026, 9, 20), e, rezago=rezago)
+
+
+@pytest.mark.parametrize("t, h, rezagos", [
+    (100, 1, 4), (100, 5, 5), (504, 1, 5), (504, 22, 22), (4500, 1, 9), (4500, 5, 9),
+])
+def test_los_rezagos_hac_son_el_ancho_o_el_horizonte(t, h, rezagos):
+    assert "`⌊4 · (T/100)^(2/9)⌋` rezagos, o `h` si `h` es mayor" in " ".join(_texto().split())
+    assert pre.rezagos_hac(t, h) == rezagos
+
+
+@pytest.mark.parametrize("h", [0, 2, 7, 30])
+def test_los_rezagos_hac_solo_para_un_horizonte_del_documento(h):
+    with pytest.raises(ValueError, match="horizonte"):
+        pre.rezagos_hac(100, h)
+
+
+@pytest.mark.parametrize("fragmento", [
+    "continuo, 24/7, para BTC (D6)",
+    "**Todo lo del día de la semana se estima solo en entrenamiento (D6).**",
+    "y **nunca decide** la conclusión. Cuenta en el N (D3).",
+    "**Model Confidence Set** de Hansen, Lunde y Nason (2011)",
+    "Los 6 p-valores se ajustan por **Holm**",
+])
+def test_lo_que_fija_d6_esta_escrito(fragmento):
+    assert fragmento in " ".join(_texto().split())
+
+
+def test_h2_esta_en_el_registro_de_ensayos_con_este_documento():
+    """D3: los dos rezagos son ensayos, pre-registrados y no corridos, y
+    apuntan al sha256 de este documento."""
+    from governance import ensayos
+    de_h2 = {e["id"]: e for e in ensayos.leer() if e["hipotesis"] == "H2"}
+    assert set(de_h2) == {f"h2-rezago-{r}" for r in pre.REZAGOS_DIAS_CALENDARIO}
+    for e in de_h2.values():
+        assert e["estado"] == "pre-registrado" and e["cuenta_en_n"] is True
+        assert e["preregistro_sha256"] == SHA256_PREREGISTRO
