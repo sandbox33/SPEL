@@ -31,7 +31,7 @@ DOC = RAIZ / "research" / "preregistro_h1_v2.md"
 
 #: Si cambia, el documento cambió. Después de fusionado, eso es un
 #: experimento nuevo: preregistro_h1_v3.md, no una edición de este.
-SHA256_PREREGISTRO = "7ffc6150fb46cd0d5882b885f3287050f3cef7b56b5a54965053827815976e75"
+SHA256_PREREGISTRO = "95588ea681ee5e48e02b22e624e4e87d3a83c9c8707dc25a2eea9c7b29a4f0e1"
 
 
 def _plano() -> str:
@@ -243,3 +243,45 @@ def test_h1_v2_esta_en_el_registro_de_ensayos_con_este_documento():
     e = de_h1[0]
     assert e["estado"] == "pre-registrado" and e["cuenta_en_n"] is True
     assert e["preregistro_sha256"] == SHA256_PREREGISTRO
+
+
+# ═══ Brief 11–13-B (17-oct-2026): P1 y P6 ═════════════════════════════════
+
+def test_no_queda_ninguna_marca_de_pendiente_del_admin():
+    """La que quedaba era la fuente de precios, y la cierra P1. Las dos de v1
+    se nombran sin la marca."""
+    assert "PENDIENTE DEL ADMIN" not in DOC.read_text(encoding="utf-8")
+
+
+def test_la_fuente_de_precios_es_la_de_p1():
+    """Antes, la sección 1 dejaba la fuente pendiente, con una propuesta. P1
+    la fija: la serie de D1, solo con la compuerta del brief 14 en verde."""
+    texto = _plano()
+    assert ("**Datos (P1, auditor, 17-oct-2026): la serie diaria de BTC de D1 (TwelveData), y "
+            "solo después de que el brief 14 la valide con su compuerta.**") in texto
+    assert ("H1 v2 no corre sobre ese activo: no hay fuente de reemplazo sin validar, y la "
+            "compuerta no se relaja.") in texto
+    assert "Propuesta de este PR, que no se aplica sin el Admin" not in texto
+    assert "**[INTERPRETACIÓN]** Si el brief 14 sale rojo para BTC, no hay veredicto" in texto
+    assert "Su serie es la diaria del oro de D1, con la misma compuerta del brief 14" in texto
+
+
+def test_p6_aprueba_el_sharpe_anualizado_y_solo_esa():
+    texto = _plano()
+    assert ("**[INTERPRETACIÓN aprobada (P6)]** Las compuertas de v1 no dicen si el Sharpe es por "
+            "barra o anualizado") in texto
+    # La marca, más la vez que el encabezado la explica.
+    assert texto.count("[INTERPRETACIÓN aprobada (P6)]") == 2
+
+
+def test_p6_acepta_que_v2_no_sea_mas_estricto():
+    """P6, tal cual en el decision-log: PSR(0) 0,913 → 0,987 con el vector
+    del brief 10, aceptado como corrección de método."""
+    texto = _plano()
+    assert ("**El auditor lo aceptó el 17-oct (P6):** es una corrección de método, declarada antes "
+            "de los datos.") in texto
+    # El decision-log la cita como bloque: se lee sin las marcas "> ".
+    lineas = (RAIZ / "decision-log.md").read_text(encoding="utf-8").splitlines()
+    log = " ".join(" ".join(l.removeprefix("> ") for l in lineas).split())
+    assert ("H1 v2 es menos estricto que v1 en el vector del brief 10 (PSR(0) 0,913 → 0,987). Se "
+            "acepta: es una corrección de método, declarada antes de los datos.") in log

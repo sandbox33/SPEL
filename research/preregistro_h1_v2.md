@@ -5,15 +5,20 @@ línea de backtest de H1.** Reemplaza para H1 a `research/preregistro_h1.md` (v1
 sellado y sin tocar. v1 no se corrió nunca: no hubo historia suficiente (su sección 4). Para
 escribir este documento no se miró ningún precio ni ningún retorno.
 
+**Revisado el mismo día, todavía sin fusionar,** con las resoluciones del auditor del 17-oct
+(brief 11–13-B): la fuente de precios (P1, sección 1), la interpretación del Sharpe de las
+compuertas, que aprobó (P6, sección 10), y el cambio de la estadística, que aceptó (P6,
+sección 9).
+
 Este documento **no se modifica después de fusionarse.** `tests/test_preregistro_h1_v2.py`
 fija su sha256 y verifica que cada número de `core/preregistro_h1_v2.py` esté escrito acá.
 Cualquier cambio de rejilla, ventanas, reglas o compuertas después de ver un resultado es un
 experimento nuevo: va en `preregistro_h1_v3.md`, con su propio N, sin borrar este.
 
 Las marcas **[INTERPRETACIÓN]** señalan una lectura del brief que el Admin aprueba al
-fusionar. Las marcas **[PENDIENTE DEL ADMIN]** señalan algo que el brief no fija o que choca
-con los datos, y que se completa **antes** de fusionar, en este mismo PR. Las dos de v1 se
-cierran acá (sección 10). **Queda una nueva: la fuente de precios (sección 1).**
+fusionar; la que dice **[INTERPRETACIÓN aprobada (P6)]** ya la aprobó el auditor el 17-oct.
+**No queda nada pendiente del Admin:** las dos cláusulas pendientes de v1 se cierran acá
+(sección 10), y la fuente de precios la fijó el auditor el 17-oct (P1, sección 1).
 
 ---
 
@@ -22,11 +27,11 @@ cierran acá (sección 10). **Queda una nueva: la fuente de precios (sección 1)
 | | v1 | v2 | por qué |
 |---|---|---|---|
 | la σ del PSR | evaluada en el Sharpe observado, con `T−1` | evaluada en SR₀, con `T` y la autocorrelación ρ | D5 (sección 9) |
-| Sharpe < 0,3 | se prueba una alternativa, [PENDIENTE DEL ADMIN] | se rechaza y se detiene: no hay alternativa | D12 (sección 10) |
-| 0,3 ≤ Sharpe < 0,5, o PSR o DSR < 0,90 | [PENDIENTE DEL ADMIN] | no concluyente: no pasa a demo | D5 (sección 10) |
+| Sharpe < 0,3 | se prueba una alternativa, que quedó pendiente del Admin | se rechaza y se detiene: no hay alternativa | D12 (sección 10) |
+| 0,3 ≤ Sharpe < 0,5, o PSR o DSR < 0,90 | pendiente del Admin | no concluyente: no pasa a demo | D5 (sección 10) |
 | los ensayos previos del N | escritos a mano | del registro de ensayos | D3 (sección 9) |
 | el paso a real | no lo dice | DG-3, con D2 y DB-3 | v1 es anterior a DG-3 (sección 10) |
-| la fuente de precios | las velas diarias de Deriv | [PENDIENTE DEL ADMIN] | Deriv da 365 días (sección 1) |
+| la fuente de precios | las velas diarias de Deriv | las de D1, cuando el brief 14 las valide | Deriv da 365 días; P1 (sección 1) |
 | la comisión | con las mediciones de una sonda que nunca escribió | con κ medido en la cuenta real | los datos (sección 8) |
 
 Todo lo demás es v1, escrito acá completo para que el documento se lea solo. Los números y
@@ -41,9 +46,11 @@ Los lookbacks individuales se reportan como diagnóstico y **nunca se promueven*
 ensemble falla y un individual pasa, se registra como **evidencia de sobreajuste**, no
 como un hallazgo.
 
-**Datos: [PENDIENTE DEL ADMIN]** La fuente de las velas diarias. v1 decía
-`metrics/velas/<símbolo>/86400.jsonl` de la rama `data`, las velas de Deriv, y con ellas H1 no
-corre:
+**Datos (P1, auditor, 17-oct-2026): la serie diaria de BTC de D1 (TwelveData), y solo después
+de que el brief 14 la valide con su compuerta.** Si el brief 14 sale rojo para un activo, H1 v2
+no corre sobre ese activo: no hay fuente de reemplazo sin validar, y la compuerta no se relaja.
+v1 decía `metrics/velas/<símbolo>/86400.jsonl` de la rama `data`, las velas de Deriv, y con ellas
+H1 no corre:
 - Deriv da **365 días** de historia diaria (decision-log 2026-10-05), y la condición de parada
   (sección 4) pide **1.058** barras con la rejilla mínima y **2.608** con la completa;
 - la rama `data` no tiene ninguna vela diaria, porque `velas.yml` nunca escribió (D8);
@@ -51,8 +58,11 @@ corre:
   decide para BTC y el oro: TwelveData, validada contra el año de Deriv con una coincidencia de
   al menos el 90 %. El brief 14 fija la métrica y la hora de corte (D1-p).
 
-**Propuesta de este PR, que no se aplica sin el Admin:** la serie diaria de BTC de D1 que valide
-el brief 14. El símbolo que se opera sigue siendo el BTC de Deriv que califique en la sonda de
+**[INTERPRETACIÓN]** Si el brief 14 sale rojo para BTC, no hay veredicto: las compuertas son de
+la serie base (sección 10, D12), y el oro es una réplica que no ocupa su lugar (sección 11). Si
+sale rojo para el oro, no hay réplica.
+
+El símbolo que se opera sigue siendo, como en v1, el BTC de Deriv que califique en la sonda de
 instrumentos (`ingestion/sonda_instrumentos.py`). Si califica más de uno, el Admin elige
 **antes** de correr, mirando solo la salida de la sonda —contratos, multiplicadores, stake,
 comisión—, nunca precios ni retornos.
@@ -231,13 +241,14 @@ razones:
 **No es más estricto en todos los casos.** Con el vector del brief 10 (γ₃ = −2,448,
 γ₄ = 10,164, T = 24, SR = 0,45570), v1 da PSR(0) = 0,913. v2 da 0,987 con ρ = 0 y 0,9658 con
 ρ = 0,2 (`tests/test_estadistica_sharpe.py`). Se cambia porque es el desvío de la nula, no
-porque endurezca la compuerta; lo decide D5, antes de mirar.
+porque endurezca la compuerta; lo decide D5, antes de mirar. **El auditor lo aceptó el 17-oct
+(P6):** es una corrección de método, declarada antes de los datos.
 
 ## 10. Compuertas
 
 Con el Sharpe neto fuera de muestra **anualizado** de la **serie base, BTC**, porque el oro es
-una réplica (sección 11). **[INTERPRETACIÓN]** Las compuertas de v1 no dicen si el Sharpe es por
-barra o anualizado; sus convenciones lo anualizan con `√A` (sección 9).
+una réplica (sección 11). **[INTERPRETACIÓN aprobada (P6)]** Las compuertas de v1 no dicen si el
+Sharpe es por barra o anualizado; sus convenciones lo anualizan con `√A` (sección 9).
 
 | resultado | veredicto |
 |---|---|
@@ -247,10 +258,10 @@ barra o anualizado; sus convenciones lo anualizan con `√A` (sección 9).
 
 - **Rechazo (D12, decisión del Admin del 17-oct).** La alternativa declarada es **ninguna**. La
   estrategia se rechaza, el proceso se detiene y no suma ensayos (N) de optimización
-  correctiva. Cierra el primer [PENDIENTE DEL ADMIN] de v1. Como no hay alternativa, no hay
-  nada que sumar al N por ella.
-- **No concluyente (D5).** No pasa a demo: lo dudoso no se trata como hallazgo. Cierra el
-  segundo [PENDIENTE DEL ADMIN] de v1. Qué sigue lo decide el Admin, y una corrida nueva con más
+  correctiva. Cierra la primera cláusula pendiente de v1. Como no hay alternativa, no hay nada
+  que sumar al N por ella.
+- **No concluyente (D5).** No pasa a demo: lo dudoso no se trata como hallazgo. Cierra la
+  segunda cláusula pendiente de v1. Qué sigue lo decide el Admin, y una corrida nueva con más
   datos es otro experimento.
 - **Avanza.** Forward en demo con las reglas congeladas. El paso de demo a real es DG-3, tal
   como está en `governance/paso_a_real.py` (decision-log 29-sep, con D2 del 14-oct y DB-3 del
@@ -263,7 +274,8 @@ tres números.
 ## 11. Réplica en oro
 
 **frxXAUUSD** con **parámetros idénticos, sin reajuste**. Es una réplica, no una
-variante, y **no suma al N**. Su calendario es hábil (ver `ingestion/velas.py`) y su
+variante, y **no suma al N**. Su serie es la diaria del oro de D1, con la misma compuerta del
+brief 14 (P1, sección 1). Su calendario es hábil (ver `ingestion/velas.py`) y su
 `A` sale de su propia serie, por la misma regla que el de BTC.
 
 ## 12. Registro de ensayos (D3)
