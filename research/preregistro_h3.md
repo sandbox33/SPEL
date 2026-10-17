@@ -1,11 +1,16 @@
 # Pre-registro H3 — tendencia multiactivo
 
-**Escrito el 29-sep-2026, en el PR-H3 del Brief final v3, antes de que se fusione el PR #31.**
-**Revisado el 01-oct-2026, todavía sin fusionar,** con dos decisiones del Admin del 29-sep:
-el sizing (sección 6) y las condiciones del paso de demo a real (DG-3, sección 12).
-Al fusionar el #31 el cron empieza a escribir los precios diarios del universo en la rama
-`data`; este documento tiene que existir antes de que haya un precio que mirar. Para
-escribirlo no se leyó ninguna vela ni ningún retorno: solo reglas.
+**Escrito el 29-sep-2026, en el PR-H3 del Brief final v3, antes de que se fusione el PR #31.
+Revisado dos veces, todavía sin fusionar:**
+- el 01-oct-2026, con dos decisiones del Admin del 29-sep: el sizing (sección 6) y las
+  condiciones del paso de demo a real (DG-3, sección 12);
+- el 17-oct-2026, por el brief 11–13. Declara los precios del oro que ya están en `data` (D7,
+  sección 2), reescribe el paso a real según D2 (sección 12) y justifica el sizing por
+  volatilidad (sección 6).
+
+Este documento tenía que existir antes de que hubiera un precio que mirar. Para escribirlo no
+se leyó ninguna vela ni ningún retorno: solo reglas. Desde entonces entraron en `data` velas
+M5 del oro, y la sección 2 dice cuáles son y qué se calculó con ellas.
 
 **H3 es la ruta principal** de la Serie H (DG-5, decision-log 25-sep-2026).
 
@@ -14,13 +19,16 @@ su sha256 y verifica que cada número de `core/preregistro_h3.py` esté escrito 
 Cualquier cambio de universo, rejilla, ventanas o reglas después de ver un resultado es un
 experimento nuevo: va en `preregistro_h3_v2.md`, con su propio N, sin borrar este.
 
-**Es autocontenido a propósito.** H3 usa por activo las reglas de H1, pero cuando este
-documento se fusiona `research/preregistro_h1.md` todavía no está en `main`, y además
-cambia en el cierre de H1-A (PR-0). Por eso las reglas que H3 toma de H1 están escritas
-acá completas: lo que vale para H3 es este texto, no el de H1.
+**Es autocontenido a propósito.** H3 usa por activo las reglas de H1, y H1 cambia de versión:
+`research/preregistro_h1.md` está sellado en `main`, y H1 v2 (D5, D12) va a reemplazarlo para
+H1. Por eso las reglas que H3 toma de H1 están escritas acá completas: lo que vale para H3 es
+este texto, no el de H1.
 
 Las marcas **[INTERPRETACIÓN]** señalan una lectura del brief que el Admin aprueba al
-fusionar.
+fusionar. Las marcas **[PENDIENTE DEL ADMIN]** señalan algo que el brief no fija o que choca
+con los datos o con el decision-log, y que se completa **antes** de fusionar, en este mismo
+PR. Quedan tres: la historia del universo (sección 2), y el N y la estadística del Sharpe
+(sección 11).
 
 ---
 
@@ -49,6 +57,43 @@ cualquier cosa**. Esa congelación va en su propio PR, con una entrada en el dec
 que registre el sha256; ningún cálculo de H3 corre antes de que esté fusionada. Después
 de congelada, el universo no cambia: un instrumento que aparezca más tarde entra, si
 entra, en un experimento nuevo.
+
+**[PENDIENTE DEL ADMIN] La historia del universo.** Con las fuentes de hoy, ningún activo
+llega a la condición de arriba:
+- Deriv da **365 días** de historia diaria (decision-log 2026-10-05), y la rejilla mínima pide
+  **766** barras;
+- la sonda nunca escribió `metrics/instrumentos/` en `data`, y su cron está apagado hasta la
+  migración de `ingestion/deriv_ws.py` (D8, D8-r): todavía no hay universo que congelar;
+- D1 da historia larga desde TwelveData, validada por el brief 14, **solo a BTC y al oro**.
+
+Hay tres salidas, y este documento no elige ninguna:
+- limitar H3 a los activos con historia de D1 (K = 2);
+- extender D1 a todo el universo, con la validación del brief 14 activo por activo;
+- acumular velas de Deriv hasta las 766 barras.
+
+La decide el Admin, antes de fusionar.
+
+### Precios que ya están en `data` (D7)
+
+Hoy hay velas del oro en `data`, y se declaran acá. Lo medido es de `data@69a0e45`, y los cuatro
+archivos no cambian desde `bc2597a`:
+
+| archivo | contenido | entró |
+|---|---|---|
+| `metrics/velas/frxXAUUSD/300.jsonl` | M5 de Deriv: 70.718 velas, del 2025-10-08 03:30 al 2026-10-14 18:00 UTC | el 08-oct (`852e5ce`, `54f63fc`, `db491b4`), y más velas el 14-oct |
+| `metrics/velas/frxXAUUSD/revisiones_300.jsonl` | las revisiones de esas velas | el 14-oct (`bc2597a`) |
+| `metrics/velas/td_XAUUSD/300.jsonl` | M5 de TwelveData: 499.252 velas, del 2020-03-16 01:10 al 2026-10-14 17:45 UTC | el 14-oct (`bc2597a`) |
+| `metrics/calendario/frxXAUUSD/trading_times.jsonl` | el calendario de Deriv | el 08-oct, con una línea por corrida |
+
+**Ninguna se miró con reglas de H3.** Lo único que se calculó con ellas es la concordancia del
+rango de apertura (`tools/concordancia_xauusd.py`): la dirección y la vela de la primera
+ruptura de un rango de 15 min. Eso corrió en las dos corridas de `velas_intradia.yml`, el 08 y
+el 14-oct, y en el recálculo del 17-oct (decision-log). No hubo ningún canal Donchian ni
+ningún voto, y no hay ninguna vela diaria: en `data` no hay ninguna.
+
+**Otra exposición previa, fuera de `data`.** El acta del 06-sep (decision-log) midió un cruce
+EMA 20/63 —una regla de tendencia, no la de H3— sobre BTC y XAU diarios del data lake legacy.
+Está en el registro de ensayos como `previo-ema-20-63`, fallido, y suma al N (sección 11).
 
 ## 3. Rejilla por activo
 
@@ -134,6 +179,20 @@ s = min(1 ; 0,25 / σ̂_cartera)
   100 USD, un nocional por activo de ese tamaño va a quedar muchas veces por debajo del
   stake mínimo, y esos activos no se operan (sección 9).
 
+**Por qué por volatilidad, y no sin escalar.** La versión sin escalar —el mismo nocional,
+`capital / K`, en cada activo— se descarta antes de mirar, por tres razones:
+- **El riesgo lo pondría el activo más volátil.** El universo mezcla mercados —cripto, forex,
+  metales— cuya volatilidad no tiene por qué parecerse. Con nocionales iguales, la cartera
+  mediría sobre todo la tendencia del más volátil, y H3 pregunta por una regla aplicada igual
+  a un universo amplio. Dividir por `vol_realizada_20d` reparte el riesgo, no el capital.
+- **El Sharpe mediría la composición, no la regla.** Sin escalar, el Sharpe de la cartera
+  cambia cuando cambia la volatilidad relativa de los activos, aunque la regla no cambie. El
+  benchmark (sección 10) usa el mismo sizing, así que la comparación aísla la señal.
+- **El sizing no mira el futuro ni se ajusta.** La volatilidad es la de las 20 barras
+  anteriores a la entrada, el target y la ventana están fijados acá, y `s` solo achica.
+
+La versión sin escalar **no se corre**: sería una segunda variante y sumaría al N (sección 11).
+
 ## 7. Stop-out y reentrada
 
 - **[INTERPRETACIÓN]** El contrato toca el stop-out cuando el movimiento adverso llega a
@@ -207,6 +266,18 @@ de H1 suman al N de H3.
 El reporte muestra además el DSR con **N = 11** contado ingenuamente (los seis lookbacks
 y el ensemble de H1, los tres previos y la cartera de H3), como cota pesimista.
 
+**[PENDIENTE DEL ADMIN] El N y el registro de ensayos (D3).** D3 hace del registro la única
+fuente del N, y el registro ya tiene más que lo de arriba: los 3 previos, los dos rezagos de H2
+y, desde este PR, la cartera de H3. Falta decidir qué ensayos del registro suman al N de H3.
+La propuesta: los que cuentan en el registro y son estrategias —los 3 previos, los de H1 y la
+cartera de H3—, sin los de H2, que prueban un predictor de volatilidad.
+
+**[PENDIENTE DEL ADMIN] La estadística del Sharpe.** Las convenciones de abajo son las de H1
+v1, sellado: la σ se evalúa en el SR observado y con `T−1`. D5 cambia las de H1 v2 al módulo
+`core/estadistica_sharpe.py` (σ en SR₀, con la autocorrelación ρ), la única implementación de
+la estadística del Sharpe (brief 10). Con las de abajo, H3 necesitaría una segunda
+implementación. La propuesta: las de H1 v2.
+
 **Convenciones**, las mismas de H1:
 
 - Sharpe por barra sobre los retornos netos diarios de la cartera; anualizado con `√A`.
@@ -225,18 +296,26 @@ y el ensemble de H1, los tres previos y la cartera de H3), como cota pesimista.
   significa **forward en demo** con las reglas congeladas, no capital real.
 - **Detener → H2:** Sharpe neto **< 0,3**. No se prueba ninguna variante de tendencia.
 - **Zona gris:** cualquier otro caso. También va a forward en demo con las reglas
-  congeladas, con la misma salida que el caso de avanzar.
-- **Paso de demo a real (DG-3, decision-log 29-sep-2026).** Exige **todas**:
-  a) **PSR ≥ 0,90** y **DSR ≥ 0,90** sobre retornos diarios de cartera, en la serie
-  combinada histórico + demo, con el mismo N (sección 11); b) **≥ 30 días** de demo y
-  **≥ 20 operaciones cerradas** en demo; c) costos observados en demo **≤ 1,25 ×** costos
-  modelados (sección 8); d) reconciliación demo sin discrepancias. El forward sigue hasta
+  congeladas, con la misma salida que el caso de avanzar. **Con D2 no tiene camino a real:**
+  a) se mide solo sobre el histórico, que el forward no cambia, así que una zona gris nunca la
+  cumple. Su forward valida infraestructura, fricciones, latencia y reconciliación, y al
+  vencer pasa a H2.
+- **Paso de demo a real** (DG-3: decision-log 29-sep-2026, con D2 del 14-oct y DB-3 del
+  17-oct; `governance/paso_a_real.py`). Exige **todas**:
+  - a) **PSR ≥ 0,90** y **DSR ≥ 0,90** sobre retornos diarios de cartera, **solo en el
+    backtest histórico** (D2), con el N de la sección 11;
+  - b) **≥ 30 días** de demo y **≥ 20 operaciones cerradas** en demo;
+  - c) costos observados en demo **≤ 1,25 ×** costos modelados (sección 8);
+  - d) reconciliación demo sin discrepancias, no_verificables ni trades terminados sin
+    reconciliar (D2, DB-3).
+
+  La latencia que nombra D2 no tiene umbral todavía y no se evalúa. El forward sigue hasta
   cumplirlas, con un **máximo de 6 meses**; al vencer sin cumplirlas, H2. Sin prórroga.
-- **[INTERPRETACIÓN]** Además de a)–d), el paso a real exige que la serie combinada
-  histórico + demo apruebe también el resto de la compuerta de avanzar: Sharpe neto
-  ≥ 0,5 y superar al benchmark en Sharpe neto o en Calmar. Es la lectura más estricta: el
-  texto anterior de este pre-registro pedía "las mismas compuertas sobre histórico +
-  forward", y DG-3 no dice que se eliminen.
+- **La demo no reevalúa el Sharpe** (D2). Valida infraestructura, fricciones, latencia y
+  reconciliación, y que sus fricciones sirvan de proxy del deslizamiento real queda UNVERIFIED
+  (D2-n). La compuerta de avanzar —Sharpe neto ≥ 0,5 y superar al benchmark— ya se mide sobre
+  el histórico, así que el paso a real no la repite. La interpretación anterior, que pedía
+  aprobarla también sobre el histórico sumado a la demo, cae con D2.
 
 ## 13. Revisión
 

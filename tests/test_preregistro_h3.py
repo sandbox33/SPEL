@@ -30,7 +30,7 @@ DOC = RAIZ / "research" / "preregistro_h3.md"
 
 #: Si cambia, el documento cambió. Después de fusionado, eso es un
 #: experimento nuevo: preregistro_h3_v2.md, no una edición de este.
-SHA256_PREREGISTRO = "71826ed211272a583fb71091e1d120fead7e38bb33146d6008323c39ab1572d3"
+SHA256_PREREGISTRO = "40a05d967108a43152e5dd0704d1dfc2f6a27e30cfcbb034edfb1fde1c1d0d19"
 
 
 def _texto() -> str:
@@ -202,3 +202,70 @@ def test_el_modulo_no_importa_nada_que_haga_un_backtest():
     importados = {a.name for n in ast.walk(arbol) if isinstance(n, ast.Import) for a in n.names}
     importados |= {n.module for n in ast.walk(arbol) if isinstance(n, ast.ImportFrom)}
     assert importados <= {"__future__", "math"}, importados
+
+
+# ═══ Brief 11–13, tarea 12: D7, D2 y el sizing ═════════════════════════════
+
+def _plano() -> str:
+    return " ".join(_texto().split())
+
+
+def _seccion(titulo: str) -> str:
+    texto = _plano()
+    i = texto.index(titulo)
+    j = texto.find(" ## ", i + len(titulo))
+    return texto[i:j if j != -1 else len(texto)]
+
+
+@pytest.mark.parametrize("fragmento", [
+    "### Precios que ya están en `data` (D7)",
+    "`metrics/velas/frxXAUUSD/300.jsonl` | M5 de Deriv: 70.718 velas",
+    "`metrics/velas/td_XAUUSD/300.jsonl` | M5 de TwelveData: 499.252 velas",
+    "`metrics/velas/frxXAUUSD/revisiones_300.jsonl`",
+    "`metrics/calendario/frxXAUUSD/trading_times.jsonl`",
+    "el 08-oct (`852e5ce`, `54f63fc`, `db491b4`)",
+    "| el 14-oct (`bc2597a`) |",
+    "**Ninguna se miró con reglas de H3.**",
+    "`previo-ema-20-63`, fallido",
+])
+def test_d7_declara_los_precios_del_oro_que_ya_estan_en_data(fragmento):
+    assert fragmento in _plano(), fragmento
+
+
+def test_el_paso_a_real_es_el_de_d2_y_db3():
+    """Antes, a) se medía en la serie combinada histórico + demo y d) pedía
+    solo cero discrepancias. Con D2 y DB-3, a) es solo el histórico y d)
+    suma los no_verificables y los trades sin reconciliar."""
+    s12 = _seccion("## 12. Compuertas")
+    assert "serie combinada" not in s12 and "histórico + demo" not in s12
+    assert "solo en el backtest histórico" in s12
+    assert "sin discrepancias, no_verificables ni trades terminados sin reconciliar" in s12
+    assert "La latencia que nombra D2 no tiene umbral todavía" in s12
+    assert "**Con D2 no tiene camino a real:**" in s12
+
+
+def test_las_cifras_de_dg3_son_las_de_governance():
+    """El documento duplica a propósito las cifras de DG-3; si DG-3 cambia en
+    governance/paso_a_real.py, este test obliga a revisar H3."""
+    from governance import paso_a_real as dg3
+    assert (pre.DIAS_MINIMOS_DEMO, pre.OPERACIONES_CERRADAS_MINIMAS_DEMO,
+            pre.RAZON_MAXIMA_COSTO_OBSERVADO_MODELADO, pre.MESES_MAXIMOS_ZONA_GRIS) == (
+        dg3.DIAS_MINIMOS_DEMO, dg3.OPERACIONES_CERRADAS_MINIMAS_DEMO,
+        dg3.RAZON_MAXIMA_COSTO_OBSERVADO_MODELADO, dg3.MESES_MAXIMOS_ZONA_GRIS)
+
+
+def test_el_sizing_se_justifica_frente_a_la_version_sin_escalar():
+    s6 = _seccion("## 6. Sizing")
+    assert "**Por qué por volatilidad, y no sin escalar.**" in s6
+    assert "La versión sin escalar **no se corre**" in s6
+
+
+def test_h3_esta_en_el_registro_de_ensayos_con_este_documento():
+    """D3: una sola variante, pre-registrada y no corrida, que apunta al
+    sha256 de este documento."""
+    from governance import ensayos
+    de_h3 = [e for e in ensayos.leer() if e["hipotesis"] == "H3"]
+    assert [e["id"] for e in de_h3] == ["h3-cartera"] and len(de_h3) == pre.VARIANTES_H3
+    e = de_h3[0]
+    assert e["estado"] == "pre-registrado" and e["cuenta_en_n"] is True
+    assert e["preregistro_sha256"] == SHA256_PREREGISTRO
