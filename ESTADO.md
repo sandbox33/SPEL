@@ -10,15 +10,15 @@
 > Este archivo se lee primero en cada chat nuevo. Frente a un chat que lo contradiga sin
 > evidencia, gana el archivo; frente al código, gana el código.
 
-**Última actualización:** 17 oct 2026 — brief del Admin 10 (gobernanza): DG-3 según D2, el registro único de ensayos (D3), la estadística del Sharpe en `core/`, H-ORB-oro pausada (D11, D11-u) y la compuerta roja del oro, en la rama `claude/brief-10-gobernanza`. Las entradas D1 y D4–D9 esperan las tablas del memo de traspaso.
+**Última actualización:** 17 oct 2026 — briefs del Admin 10 y 10-B (gobernanza): DG-3 según D2 y DB-3, el registro único de ensayos (D3), la estadística del Sharpe en `core/`, H-ORB-oro pausada (D11, D11-u) con la compuerta roja del oro, las Fases 3, 5 y 6 congeladas (D9), y D1–D9, D11, D11-u y D12 en el decision-log, cada una con su razón, en la rama `claude/brief-10-gobernanza`.
 
 **Commit de referencia:** `dcea171` (merge del PR #41).
 
-**Tests:** **1912** recolectados en `tests/`, en 60 archivos, medido con
+**Tests:** **1933** recolectados en `tests/`, en 60 archivos, medido con
 `pytest --collect-only -q tests/` el 17-oct-2026 sobre esta rama. Más 74 en `research/tests/`,
 que no bloquean.
 
-Desfase: **ninguno**. El commit de referencia es el merge del PR #41, el último de `main`, y esta actualización entra con el PR del brief 10. Los PRs #33 y #34 siguen abiertos y
+Desfase: **ninguno**. El commit de referencia es el merge del PR #41, el último de `main`, y esta actualización entra con el PR del brief 10, que el 10-B completa. Los PRs #33 y #34 siguen abiertos y
 en pausa. `tests/test_estado_al_dia.py` falla si hay **más
 de 3 PRs fusionados** desde el commit de referencia de arriba (DG-6).
 
@@ -94,13 +94,13 @@ corridas seguidas sin intermitencia.
 | `ingestion/frescura.py` | Alarma de la serie: rojo solo por hueco interno posterior a la marca de inicio | 18 | ✅ |
 | `tools/verificar_siembra.py` | Compara BTC/XAU sembrados contra la serie medida | 14 | ✅ verde contra la siembra real (corrido el 29-sep, ver decision-log) |
 | `ingestion/deriv_ws.py` | Sesión de solo lectura con Deriv: `entorno` obligatorio, `real` con permiso aparte, lista blanca de siete mensajes | 29 | 🟡 habla con el endpoint legacy, muerto desde el 01-oct (HTTP 520): falta migrar al WS público |
-| `ingestion/sonda_instrumentos.py` + `.github/workflows/sonda.yml` | Contratos, multiplicadores, stake y comisión de BTC y oro, desde la API, siete días | 19 + 6 | 🟡 usa `deriv_ws.py`, así que depende de la misma migración |
+| `ingestion/sonda_instrumentos.py` + `.github/workflows/sonda.yml` | Contratos, multiplicadores, stake y comisión de BTC y oro, desde la API, siete días | 19 + 6 | 🟡 usa `deriv_ws.py`, así que depende de la misma migración; 🔴 cron apagado por el Admin el 14-oct (D8) tras 7 corridas en rojo, aunque el YAML lo sigue declarando |
 | `ingestion/velas_intradia.py` + `.github/workflows/velas_intradia.yml` | Velas M5 del oro en `data`: TwelveData XAU/USD 5min desde 2020-03-16 y Deriv frxXAUUSD M5 por `/ws/public`, con el patrón de `velas.py`; horario de `trading_times` crudo con sha256; una página vacía de TwelveData es el fondo solo tras una página corta (brief 07-oct (6)) | 43 + 6 | ✅ segundo run el 14-oct (38610611624, rama `data` en `bc2597a`): TwelveData 499.252 velas M5 desde 2020-03-16 y Deriv 70.718 desde 2025-10-08; el primero (08-oct) se había cortado en el 400 del fondo |
 | `ingestion/deriv_publico.py` + `ingestion/limitador.py` | Canal público de Deriv y paginación de velas, y el limitador de TwelveData, portados de las sondas | (en los de arriba) | ✅ |
 | `tools/concordancia_xauusd.py` | Rango de apertura 08:00 Londres y primera ruptura hasta las 12:00 por fuente, filtro de calendario, métricas y compuerta del 90 %; ningún desenlace (guarda AST + serie espía) | 38 + 24 | 🔴 compuerta roja con datos reales: 62,74 % contra 90 % (data@bc2597a, 14-oct) |
 | `ingestion/adapters.py::TwelveDataAdapter.fetch_pagina` | XAU/USD en el mapa (evidencia 3b, autorización del 06-oct (4)); página con `start/end_date` y cierre por la hora del servidor; vacías: el 404 "data not found" y el 400 "No data is available on the specified dates" (prefijo exacto) | 30 | ✅ offline |
 | `ingestion/reintentos.py` | Reintentos de `fetch_pagina` (issue #39): 429, 500/502/503/504 y cortes de red; espera del `Retry-After` o, si no viene, 60 s para un 429 y backoff 2·2ⁿ (tope 30 s); a lo sumo 3 reintentos y 180 s de espera; cada reintento consume un turno del `Limitador`; sin limitador no reintenta | 63 | ✅ offline; 🟡 ningún 429 ni 5xx real visto todavía; que TwelveData mande `Retry-After` no está verificado |
-| `ingestion/velas.py` + `.github/workflows/velas.yml` | Velas diarias de BTC y oro en la rama `data`, profundidad usable, `leer_velas()` en polars | 33 + 6 | 🟡 ídem; además, Deriv entrega 365 días de historia (sonda §0.A-2) |
+| `ingestion/velas.py` + `.github/workflows/velas.yml` | Velas diarias de BTC y oro en la rama `data`, profundidad usable, `leer_velas()` en polars | 33 + 6 | 🟡 ídem; además, Deriv entrega 365 días de historia (sonda §0.A-2); 🔴 cron apagado por el Admin el 14-oct (D8) tras 7 corridas en rojo, aunque el YAML lo sigue declarando |
 | `core/preregistro_h1.py` + `research/preregistro_h1.md` | Reglas del experimento H1, fijadas antes del backtest | 26 | 🟡 dos cláusulas PENDIENTES del Admin |
 | `ingestion/kappa_deriv.py` | κ = comisión/nocional de MULTUP por activo, máximo medido en la cuenta real (sonda §0.A-3b, decision-log 06-oct) | 6 | ✅ dato medido, sin consumidor todavía |
 | `ingestion/source_registry.py` | Registro versionado de cobertura por fuente | 34 | ✅ |
@@ -114,11 +114,11 @@ corridas seguidas sin intermitencia.
 | `governance/estado.py` + `tests/test_estado_al_dia.py` | Control anti-desfase de este archivo (DG-6) | 16 | ✅ |
 | `integracion_demo/otp.py` + `conexion.py` | OTP solo para la cuenta que `GET /accounts` dice demo, URL solo `/ws/demo`, un OTP nuevo por conexión, reconexión con backoff, ping como parámetro | 113 (con `ejecucion.py`) | ✅ offline; ✅ conectó en vivo una vez: parte B, 08-oct, run 37716067033 (1 OTP, 1 conexión; el servidor la cerró a los 59,7 s sin mensajes) |
 | `integracion_demo/ejecucion.py` | Lista blanca de ocho mensajes; `buy` solo MULTUP/MULTDOWN con `stop_loss`; un `buy` sin respuesta no se reintenta | ídem | ✅ offline; ✅ una orden demo en vivo (parte B, 08-oct): MULTUP frxXAUUSD, stake 1 ×100, SL 0,10, vendida a los 62 s, profit −0,03 USD |
-| `integracion_demo/registro.py` + `reconciliar.py` | Registro demo JSONL con cadena de hashes y crudo aparte (porta `trade_ledger.py`, no lo importa); reconciliación con `profit_table` y `statement`, y comisión cotizada contra la del contrato (DB-1/DB-2, `SCHEMA_VERSION` 2): `reconciliado_profit`, `reconciliado_comision` y un global en que `no_verificable` nunca es `ok` | 111 | ✅ offline; 🟡 la condición d) de DG-3 todavía cuenta solo discrepancias (el cableado con `no_verificable` es del brief 10); 🟡 parser de `proposal_open_contract` sin fijar |
+| `integracion_demo/registro.py` + `reconciliar.py` | Registro demo JSONL con cadena de hashes y crudo aparte (porta `trade_ledger.py`, no lo importa); reconciliación con `profit_table` y `statement`, y comisión cotizada contra la del contrato (DB-1/DB-2, `SCHEMA_VERSION` 2): `reconciliado_profit`, `reconciliado_comision` y un global en que `no_verificable` nunca es `ok`; `conteo_de_marcas` da los tres conteos de d) de DG-3, con el mismo `ok_vigente` que `reconciliar` | 120 | ✅ offline; 🟡 parser de `proposal_open_contract` sin fijar |
 | `tests/test_integracion_demo_orden_live.py` | Parte B: UNA orden demo, 07..16-oct-2026, job `orden_demo` de `live-tests.yml` | 13 | ✅ corrió una vez: 08-oct, run 37716067033, job `orden_demo`, 1 passed en 124,7 s; informe en el decision-log del 14-oct |
 | `tests/test_guarda_integracion_demo.py` | `buy`/`sell`/`contract_update` solo en `integracion_demo/`; el paquete no nombra el canal real ni importa `execution/` ni lo congelado de `core/` | 34 | ✅ |
 | `tests/test_reglas_ordenes_demo.py` | La regla de órdenes demo de CLAUDE.md (OTP para una cuenta demo según `GET /accounts`, solo `/ws/demo`) y DG-7/DG-8 en el decision-log | 3 | ✅ |
-| `governance/paso_a_real.py` | DG-3 con D2: a) PSR y DSR solo sobre el histórico; d) sin discrepancias ni no_verificables, contados desde el registro demo (`reconciliar.conteo_de_marcas`); la latencia, sin umbral (`sin_evaluar`); zona gris de 6 meses | 31 | ✅; 🟡 la latencia de D2 sin umbral medido; los trades sin reconciliar no entran en d) (decisión pendiente) |
+| `governance/paso_a_real.py` | DG-3 con D2 y DB-3: a) PSR y DSR solo sobre el histórico; d) sin discrepancias, no_verificables ni trades terminados sin reconciliar, contados desde el registro demo (`reconciliar.conteo_de_marcas`), y `incumplidas_d` dice cuál falta; la latencia, sin umbral (`sin_evaluar`); zona gris de 6 meses | 43 | ✅; 🟡 la latencia de D2 sin umbral medido |
 | `governance/ensayos.py` + `ensayos.jsonl` | Registro único de ensayos (D3), append-only: los 3 previos fallidos y la concordancia del oro (no cuenta en el N); `ENSAYOS_PREVIOS_FALLIDOS` de H1 se deriva de acá | 35 | ✅ |
 | `config/constantes.json` | Registro de las 138 constantes de módulo, verificado contra el código en las dos direcciones | 30 | ✅ |
 | `tests/test_registro_linguistico*.py` | Español neutro: sin voseo en `.py` y en `.md` | 84 + 5 | ✅ |
@@ -532,15 +532,20 @@ salvedad que hay que resolver **antes** de revertir.
 `core/estadistica_sharpe.py`, y su N con el registro de ensayos (`governance/ensayos.py`).
 H1 v1 queda sellada con su fórmula de 2012.
 
-Pendiente del brief 10: las entradas de D1 y D4–D9, y las razones de D2, D3, D11 y D11-u.
-Esperan las tablas del memo de traspaso del 14-oct, que no están en el repo.
+Antes de fusionarlos, el #34 se ajusta a D6 (rezago de 1 día secundario, horizontes 1, 5 y 22)
+y el #33 declara las velas del oro que ya están en `data` (D7). H1 v2 escribe D5 y D12.
+
+Para el Admin, sin resolver (decision-log 17-oct): D4 contra la decisión a) del 06-oct sobre
+las fricciones; la razón de D2 contra el 25-sep sobre el deslizamiento; y el cron de
+`velas.yml` y `sonda.yml`, apagado en GitHub pero no en el repo (D8).
 
 La cola, en orden:
 
 1. Tanda 11–13: H2, H3 y H1 v2.
-2. Brief 8: sonda de profundidad diaria.
-3. Después, la concordancia diaria y la migración de `ingestion/deriv_ws.py` al WS público nuevo
-   (la legacy está muerta desde el 01-oct).
+2. Brief 8: sonda de profundidad diaria (D1).
+3. Después, la concordancia diaria (D1: coincidencia ≥ 90 % con el año de Deriv) y la migración
+   de `ingestion/deriv_ws.py` al WS público nuevo (la legacy está muerta desde el 01-oct, y es
+   el 520 que dejó en rojo a `velas.yml`).
 
 **H-ORB-oro: pausada (D11)** hasta tener 756 días hábiles de M5 de Deriv (D11-u); ver el
 semáforo.
