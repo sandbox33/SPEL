@@ -163,15 +163,15 @@
     {
       "nombre": "ENSAYOS_PREVIOS_FALLIDOS",
       "modulo": "core.preregistro_h1",
-      "categoria": "parametro",
+      "categoria": "derivada",
       "evidencia": "provisional_sin_evidencia",
       "afecta_resultado": true,
       "fuente": "research/preregistro_h1.md (fusionado antes del backtest; ver tests/test_preregistro_h1.py).",
       "usado_en": [
         "core.preregistro_h1.N_INGENUO"
       ],
-      "notas": "Máscara Gödel, proxy de transfer entropy, EMA 20/63.",
-      "valor": 3
+      "notas": "Máscara Gödel, proxy de transfer entropy, EMA 20/63. Vale 3: tests/test_ensayos.py lo exige, y tests/test_preregistro_h1.py lo compara con 'Suman **3**' del documento sellado. Derivada desde el brief del Admin 10 (D3).",
+      "expresion": "governance.ensayos.previos_fallidos(): los fallidos con hipótesis 'previa a la Serie H' que cuentan en el N, en governance/ensayos.jsonl"
     },
     {
       "nombre": "ENTRENAMIENTO_INICIAL_BARRAS",
@@ -2589,6 +2589,90 @@
         "core.estadistica_sharpe.sr_estrella"
       ],
       "notas": "Literal y no np.euler_gamma: el módulo no importa numpy (brief del Admin 10, punto 2)."
+    },
+    {
+      "nombre": "RUTA_ENSAYOS",
+      "modulo": "governance.ensayos",
+      "categoria": "derivada",
+      "expresion": "Path(__file__).resolve().parent / 'ensayos.jsonl'",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 10, punto 3 (D3: registro único de ensayos), 17-oct-2026.",
+      "usado_en": [
+        "governance.ensayos.leer",
+        "governance.ensayos.agregar"
+      ],
+      "notas": "Absoluta: depende de dónde esté clonado el repo, como REGISTRY_PATH."
+    },
+    {
+      "nombre": "CAMPOS_ENSAYO",
+      "modulo": "governance.ensayos",
+      "categoria": "etiqueta",
+      "valor": [
+        "id",
+        "hipotesis",
+        "fecha",
+        "preregistro_sha256",
+        "activo",
+        "estado",
+        "cuenta_en_n",
+        "fuente",
+        "nota"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 10, punto 3 (D3: registro único de ensayos), 17-oct-2026. El brief nombra id, hipótesis, fecha, sha256 del pre-registro, activo, estado y si cuenta en el N; fuente y nota se agregan para que ningún ensayo entre sin su evidencia.",
+      "usado_en": [
+        "governance.ensayos.validar",
+        "governance.ensayos.agregar"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "ESTADOS_ENSAYO",
+      "modulo": "governance.ensayos",
+      "categoria": "etiqueta",
+      "valor": [
+        "aprobado",
+        "compuerta_roja",
+        "en_curso",
+        "fallido",
+        "pre-registrado"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 10, punto 3 (D3: registro único de ensayos), 17-oct-2026.",
+      "usado_en": [
+        "governance.ensayos.validar",
+        "governance.ensayos.previos_fallidos"
+      ],
+      "notas": "Conjunto cerrado: un estado nuevo pasa por acá."
+    },
+    {
+      "nombre": "HIPOTESIS_PREVIA_A_LA_SERIE_H",
+      "modulo": "governance.ensayos",
+      "categoria": "etiqueta",
+      "valor": "previa a la Serie H",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 10, punto 3 (D3: registro único de ensayos), 17-oct-2026. research/preregistro_h1.md §9: 'Ensayos previos sobre BTC, ya fallidos y documentados'.",
+      "usado_en": [
+        "governance.ensayos.previos_fallidos"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "DIAS_HABILES_M5_DERIV_PARA_REABRIR_H_ORB_ORO",
+      "modulo": "governance.ensayos",
+      "categoria": "parametro",
+      "valor": 756,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "D11-u: H-ORB-oro se reabre con 756 días hábiles de M5 de Deriv. Decisión delegada por el Admin en el auditor el 14-oct-2026, registrada por el brief del Admin 10. La razón está en claude/SPEL_memo_traspaso_2026-10-14.md §2, que no está en el repo.",
+      "usado_en": [
+        "governance.ensayos.h_orb_oro_se_puede_reabrir"
+      ],
+      "notas": "Al 14-oct-2026 Deriv tiene 263 días comunes con TwelveData en la concordancia (data@bc2597a)."
     }
   ]
 }

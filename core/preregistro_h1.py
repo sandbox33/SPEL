@@ -17,6 +17,8 @@ de profundidad de `ingestion/velas.py`.
 
 from __future__ import annotations
 
+from governance.ensayos import previos_fallidos
+
 #: Lookbacks de la rejilla, en barras diarias.
 REJILLA_H1: tuple[int, ...] = (10, 20, 40, 80, 160, 320)
 
@@ -49,8 +51,10 @@ DSR_MINIMO = 0.90
 SHARPE_UMBRAL_ALTERNATIVA = 0.3
 
 #: Ensayos previos sobre BTC, fallidos y documentados (máscara Gödel, proxy
-#: de transfer entropy, EMA 20/63), que suman al N del DSR.
-ENSAYOS_PREVIOS_FALLIDOS = 3
+#: de transfer entropy, EMA 20/63), que suman al N del DSR. Se derivan del
+#: registro único de ensayos (D3, governance/ensayos.jsonl): una sola fuente
+#: para el N. El documento dice "Suman **3**" y su test lo compara.
+ENSAYOS_PREVIOS_FALLIDOS = previos_fallidos()
 
 #: N contado ingenuamente para la cota pesimista del DSR: los seis
 #: lookbacks, el ensemble y los tres previos.
