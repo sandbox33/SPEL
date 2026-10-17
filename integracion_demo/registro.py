@@ -60,6 +60,16 @@ outcome None: todavía no hay un resultado que nombrar.
 `evidencia` son las dos columnas que se agregan a su lista. `evidencia` es
 la del outcome ("con su evidencia", punto 3d) y, en una fila de
 reconciliación, la de la marca ok o discrepancia.
+
+══ SCHEMA_VERSION 2: LA COMISIÓN COTIZADA (DB-1, DB-2) ══
+
+Brief del Admin 9-R2 (17-oct-2026). Tres columnas nuevas:
+  · `commission_cotizada`: la comisión de la cotización con que se compró,
+    cruda (str, sin convertir). Va en la fila de `envío`.
+  · `reconciliado_profit` (ok, discrepancia) y `reconciliado_comision`
+    (ok, discrepancia, no_verificable, no_aplica): en la fila de
+    reconciliación, ver reconciliar.py.
+Las filas escritas con SCHEMA_VERSION 1 no las traen: no se rellenan.
 """
 
 from __future__ import annotations
@@ -82,7 +92,7 @@ from governance.persistence import (
 )
 from ingestion.kappa_deriv import KAPPA_DERIV
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 #: El prev_hash de la primera fila.
 HASH_INICIAL = "0" * 64
@@ -112,9 +122,22 @@ class Outcome(str, Enum):
 
 
 class Reconciliado(str, Enum):
+    """La marca global de una reconciliación. NO_VERIFICABLE nunca es OK."""
     PENDIENTE = "pendiente"
     OK = "ok"
     DISCREPANCIA = "discrepancia"
+    NO_VERIFICABLE = "no_verificable"
+
+
+#: Lo que puede valer `reconciliado_profit`.
+RECONCILIADO_PROFIT = frozenset({Reconciliado.OK.value, Reconciliado.DISCREPANCIA.value})
+
+
+class ReconciliadoComision(str, Enum):
+    OK = "ok"
+    DISCREPANCIA = "discrepancia"
+    NO_VERIFICABLE = "no_verificable"
+    NO_APLICA = "no_aplica"            # no hubo contrato
 
 
 class Evento(str, Enum):
@@ -145,11 +168,13 @@ CAMPOS: tuple[str, ...] = (
     "sl_solicitado", "sl_confirmado", "tp_confirmado",
     "quote_at_signal", "entry_spot", "exit_spot", "sl_precio",
     "slip_entrada", "slip_salida",
-    "commission_cruda", "commission_usd", "commission_modelada", "cost_ratio",
+    "commission_cotizada", "commission_cruda", "commission_usd", "commission_modelada",
+    "cost_ratio",
     "profit_deriv", "pnl_recalculado", "R_usd", "r_multiple",
     "outcome", "evidencia",
     "t_senal_ms", "t_envio_ms", "t_ack_ms", "purchase_time", "sell_time", "latencia_ms",
     "raw_sha256", "prev_hash", "row_hash", "reconciliado",
+    "reconciliado_profit", "reconciliado_comision",
 )
 
 #: Lo que pone el registro, no quien llama.
@@ -360,6 +385,16 @@ class Registro:
         if outcome is not None and not campos.get("evidencia"):
             raise ValueError("un outcome sin evidencia no entra")
         reconciliado = Reconciliado(campos.get("reconciliado") or Reconciliado.PENDIENTE).value
+        marca_profit = campos.get("reconciliado_profit")
+        if marca_profit is not None and marca_profit not in RECONCILIADO_PROFIT:
+            raise ValueError(f"reconciliado_profit={marca_profit!r}: solo ok o discrepancia")
+        if campos.get("reconciliado_comision") is not None:
+            campos["reconciliado_comision"] = ReconciliadoComision(
+                campos["reconciliado_comision"]).value
+        cotizada = campos.get("commission_cotizada")
+        if cotizada is not None and not isinstance(cotizada, str):
+            raise ValueError("commission_cotizada se guarda cruda, como str: "
+                             f"{type(cotizada).__name__}")
         cuenta = campos.get("account_id")
         if cuenta is not None and re.search(r"\d", str(cuenta)):
             raise ValueError("account_id sin enmascarar: el registro guarda solo el prefijo")

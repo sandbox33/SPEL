@@ -213,7 +213,8 @@ def test_los_campos_del_brief_estan_todos():
     r_multiple outcome t_senal_ms t_envio_ms t_ack_ms purchase_time sell_time
     latencia_ms raw_sha256 prev_hash row_hash reconciliado""".split()
     assert set(brief) <= set(CAMPOS)
-    assert set(CAMPOS) - set(brief) == {"evento", "evidencia"}
+    assert set(CAMPOS) - set(brief) == {"evento", "evidencia", "commission_cotizada",
+                                        "reconciliado_profit", "reconciliado_comision"}
 
 
 @pytest.mark.parametrize("evento", ["cierre", "rechazo", "no_enviada", "sin_respuesta"])
@@ -451,11 +452,15 @@ def test_el_parser_tolera_claves_faltantes():
 
 # ═══ Reconciliación ═══════════════════════════════════════════════════════
 
-def _cerrado(tmp_path) -> Registro:
+def _cerrado(tmp_path, *, cotizada: object = "0.02", cruda: object = "0.02") -> Registro:
+    """Un trade cerrado. Desde DB-2 trae su fila de envío con la comisión
+    cotizada, y la del contrato en el cierre: sin ellas, la comisión es
+    no_verificable y ningún trade llegaría a ok."""
     r = Registro(tmp_path)
+    r.agregar(evento="envio", trade_uuid=_U, commission_cotizada=cotizada)
     r.agregar(evento="cierre", trade_uuid=_U, contract_id=11, buy_transaction_id=501,
               sell_transaction_id=502, stake=1.0, profit_deriv="-0.10",
-              outcome="sl", evidencia="x", t_envio_ms=100_000)
+              outcome="sl", evidencia="x", t_envio_ms=100_000, commission_cruda=cruda)
     return r
 
 
@@ -470,7 +475,8 @@ def test_reconciliar_ok_agrega_una_linea_y_no_edita(tmp_path):
     r = _cerrado(tmp_path)
     antes = _lineas(tmp_path)
     nuevas = reconciliar(r, profit_table=_PT, statement=_ST, raw_profit_table="aa")
-    assert [n["reconciliado"] for n in nuevas] == ["ok"]
+    assert [(n["reconciliado"], n["reconciliado_profit"], n["reconciliado_comision"])
+            for n in nuevas] == [("ok", "ok", "ok")]
     despues = _lineas(tmp_path)
     assert despues[:len(antes)] == antes and len(despues) == len(antes) + 1
     assert json.loads(despues[-1])["evento"] == "reconciliacion"
@@ -505,11 +511,13 @@ def test_reconciliar_tolera_medio_centavo_y_no_mas(tmp_path):
     r = _cerrado(tmp_path)
     pt = [{**_PT[0], "sell_price": 0.9 + TOLERANCIA_USD * 0.9}]
     st = [_ST[0], {**_ST[1], "amount": pt[0]["sell_price"]}]
-    assert reconciliar(r, profit_table=pt, statement=st)[0]["reconciliado"] == "ok"
+    n = reconciliar(r, profit_table=pt, statement=st)[0]
+    assert (n["reconciliado"], n["reconciliado_profit"]) == ("ok", "ok")
     r2 = _cerrado(tmp_path / "b")
     pt = [{**_PT[0], "sell_price": 0.9 + TOLERANCIA_USD * 1.5}]
     st = [_ST[0], {**_ST[1], "amount": pt[0]["sell_price"]}]
-    assert reconciliar(r2, profit_table=pt, statement=st)[0]["reconciliado"] == "discrepancia"
+    n = reconciliar(r2, profit_table=pt, statement=st)[0]
+    assert (n["reconciliado"], n["reconciliado_profit"]) == ("discrepancia", "discrepancia")
 
 
 def test_la_tolerancia_es_medio_centavo(tmp_path):
@@ -529,11 +537,15 @@ def test_una_rechazada_con_una_compra_cerca_es_discrepancia(tmp_path):
     cerca = [{**_ST[0], "transaction_time": 100 + VENTANA_S}]
     n = reconciliar(r, profit_table=[], statement=cerca)
     assert n[0]["reconciliado"] == "discrepancia" and "contract_id 11" in n[0]["evidencia"]
+    assert (n[0]["reconciliado_profit"], n[0]["reconciliado_comision"]) == (
+        "discrepancia", "no_verificable")
     r2 = Registro(tmp_path / "b")
     r2.agregar(evento="rechazo", trade_uuid=_U, outcome="rechazada", evidencia="x",
                t_envio_ms=100_000)
     lejos = [{**_ST[0], "transaction_time": 100 + VENTANA_S + 1}]
-    assert reconciliar(r2, profit_table=[], statement=lejos)[0]["reconciliado"] == "ok"
+    n = reconciliar(r2, profit_table=[], statement=lejos)[0]
+    assert (n["reconciliado"], n["reconciliado_profit"], n["reconciliado_comision"]) == (
+        "ok", "ok", "no_aplica")
 
 
 def test_reconciliar_ignora_trades_abiertos(tmp_path):
@@ -546,6 +558,185 @@ def test_una_discrepancia_se_vuelve_a_reconciliar(tmp_path):
     r = _cerrado(tmp_path)
     assert reconciliar(r, profit_table=[], statement=_ST)[0]["reconciliado"] == "discrepancia"
     assert reconciliar(r, profit_table=_PT, statement=_ST)[0]["reconciliado"] == "ok"
+    marcas = [(f["reconciliado"], f["reconciliado_profit"], f["reconciliado_comision"])
+              for f in leer_registro(tmp_path).filas if f["evento"] == "reconciliacion"]
+    assert marcas == [("discrepancia", "discrepancia", "ok"), ("ok", "ok", "ok")]
+
+
+# ═══ La comisión cotizada contra la del contrato (DB-1, DB-2, brief 9-R2) ══
+#
+# El criterio viejo: la reconciliación marcaba `ok` con la nota "la comisión
+# no se reconcilia". El nuevo: la cotizada (fila de envío) y la del contrato
+# (`commission_cruda`, fila de cierre) se comparan en Decimal, y lo que no
+# se puede comparar es no_verificable, nunca ok.
+
+from integracion_demo.reconciliar import marca_comision, marca_global  # noqa: E402
+
+
+def _comision(tmp_path, cotizada, cruda):
+    n = reconciliar(_cerrado(tmp_path, cotizada=cotizada, cruda=cruda),
+                    profit_table=_PT, statement=_ST)[0]
+    return n["reconciliado_comision"], n["reconciliado"], json.loads(n["evidencia"])["comision"]
+
+
+def test_str_del_contrato_contra_float_de_la_cotizacion(tmp_path):
+    """La cotización trae 0.02 (float) y el contrato "0.02" (str): comprar
+    guarda str(0.02) y los dos pasan a Decimal desde su texto."""
+    assert _comision(tmp_path, str(0.02), "0.02")[:2] == ("ok", "ok")
+
+
+def test_un_float_largo_se_compara_por_su_texto(tmp_path):
+    cotizada = str(0.1 + 0.2 - 0.28)          # '0.020000000000000018'
+    assert cotizada != "0.02"
+    assert _comision(tmp_path, cotizada, "0.02")[0] == "ok"
+
+
+@pytest.mark.parametrize("cotizada, esperado", [
+    ("0.015", "ok"),         # exactamente medio centavo
+    ("0.025", "ok"),
+    ("0.0149", "discrepancia"),
+    ("0.0251", "discrepancia"),
+    ("0.02", "ok"),
+    ("0.03", "discrepancia"),
+])
+def test_la_frontera_de_medio_centavo(tmp_path, cotizada, esperado):
+    assert _comision(tmp_path, cotizada, "0.02")[0] == esperado
+
+
+def test_la_frontera_es_exacta_en_decimal_y_no_en_float(tmp_path):
+    """Con floats, 0.02 − 0.015 da 0.005000000000000001 y sería discrepancia."""
+    assert 0.02 - 0.015 > TOLERANCIA_USD
+    estado, _, detalle = _comision(tmp_path, "0.015", "0.02")
+    assert estado == "ok" and detalle["diferencia"] == "0.005"
+
+
+@pytest.mark.parametrize("cotizada, cruda", [
+    (None, "0.02"), ("0.02", None), (None, None),
+    ("abc", "0.02"), ("0.02", "NaN"), ("Infinity", "0.02"), ("", "0.02"),
+])
+def test_si_falta_una_o_no_es_un_numero_es_no_verificable(tmp_path, cotizada, cruda):
+    estado, global_, detalle = _comision(tmp_path, cotizada, cruda)
+    assert (estado, global_) == ("no_verificable", "no_verificable")
+    assert detalle["cotizada"] == cotizada and detalle["contrato"] == cruda
+
+
+def test_sin_contrato_y_sin_compra_cerca_es_no_aplica(tmp_path):
+    r = Registro(tmp_path)
+    r.agregar(evento="rechazo", trade_uuid=_U, outcome="rechazada", evidencia="x",
+              t_envio_ms=100_000)
+    n = reconciliar(r, profit_table=[], statement=[])[0]
+    assert (n["reconciliado"], n["reconciliado_profit"], n["reconciliado_comision"]) == (
+        "ok", "ok", "no_aplica")
+
+
+def test_una_discrepancia_de_comision_hace_discrepancia_global(tmp_path):
+    estado, global_, _ = _comision(tmp_path, "0.05", "0.02")
+    assert (estado, global_) == ("discrepancia", "discrepancia")
+
+
+@pytest.mark.parametrize("profit, comision, esperado", [
+    ("ok", "ok", "ok"),
+    ("ok", "no_aplica", "ok"),
+    ("ok", "no_verificable", "no_verificable"),
+    ("ok", "discrepancia", "discrepancia"),
+    ("discrepancia", "ok", "discrepancia"),
+    ("discrepancia", "no_aplica", "discrepancia"),
+    ("discrepancia", "no_verificable", "discrepancia"),
+    ("discrepancia", "discrepancia", "discrepancia"),
+])
+def test_la_marca_global(profit, comision, esperado):
+    assert marca_global(profit, comision) == esperado
+
+
+def test_marca_comision_sin_contrato_con_compra_cerca_no_es_no_aplica():
+    estado, _ = marca_comision(None, {"contract_id": None}, ["statement: compra cerca"])
+    assert estado == "no_verificable"
+
+
+def test_un_no_verificable_se_vuelve_a_reconciliar(tmp_path):
+    r = _cerrado(tmp_path, cotizada=None)
+    assert reconciliar(r, profit_table=_PT, statement=_ST)[0]["reconciliado"] == "no_verificable"
+    assert reconciliar(r, profit_table=_PT, statement=_ST)[0]["reconciliado"] == "no_verificable"
     marcas = [f["reconciliado"] for f in leer_registro(tmp_path).filas
               if f["evento"] == "reconciliacion"]
-    assert marcas == ["discrepancia", "ok"]
+    assert marcas == ["no_verificable", "no_verificable"]
+
+
+def test_el_envio_que_cuenta_es_el_del_mismo_trade(tmp_path):
+    r = Registro(tmp_path)
+    r.agregar(evento="envio", trade_uuid="otro-trade", commission_cotizada="0.02")
+    r.agregar(evento="envio", trade_uuid=_U)
+    r.agregar(evento="cierre", trade_uuid=_U, contract_id=11, buy_transaction_id=501,
+              sell_transaction_id=502, stake=1.0, profit_deriv="-0.10",
+              outcome="sl", evidencia="x", t_envio_ms=100_000, commission_cruda="0.02")
+    assert reconciliar(r, profit_table=_PT, statement=_ST)[0]["reconciliado_comision"] == (
+        "no_verificable")
+
+
+# ── Un registro escrito antes de DB-2 (SCHEMA_VERSION 1, sin la columna) ──
+
+_CAMPOS_V1 = [c for c in CAMPOS if c not in (
+    "commission_cotizada", "reconciliado_profit", "reconciliado_comision")]
+
+
+def _registro_v1(tmp_path, eventos: list[dict]) -> None:
+    prev, lineas = reg.HASH_INICIAL, []
+    for seq, campos in enumerate(eventos, start=1):
+        fila = {c: campos.get(c) for c in _CAMPOS_V1}
+        fila.update(seq=seq, schema_version=1, prev_hash=prev,
+                    reconciliado=campos.get("reconciliado", "pendiente"))
+        fila["row_hash"] = prev = reg.hash_de_fila(prev, fila)
+        lineas.append(json.dumps(fila, ensure_ascii=False))
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    (tmp_path / reg.ARCHIVO_REGISTRO).write_text("\n".join(lineas) + "\n", encoding="utf-8")
+
+
+_V1_TRADE = [
+    {"evento": "envio", "trade_uuid": _U},
+    {"evento": "cierre", "trade_uuid": _U, "contract_id": 11, "buy_transaction_id": 501,
+     "sell_transaction_id": 502, "stake": 1.0, "profit_deriv": "-0.10", "outcome": "sl",
+     "evidencia": "x", "t_envio_ms": 100_000, "commission_cruda": "0.02"},
+]
+
+
+def test_un_registro_viejo_sin_la_columna_es_no_verificable_y_no_se_rellena(tmp_path):
+    _registro_v1(tmp_path, _V1_TRADE)
+    antes = _lineas(tmp_path)
+    assert "commission_cotizada" not in json.loads(antes[0])
+    n = reconciliar(Registro(tmp_path), profit_table=_PT, statement=_ST)[0]
+    assert (n["reconciliado"], n["reconciliado_profit"], n["reconciliado_comision"]) == (
+        "no_verificable", "ok", "no_verificable")
+    despues = _lineas(tmp_path)
+    assert despues[:len(antes)] == antes, "las filas viejas no se tocan"
+    assert leer_registro(tmp_path).integro
+
+
+def test_un_ok_viejo_sin_marca_de_comision_se_reconcilia_de_nuevo(tmp_path):
+    _registro_v1(tmp_path, [*_V1_TRADE, {"evento": "reconciliacion", "trade_uuid": _U,
+                                         "reconciliado": "ok", "evidencia": "{}"}])
+    nuevas = reconciliar(Registro(tmp_path), profit_table=_PT, statement=_ST)
+    assert [n["reconciliado"] for n in nuevas] == ["no_verificable"]
+
+
+# ── Lo que el registro acepta ──────────────────────────────────────────────
+
+def test_la_cotizada_se_guarda_cruda_como_str(tmp_path):
+    r = Registro(tmp_path)
+    with pytest.raises(ValueError, match="cruda"):
+        r.agregar(evento="envio", trade_uuid=_U, commission_cotizada=0.02)
+    assert r.agregar(evento="envio", trade_uuid=_U,
+                     commission_cotizada="0.02")["commission_cotizada"] == "0.02"
+
+
+@pytest.mark.parametrize("campo, valor", [
+    ("reconciliado_profit", "no_verificable"), ("reconciliado_profit", "no_aplica"),
+    ("reconciliado_profit", "pendiente"), ("reconciliado_comision", "talvez"),
+    ("reconciliado", "no_aplica"),
+])
+def test_las_marcas_fuera_de_su_conjunto_no_entran(tmp_path, campo, valor):
+    with pytest.raises(ValueError):
+        Registro(tmp_path).agregar(evento="reconciliacion", trade_uuid=_U, **{campo: valor})
+
+
+def test_el_esquema_es_la_version_2():
+    assert reg.SCHEMA_VERSION == 2

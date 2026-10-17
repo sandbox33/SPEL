@@ -748,3 +748,39 @@ async def test_profit_table_y_statement_devuelven_las_transacciones(tmp_path):
         st, sha_st = await e.statement(limit=10)
     assert pt == [] and st == []
     assert {sha_pt, sha_st} <= set(leer_crudo(tmp_path))
+
+
+# ═══ La comisión cotizada (DB-1, brief 9-R2) ══════════════════════════════
+
+@pytest.mark.parametrize("cotizada, guardada", [
+    (0.02, "0.02"),                        # como la manda Deriv en proposal: float
+    ("0.02", "0.02"),
+    (0.1 + 0.2 - 0.28, "0.020000000000000018"),   # cruda: str(float), sin redondear
+    (None, None),
+])
+async def test_comprar_guarda_la_cotizada_cruda_en_el_envio(tmp_path, cotizada, guardada):
+    _, _, registro, _, conexion = _armar(tmp_path)
+    async with conexion as c:
+        trade = await Ejecutor(c, registro, _CTX).comprar(_ORDEN, commission_cotizada=cotizada)
+    assert trade.commission_cotizada == guardada
+    filas = leer_registro(tmp_path).filas
+    assert [(f["evento"], f["commission_cotizada"]) for f in filas] == [
+        ("envio", guardada), ("compra", None)]
+
+
+async def test_la_operacion_entera_reconcilia_la_comision(tmp_path):
+    """La cotizada (float, como en la parte B) contra la del contrato (str)."""
+    from integracion_demo.reconciliar import reconciliar
+    falso, _, registro, _, conexion = _armar(tmp_path)
+    dormir, reloj = _reloj()
+    async with conexion as c:
+        e = Ejecutor(c, registro, _CTX)
+        trade = await e.comprar(_ORDEN, quote_at_signal=2399.90, commission_cotizada=0.02)
+        await e.seguir_hasta_cierre(trade, vender_a_los_s=60, cada_s=5, esperar_cierre_s=30,
+                                    dormir=dormir, reloj_s=reloj)
+    pt = [{"contract_id": 11, "buy_price": 1.0, "sell_price": 1.03}]
+    st = [{"action_type": "buy", "contract_id": 11, "transaction_id": 501, "amount": -1.0},
+          {"action_type": "sell", "contract_id": 11, "transaction_id": 502, "amount": 1.03}]
+    n = reconciliar(registro, profit_table=pt, statement=st)[0]
+    assert (n["reconciliado"], n["reconciliado_profit"], n["reconciliado_comision"]) == (
+        "ok", "ok", "ok")

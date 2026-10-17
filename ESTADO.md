@@ -10,15 +10,15 @@
 > Este archivo se lee primero en cada chat nuevo. Frente a un chat que lo contradiga sin
 > evidencia, gana el archivo; frente al código, gana el código.
 
-**Última actualización:** 16 oct 2026 — tanda A–D, tarea C: reintentos con Retry-After en `fetch_pagina` (issue #39), apilada sobre la tarea A (brief del Admin 9-R), en la rama `claude/tanda-c-reintentos`.
+**Última actualización:** 17 oct 2026 — brief del Admin 9-R2: DB-1 y DB-2 implementadas (la comisión cotizada contra la del contrato, `reconciliado_profit`, `reconciliado_comision` y un global en que `no_verificable` nunca es `ok`), en la rama `claude/tanda-b-reconciliacion`.
 
 **Commit de referencia:** `ed70664` (merge del PR #43).
 
-**Tests:** **1769** recolectados en `tests/`, en 58 archivos, medido con
-`pytest --collect-only -q tests/` el 16-oct-2026 sobre esta rama. Más 74 en `research/tests/`,
+**Tests:** **1813** recolectados en `tests/`, en 58 archivos, medido con
+`pytest --collect-only -q tests/` el 17-oct-2026 sobre esta rama. Más 74 en `research/tests/`,
 que no bloquean.
 
-Desfase: **ninguno**. El commit de referencia es el merge del PR #43 (tarea D), el último de `main`. Esta rama se apila sobre la del PR #40 (tarea A) y entra con el PR #42; el #41 (tarea B) se apila sobre esta. Los PRs #33 y #34 siguen abiertos y
+Desfase: **dos PRs** (#40 y #42) fusionados después del commit de referencia, que es el merge del PR #43 (tarea D) como pide el brief 9-R2; DG-6 admite hasta 3. Esta actualización entra con el PR #41. Los PRs #33 y #34 siguen abiertos y
 en pausa. `tests/test_estado_al_dia.py` falla si hay **más
 de 3 PRs fusionados** desde el commit de referencia de arriba (DG-6).
 
@@ -56,8 +56,8 @@ Eso no reabre Fase 1 ni cambia su resultado; ordena el código para que coincida
 
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-**1769 recolectados en `tests/`, en 58 archivos**, contados con `pytest --collect-only -q`
-el 16-oct-2026 sobre la rama `claude/tanda-c-reintentos`, no copiados de ningún
+**1813 recolectados en `tests/`, en 58 archivos**, contados con `pytest --collect-only -q`
+el 17-oct-2026 sobre la rama `claude/tanda-b-reconciliacion`, no copiados de ningún
 documento. Sin credenciales se saltan 6, cada uno por su propio `skipif`: el test `live` de
 TwelveData, el guardián de secretos de `tests/test_sources.py`, las dos sondas de endpoints de
 Deriv, la 3b de TwelveData y la orden demo de la parte B.
@@ -101,10 +101,10 @@ corridas seguidas sin intermitencia.
 | `execution/circuit_breaker.py` + `execution_guard.py` | Guardrails duros — congelados hasta F4 | 14 + 17 | ✅ |
 | `governance/persistence.py` + `secrets.py` | 5 streams (TRADE_LEDGER desde el PR #25), SecretKey único | 19 + 10 | ✅ |
 | `governance/estado.py` + `tests/test_estado_al_dia.py` | Control anti-desfase de este archivo (DG-6) | 16 | ✅ |
-| `integracion_demo/otp.py` + `conexion.py` | OTP solo para la cuenta que `GET /accounts` dice demo, URL solo `/ws/demo`, un OTP nuevo por conexión, reconexión con backoff, ping como parámetro | 108 (con `ejecucion.py`) | ✅ offline; 🟡 nunca conectó en vivo |
-| `integracion_demo/ejecucion.py` | Lista blanca de ocho mensajes; `buy` solo MULTUP/MULTDOWN con `stop_loss`; un `buy` sin respuesta no se reintenta | ídem | ✅ offline; 🟡 la parte B no corrió |
-| `integracion_demo/registro.py` + `reconciliar.py` | Registro demo JSONL con cadena de hashes y crudo aparte (porta `trade_ledger.py`, no lo importa); reconciliación con `profit_table` y `statement` | 73 | ✅ offline; 🟡 parser de `proposal_open_contract` sin fijar |
-| `tests/test_integracion_demo_orden_live.py` | Parte B: UNA orden demo, 07..16-oct-2026, job `orden_demo` de `live-tests.yml` | 13 | 🟡 escrito, no disparado |
+| `integracion_demo/otp.py` + `conexion.py` | OTP solo para la cuenta que `GET /accounts` dice demo, URL solo `/ws/demo`, un OTP nuevo por conexión, reconexión con backoff, ping como parámetro | 113 (con `ejecucion.py`) | ✅ offline; ✅ conectó en vivo una vez: parte B, 08-oct, run 37716067033 (1 OTP, 1 conexión; el servidor la cerró a los 59,7 s sin mensajes) |
+| `integracion_demo/ejecucion.py` | Lista blanca de ocho mensajes; `buy` solo MULTUP/MULTDOWN con `stop_loss`; un `buy` sin respuesta no se reintenta | ídem | ✅ offline; ✅ una orden demo en vivo (parte B, 08-oct): MULTUP frxXAUUSD, stake 1 ×100, SL 0,10, vendida a los 62 s, profit −0,03 USD |
+| `integracion_demo/registro.py` + `reconciliar.py` | Registro demo JSONL con cadena de hashes y crudo aparte (porta `trade_ledger.py`, no lo importa); reconciliación con `profit_table` y `statement`, y comisión cotizada contra la del contrato (DB-1/DB-2, `SCHEMA_VERSION` 2): `reconciliado_profit`, `reconciliado_comision` y un global en que `no_verificable` nunca es `ok` | 111 | ✅ offline; 🟡 la condición d) de DG-3 todavía cuenta solo discrepancias (el cableado con `no_verificable` es del brief 10); 🟡 parser de `proposal_open_contract` sin fijar |
+| `tests/test_integracion_demo_orden_live.py` | Parte B: UNA orden demo, 07..16-oct-2026, job `orden_demo` de `live-tests.yml` | 13 | ✅ corrió una vez: 08-oct, run 37716067033, job `orden_demo`, 1 passed en 124,7 s; informe en el decision-log del 14-oct |
 | `tests/test_guarda_integracion_demo.py` | `buy`/`sell`/`contract_update` solo en `integracion_demo/`; el paquete no nombra el canal real ni importa `execution/` ni lo congelado de `core/` | 34 | ✅ |
 | `tests/test_reglas_ordenes_demo.py` | La regla de órdenes demo de CLAUDE.md (OTP para una cuenta demo según `GET /accounts`, solo `/ws/demo`) y DG-7/DG-8 en el decision-log | 3 | ✅ |
 | `governance/paso_a_real.py` | DG-3: las cuatro condiciones del paso de demo a real y la zona gris de 6 meses (decision-log 29-sep) | 21 | ✅ |
@@ -515,17 +515,19 @@ salvedad que hay que resolver **antes** de revertir.
 
 ## ▶️ PRÓXIMO PASO CONCRETO
 
-**Registrar la segunda corrida de `SPEL velas intradía del oro`** (`velas_intradia.yml`). El
-Admin la volvió a disparar el 14-oct sobre `6c1d29c` (run 38610611624, terminó en éxito); su
-informe —datos, calendario, concordancia y compuerta del 90 %— no está leído ni registrado y
-espera el brief que lo haga. La primera corrida (08-oct, run 37721686439) escribió Deriv, y
-TwelveData se cortó en el 400 del fondo sin escribir nada.
+**Brief 10 (gobernanza).** Cablea la condición d) de DG-3 con `no_verificable`
+(`governance/paso_a_real.py`) y registra la pausa de H-ORB-oro (D11). Las marcas que va a leer
+ya existen: `reconciliado_comision` y el global con `no_verificable` (DB-1/DB-2, brief 9-R2).
 
-La parte B (PR #36) ya corrió: el 08-oct, run 37716067033, job `orden_demo` en verde. Su
-informe espera el brief que lo registre.
+La cola, en orden:
 
-Siguen abiertas la migración de `ingestion/deriv_ws.py` al WS público nuevo (la legacy está
-muerta desde el 01-oct) y el brief de la batería multi-estrategia (DG-8).
+1. Brief 10, gobernanza.
+2. Tanda 11–13: H2, H3 y H1 v2.
+3. Brief 8: sonda de profundidad diaria.
+4. Después, la concordancia diaria y la migración de `ingestion/deriv_ws.py` al WS público nuevo
+   (la legacy está muerta desde el 01-oct).
+
+**H-ORB-oro: pausada (D11).** La registra el brief 10.
 
 *(Lo que estaba acá —"decidir qué mide el éxito de Fase 2"— lo contestan los
 pre-registros de la Serie H —Sharpe neto fuera de muestra, PSR, DSR y la comparación contra

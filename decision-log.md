@@ -2565,3 +2565,268 @@ Unificarlo con `ingestion/reintentos.py` queda pendiente de un brief.
 - la clasificación de red;
 - el camino sin limitador;
 - el cableado de la ingesta.
+
+## 2026-10-14 — Tarea B de la tanda del 14-oct: la reconciliación de la parte B, DETENIDA
+
+**Contexto:** brief del Admin del 14-oct-2026 (9), tarea B. La regla de la tanda: si algo del
+brief contradice el código, los datos o el decision-log, la tarea se detiene, se reporta en un PR
+borrador y se pasa a la siguiente. **No se cambió código.** Este PR solo trae este informe y las
+filas de ESTADO.md que estaban mal (punto 4).
+
+### El informe de la parte B (run 37716067033, job `orden_demo`, 08-oct, `056055e`)
+
+Leído del log del job (el test lo imprime como una línea JSON). 1 passed en 124,73 s.
+
+- **Cuentas:** `GET /accounts` devolvió una demo (`DOT********`) y una real (`ROT********`),
+  las dos activas. OTP pedido para la demo; 1 OTP y 1 conexión.
+- **Orden:** MULTUP sobre frxXAUUSD, stake 1 (el mínimo que dio la cotización de sondeo),
+  multiplicador 100, stop loss 0,10 USD. Comisión cotizada 0,02 (float en `proposal`).
+  `contract_id` 16063879879, latencia del `buy` 288 ms.
+- **Cierre:** `sell` propio a los 62 s (`purchase_time` 1791425094, `sell_time` 1791425156),
+  outcome `sell_tiempo`, profit de Deriv −0,03 USD, r_multiple −0,3, `commission_usd` 0,02 igual a
+  la modelada (`cost_ratio` 1,0). En el contrato la comisión llegó como string ("0.02").
+- **Balance:** 10000,00 → 9999,97 USD.
+- **Registro:** íntegro, 6 filas (envío, compra, seguimiento, venta, cierre, reconciliación), cabeza
+  `bccd4fab…`.
+- **Reconciliación:** `reconciliado: ok`, sin problemas, con la nota "la comisión no aparece en
+  profit_table ni en statement: no se reconcilia".
+- **Esquema medido sobre todo lo crudo:** `commission` aparece solo en `proposal` y en
+  `proposal_open_contract`. Las respuestas crudas de `profit_table` (sha256 `6ee6140f…`) y
+  `statement` (`14d631ac…`) no la traen.
+- **Cierre por inactividad:** `cierre_inactivo_s` 59,705 s, con tope de 300 s.
+
+### Por qué se detuvo
+
+**1. El punto 2 contradice la DG-3 del 29-sep.** El brief pide que la reconciliación sea limpia
+solo si `reconciliado_profit` y `reconciliado_comision` son `ok`, y que una comisión que no se
+puede contrastar sea `no_verificable`, nunca `ok`.
+- La DG-3 del 29-sep (entrada "DG-3 reemplazada") dice "d) reconciliación demo sin
+  discrepancias". `governance/paso_a_real.py` lo implementa así:
+  `discrepancias_reconciliacion != 0` incumple d). Una comisión `no_verificable` no es una
+  discrepancia: con la DG-3 vigente, d) se cumple; con la regla del brief, no.
+- **La consecuencia la fijan los datos:** la comisión no aparece en `profit_table` ni en
+  `statement`. Lo dicen los esquemas oficiales (entrada del 06-oct, interpretación 7) y ahora
+  también las respuestas crudas de la parte B. Con la regla del brief, TODA operación tendría la
+  comisión `no_verificable`, d) no se cumpliría nunca, y toda hipótesis terminaría en
+  `VENCIDO_PASA_A_H2` a los 6 meses. Eso cambia el efecto de la decisión del 29-sep, y lo decide
+  el Admin.
+
+**2. El punto 1 choca con tests existentes que codifican el comportamiento viejo.** CLAUDE.md:
+"Si un test existente codifica el comportamiento viejo, repórtalo; no lo edites."
+- `tests/test_integracion_demo_registro.py::test_los_campos_del_brief_estan_todos` fija que las
+  columnas son las del brief del 06-oct (3) más `evento` y `evidencia`, y nada más. Dos columnas
+  nuevas lo rompen.
+- Cuatro tests del mismo archivo esperan `reconciliado == "ok"` en un trade cerrado cuya
+  comisión no se contrastó: `test_reconciliar_ok_agrega_una_linea_y_no_edita`,
+  `test_reconciliar_tolera_medio_centavo_y_no_mas`, `test_una_discrepancia_se_vuelve_a_reconciliar`
+  y `test_reconciliar_no_repite_un_ok`, que además fija que un `ok` no se vuelve a reconciliar.
+  Ese es justamente el comportamiento que el brief corrige.
+- Un quinto, `test_una_rechazada_con_una_compra_cerca_es_discrepancia`, espera `ok` para una
+  orden sin contrato y sin compras cerca. Ahí no hay comisión que contrastar, y el brief no dice
+  qué marca lleva: es otra decisión pendiente.
+
+### Lo que el Admin tiene que decidir
+
+- Si d) pasa a exigir comisión `ok`, cómo se contrasta la comisión. Sin un dato de Deriv que la
+  separe, d) queda inalcanzable. Si en cambio d) sigue siendo "sin discrepancias", con
+  `no_verificable` declarado aparte.
+- Autorizar la edición de los tests nombrados arriba, o el esquema de las columnas nuevas.
+
+### Punto 3: 59,7 s frente a ~122 s (solo diagnóstico)
+
+- **59,705 s** es `cierre_inactivo_s`: `ConexionDemo.medir_cierre_inactivo` empieza a contar
+  después de la última respuesta pedida (`statement`) y para cuando `recv` falla porque el
+  servidor cerró. Es el tiempo **sin ningún mensaje** hasta el cierre. El socket se abre sin el
+  ping de protocolo de `websockets` (`ping_interval=None`).
+- **122,465 s** es lo que da el `historial` de la conexión en el mismo informe: `conectada` en
+  `t_ms` 1791425094011 y `descartada` ("cierre por inactividad") en 1791425216476. Es la **vida
+  entera de la conexión**: cotización, compra, 62 s de seguimiento, venta, reconciliación y los
+  59,7 s de silencio.
+- Las dos cuadran: 1791425216,476 − 59,705 = 1791425156,771, menos de un segundo después del
+  `sell_time` (1791425156), que es cuando terminaron la venta y las dos consultas de la
+  reconciliación. El `historial` usa el reloj local y `sell_time` el del servidor.
+- **No encontré otro registro de ~122 s.** Busqué "122", "inactiv" y `cierre_inactivo` en el
+  decision-log, ESTADO.md y el código. Si la cifra del brief viene del `historial`, las dos cifras
+  no son dos mediciones del mismo fenómeno: miden cosas distintas.
+- **No verificado:**
+  - si Deriv cuenta la inactividad desde el último mensaje del cliente o desde el último del
+    servidor;
+  - si ~60 s es un límite fijo. Es una sola medición, y Deriv no lo documenta.
+
+## 2026-10-16 — Brief 9-R, tarea 3 (DB-1, DB-2): auditoría de la comisión, y por qué se detiene
+
+**Contexto:** brief del Admin 9-R, tarea 3, con las decisiones DB-1 y DB-2 del 14-oct-2026:
+- columnas `reconciliado_profit` y `reconciliado_comision`;
+- `reconciliado_comision` es `ok` si "la comisión del contrato, la cotizada y la registrada
+  coinciden" a medio centavo;
+- `no_verificable` si falta alguno de los tres valores;
+- `no_verificable` nunca es `ok`.
+
+El punto 1 pide auditar antes dónde quedan hoy las tres. **No se cambió código.**
+
+### Auditoría: dónde está cada comisión hoy
+
+| comisión | dónde la recibe el código | qué guarda el registro |
+|---|---|---|
+| **del contrato** (`proposal_open_contract.commission`) | `registro.derivados_de_cierre(poc)` | la fila de `cierre`: `commission_cruda` = `str(poc["commission"])` y `commission_usd` = `num(...)` si la moneda es USD |
+| **cotizada** (`proposal.commission`) | `Ejecutor.cotizar` devuelve la respuesta entera; nadie la guarda en una fila | **nada**: solo la respuesta cruda en `crudo.jsonl`, sin `trade_uuid` ni enlace a la compra. En la parte B la lee el test live, no `integracion_demo/` |
+| **registrada** | — | no hay una tercera fuente. `commission_usd` y `commission_cruda` salen del mismo `poc`. `commission_modelada` es κ·nocional, el modelo, no un valor de Deriv |
+
+`reconciliar.py` solo recibe el registro, `profit_table` y `statement`, y en `profit_table` y
+`statement` no viene ninguna comisión (entrada del 14-oct).
+
+### La contradicción
+
+La regla `ok` de DB-2 compara tres valores, y el registro tiene uno:
+- **La cotizada no llega a la reconciliación por ningún camino.** Con el código de hoy, toda
+  operación real quedaría con la comisión `no_verificable`, y la parte B no podría dar `ok`
+  como pide el punto 6.
+- **"La registrada" no tiene un referente propio:** comparar `commission_cruda` con
+  `commission_usd` compara un valor consigo mismo.
+
+Para cumplir DB-2 hay que decidir un esquema que el brief no fija: dónde se registra la
+cotizada y cómo se enlaza con la compra (una o dos cotizaciones antes de cada `buy`; en la
+parte B hubo dos). Eso es elegir, y la regla de la tanda dice detenerse y reportar.
+
+### Propuesta para el Admin (no implementada)
+
+1. **`Ejecutor.comprar` recibe la comisión de la cotización que usó** y la escribe en la fila de
+   `envío`, en una columna nueva `commission_cotizada` (crudo, como string). Así queda junto al
+   `trade_uuid` y antes de la compra.
+2. **"Registrada" = `commission_usd`** de la fila de cierre (el valor con que el registro calcula
+   costos y `pnl_recalculado`). **"Del contrato" = `commission_cruda`.** Si el Admin entiende
+   otra cosa por "registrada" (por ejemplo, `commission_modelada`), la regla cambia: comparar
+   contra el modelo mide el costo contra κ, no la reconciliación.
+3. Con eso, el resto de DB-2 se implementa tal cual:
+   - Decimal para el string del contrato y para el float de la cotización;
+   - `no_aplica` sin contrato;
+   - `no_verificable` se vuelve a reconciliar;
+   - un `ok` no se repite.
+
+Hacerlo exige autorizar, además de los cinco tests nombrados, la columna nueva y el cambio de
+firma de `comprar` (y su uso en `tests/test_integracion_demo_orden_live.py`).
+
+### Punto 6
+
+El crudo de la parte B (run 37716067033) **no está** en el repo ni en la rama `data`:
+- `git ls-tree` de `data` no tiene nada de la demo;
+- `git log -S 16063879879` solo encuentra el decision-log;
+- el test live escribe el registro en un directorio temporal del runner, que "se pierde con el
+  job" (docstring de `tests/test_integracion_demo_orden_live.py`).
+
+No se reconstruyó. Lo que queda es el informe del log: la cotización trajo 0.02 como float y el
+contrato "0.02" como string.
+
+### Lo que sí se hizo en esta rama
+
+- El informe de la parte B y las filas corregidas de ESTADO.md del PR #41, rebasados sobre la
+  tarea C.
+- El "Próximo paso" de ESTADO.md reescrito con la cola del brief 9-R (tarea 4).
+- `governance/paso_a_real.py` no se tocó.
+
+## 2026-10-17 — DB-1 y DB-2 implementadas: la comisión cotizada contra la del contrato (brief 9-R2)
+
+**Contexto:** brief del Admin 9-R2. Aprueba la propuesta del 16-oct, con una corrección: DB-1
+compara **dos** comisiones, no tres.
+- `commission_usd` sale del mismo contrato que `commission_cruda`.
+- `commission_modelada` es el modelo κ, que vigila la condición c), no la d).
+
+### El cambio
+
+- **`Ejecutor.comprar(..., commission_cotizada=None)`**, con el mismo patrón que
+  `quote_at_signal`.
+  - Guarda el valor en el `Trade` y lo escribe crudo en la fila de `envío`, como `str(valor)`
+    sin redondear. El float 0.02 queda "0.02", y 0.1+0.2−0.28 queda "0.020000000000000018".
+  - `Registro.agregar` rechaza una `commission_cotizada` que no sea str.
+- **Columnas nuevas:** `commission_cotizada`, `reconciliado_profit` y `reconciliado_comision`.
+  `SCHEMA_VERSION` pasa de 1 a 2.
+- **`Reconciliado` suma `no_verificable`.** `reconciliado_profit` solo acepta ok o
+  discrepancia. `ReconciliadoComision` acepta ok, discrepancia, no_verificable y no_aplica.
+- **`reconciliar`** compara, en Decimal desde el texto, la cotizada (fila de `envío` del mismo
+  `trade_uuid`) con `commission_cruda` (fila de cierre):
+  - `ok`: diferencia ≤ 0,005;
+  - `discrepancia`: más que eso;
+  - `no_verificable`: falta alguna o no es un número finito;
+  - `no_aplica`: no hubo contrato y no hay compra cerca.
+- **Marca global:** `ok` solo si profit es ok y la comisión es ok o no_aplica; `discrepancia`
+  si cualquiera lo es; `no_verificable` en todo lo demás.
+- La evidencia de la fila trae la cotizada, la del contrato y la diferencia. Se quitó la nota
+  vieja "la comisión no se reconcilia".
+- **La parte B** (`tests/test_integracion_demo_orden_live.py`) le pasa a `comprar`
+  `commission_cotizada=prop.get("commission")`.
+- `governance/paso_a_real.py` y `execution/` no se tocaron.
+
+### Interpretaciones
+
+- **Una orden sin `contract_id` CON una compra cerca en `statement`:** la comisión es
+  `no_verificable`, no `no_aplica`. El contrato pudo existir y su comisión no se ve. El global
+  ya es discrepancia por el profit.
+- **Un `ok` escrito antes de DB-2** (fila de reconciliación sin `reconciliado_comision`) no
+  cuenta como ok: el trade se reconcilia de nuevo en una fila nueva, que da `no_verificable`
+  porque el envío viejo no trae la cotizada. Las filas viejas no se tocan ni se rellenan.
+- **`no_verificable` se vuelve a reconciliar**, como una discrepancia, y un `ok` no se repite.
+- **`SCHEMA_VERSION` 2** marca las filas con las columnas nuevas. Las de la versión 1 no las
+  tienen, y así se distinguen.
+
+### Tests editados: el assert viejo y el nuevo
+
+Todos en `tests/test_integracion_demo_registro.py`.
+
+| test | assert viejo | assert nuevo |
+|---|---|---|
+| `test_los_campos_del_brief_estan_todos` | `set(CAMPOS) - set(brief) == {"evento", "evidencia"}` | `== {"evento", "evidencia", "commission_cotizada", "reconciliado_profit", "reconciliado_comision"}` |
+| `test_reconciliar_ok_agrega_una_linea_y_no_edita` | `[n["reconciliado"] for n in nuevas] == ["ok"]` | `[(reconciliado, reconciliado_profit, reconciliado_comision) …] == [("ok", "ok", "ok")]` |
+| `test_reconciliar_tolera_medio_centavo_y_no_mas` | `…["reconciliado"] == "ok"` y `== "discrepancia"` | `(reconciliado, reconciliado_profit) == ("ok", "ok")` y `== ("discrepancia", "discrepancia")` |
+| `test_una_discrepancia_se_vuelve_a_reconciliar` | `marcas == ["discrepancia", "ok"]` | `marcas == [("discrepancia", "discrepancia", "ok"), ("ok", "ok", "ok")]` (global, profit, comisión) |
+| `test_una_rechazada_con_una_compra_cerca_es_discrepancia` | `reconciliar(r2, …)[0]["reconciliado"] == "ok"` | `(reconciliado, reconciliado_profit, reconciliado_comision) == ("ok", "ok", "no_aplica")`; y para la compra cerca, se agregó `(profit, comisión) == ("discrepancia", "no_verificable")` |
+
+**Además, un cambio fuera de los cinco, que se reporta:** el fixture `_cerrado` del mismo archivo.
+- Desde ahora arma la fila de `envío` con `commission_cotizada="0.02"` y el cierre con
+  `commission_cruda="0.02"` (parametrizables).
+- Sin eso, ningún trade cerrado llega a `ok`, y `test_reconciliar_no_repite_un_ok` (que el brief
+  9-R mantiene) fallaría.
+- No se cambió ningún assert fuera de los cinco tests.
+
+### Tests nuevos (criterio viejo contra nuevo)
+
+- **`tests/test_integracion_demo_registro.py`:**
+  - str contra float;
+  - un float largo comparado por su texto;
+  - la frontera de medio centavo (0,015, 0,025, 0,0149, 0,0251), y que en float sería
+    discrepancia;
+  - los cuatro valores;
+  - la marca global en las 8 combinaciones;
+  - `no_verificable` que se vuelve a reconciliar;
+  - el envío del mismo trade;
+  - un registro de la versión 1 sin la columna, y su `ok` viejo;
+  - las marcas fuera de su conjunto.
+- **`tests/test_integracion_demo_ejecucion.py`:** `comprar` guarda la cotizada cruda solo en el
+  envío, y la operación entera reconcilia la comisión.
+- **`tests/test_integracion_demo_orden_live.py`:** la parte B, contra el falso, reconcilia la
+  comisión en `ok` (el profit da discrepancia porque el falso no trae nada en `profit_table`).
+
+### Mutantes
+
+22 en total, 21 atrapados:
+- frontera `<`;
+- Decimal desde el float binario y resta en float;
+- falta uno es ok;
+- NaN aceptado;
+- compra cerca como no_aplica y no_aplica como no_verificable;
+- tres de la marca global;
+- un ok viejo que cuenta y no_verificable que no se repite;
+- envío de otro trade;
+- la columna sin escribir;
+- los tres controles del registro;
+- la versión;
+- `comprar` que no escribe o redondea;
+- la parte B que no la pasa.
+
+**El que sobrevive es equivalente.** Quitar `profit == ok` de la regla de ok no cambia nada,
+porque la discrepancia se descarta antes y el profit solo puede valer ok o discrepancia. La
+condición queda explícita, tal como la escribe DB-2.
+
+### Punto 6 de 9-R
+
+Sigue sin crudo de la parte B en el repo ni en `data`, y no se reconstruyó. El test contra el
+falso fija que la parte B escribe y compara la cotizada.
