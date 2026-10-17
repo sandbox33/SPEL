@@ -3,17 +3,28 @@ governance/paso_a_real.py
 ===========================
 DG-3: cuándo una hipótesis puede pasar de demo a capital real. Decisión del
 Admin del 29-sep-2026, que REEMPLAZA la del 25-sep ("6 meses de forward en
-demo"). Ver decision-log.md, 2026-09-29, y governance/PRINCIPLES.md #6.
+demo"), modificada por D2 (14-oct-2026) en a) y d). Ver decision-log.md,
+2026-09-29 y 2026-10-17, y governance/PRINCIPLES.md #6.
 
 ══ LAS CUATRO CONDICIONES, TODAS ══
 
-  a) PSR ≥ 0,90 y DSR ≥ 0,90 sobre retornos diarios de cartera, en la serie
-     COMBINADA histórico + demo, con el mismo N de ensayos que el
-     pre-registro. Este módulo recibe los dos números ya calculados; cómo se
-     calculan lo fija cada pre-registro.
+  a) PSR ≥ 0,90 y DSR ≥ 0,90 sobre retornos diarios de cartera, SOLO en el
+     backtest histórico (D2: dejó de ser la serie combinada histórico +
+     demo), con el N del registro de ensayos (governance/ensayos.py). Este
+     módulo recibe los dos números ya calculados (core/estadistica_sharpe.py
+     tiene las fórmulas).
   b) ≥ 30 días de demo y ≥ 20 operaciones cerradas en demo.
   c) Costos observados en demo ≤ 1,25 × costos modelados.
-  d) Reconciliación demo sin discrepancias.
+  d) Reconciliación demo sin discrepancias NI no_verificables (D2 y DB-1):
+     los dos conteos salen de la marca global `reconciliado` del registro
+     demo, la última de cada trade
+     (integracion_demo.reconciliar.conteo_de_marcas).
+
+══ LA LATENCIA, SIN UMBRAL ══
+
+D2 nombra la latencia, pero no hay un umbral medido, y este módulo no
+inventa uno. No se evalúa, y `Evaluacion.sin_evaluar` lo dice en cada
+veredicto: un APTO no cubre la latencia.
 
 ══ ZONA GRIS ══
 
@@ -39,10 +50,11 @@ import calendar
 from dataclasses import dataclass
 from datetime import date
 
-#: a) Probabilistic Sharpe Ratio mínimo sobre histórico + demo.
+#: a) Probabilistic Sharpe Ratio mínimo, sobre el backtest histórico (D2).
 PSR_MINIMO = 0.90
 
-#: a) Deflated Sharpe Ratio mínimo, con el mismo N que el pre-registro.
+#: a) Deflated Sharpe Ratio mínimo, sobre el backtest histórico (D2), con el
+#: N del registro de ensayos.
 DSR_MINIMO = 0.90
 
 #: b) Días de calendario de demo, como mínimo.
@@ -66,14 +78,18 @@ class Veredicto:
 
 @dataclass(frozen=True)
 class EvidenciaDemo:
-    psr: float
-    dsr: float
+    #: a) Sobre el backtest histórico, no sobre histórico + demo (D2).
+    psr_historico: float
+    dsr_historico: float
     inicio_demo: date
     fecha: date
     operaciones_cerradas: int
     costo_observado: float
     costo_modelado: float
+    #: d) Trades cuya última marca global de reconciliación es
+    #: `discrepancia` o `no_verificable` (D2, DB-1).
     discrepancias_reconciliacion: int
+    no_verificables_reconciliacion: int
 
 
 @dataclass(frozen=True)
@@ -82,6 +98,8 @@ class Evaluacion:
     #: Las condiciones que faltan, por letra ("a", "b", "c", "d").
     incumplidas: tuple[str, ...]
     vence_el: date
+    #: Lo que D2 nombra y no se evalúa porque no tiene umbral medido.
+    sin_evaluar: tuple[str, ...] = ("latencia",)
 
 
 def sumar_meses(d: date, meses: int) -> date:
@@ -98,18 +116,19 @@ def evaluar(e: EvidenciaDemo) -> Evaluacion:
         raise ValueError(f"fecha {e.fecha} anterior al inicio de demo {e.inicio_demo}")
     if e.costo_modelado <= 0:
         raise ValueError("costo_modelado tiene que ser positivo: sin él, c) no se puede evaluar")
-    if e.operaciones_cerradas < 0 or e.discrepancias_reconciliacion < 0:
+    if (e.operaciones_cerradas < 0 or e.discrepancias_reconciliacion < 0
+            or e.no_verificables_reconciliacion < 0):
         raise ValueError("conteos negativos")
 
     incumplidas = []
-    if not (e.psr >= PSR_MINIMO and e.dsr >= DSR_MINIMO):
+    if not (e.psr_historico >= PSR_MINIMO and e.dsr_historico >= DSR_MINIMO):
         incumplidas.append("a")
     if not ((e.fecha - e.inicio_demo).days >= DIAS_MINIMOS_DEMO
             and e.operaciones_cerradas >= OPERACIONES_CERRADAS_MINIMAS_DEMO):
         incumplidas.append("b")
     if not e.costo_observado <= RAZON_MAXIMA_COSTO_OBSERVADO_MODELADO * e.costo_modelado:
         incumplidas.append("c")
-    if e.discrepancias_reconciliacion != 0:
+    if e.discrepancias_reconciliacion != 0 or e.no_verificables_reconciliacion != 0:
         incumplidas.append("d")
 
     vence_el = sumar_meses(e.inicio_demo, MESES_MAXIMOS_ZONA_GRIS)

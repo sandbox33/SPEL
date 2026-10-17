@@ -226,3 +226,26 @@ def reconciliar(registro: Registro, *, profit_table: list[dict], statement: list
             reconciliado_comision=comision,
             evidencia=json.dumps(evidencia, ensure_ascii=False, sort_keys=True)))
     return nuevas
+
+
+def conteo_de_marcas(directorio: Any) -> dict[str, int]:
+    """Por trade terminado, la marca global `reconciliado` de su ÚLTIMA fila
+    de reconciliación, contada: ok, discrepancia, no_verificable, y
+    sin_reconciliar si todavía no tiene ninguna. De acá salen los dos
+    conteos de la condición d) de DG-3 (governance/paso_a_real.py, D2 y
+    DB-1). Un trade abierto no cuenta."""
+    filas = leer_registro(directorio).filas
+    terminales = {e.value for e in EVENTOS_TERMINALES}
+    terminados: set[str] = set()
+    ultima: dict[str, str] = {}
+    for f in filas:
+        if f["evento"] in terminales:
+            terminados.add(f["trade_uuid"])
+        elif f["evento"] == Evento.RECONCILIACION.value:
+            ultima[f["trade_uuid"]] = f["reconciliado"]
+    conteo = {Reconciliado.OK.value: 0, Reconciliado.DISCREPANCIA.value: 0,
+              Reconciliado.NO_VERIFICABLE.value: 0, "sin_reconciliar": 0}
+    for uuid in terminados:
+        marca = ultima.get(uuid, "sin_reconciliar")
+        conteo[marca if marca in conteo else "sin_reconciliar"] += 1
+    return conteo

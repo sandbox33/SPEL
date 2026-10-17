@@ -35,12 +35,13 @@ una página de reglas prácticas.
    aproximación de entrenamiento — se declara así.
 
 6. **Capital real solo después de que el forward en demo lo demuestre.**
-   El paso de demo a real exige TODAS (DG-3, decision-log 29-sep-2026):
-   a) PSR ≥ 0,90 y DSR ≥ 0,90 sobre retornos diarios de cartera, en la
-   serie combinada histórico + demo, con el mismo N; b) ≥ 30 días de demo y
-   ≥ 20 operaciones cerradas en demo; c) costos observados en demo
-   ≤ 1,25 × costos modelados; d) reconciliación demo sin discrepancias.
-   Zona gris: forward hasta cumplir a)–d), con un máximo de 6 meses; al
+   El paso de demo a real exige TODAS (DG-3, decision-log 29-sep-2026, con
+   D2 del 14-oct-2026): a) PSR ≥ 0,90 y DSR ≥ 0,90 sobre retornos diarios de
+   cartera, solo en el backtest histórico, con el N del registro de
+   ensayos; b) ≥ 30 días de demo y ≥ 20 operaciones cerradas en demo;
+   c) costos observados en demo ≤ 1,25 × costos modelados;
+   d) reconciliación demo sin discrepancias ni no_verificables. La latencia
+   que nombra D2 no tiene umbral medido y todavía no se evalúa. Zona gris: forward hasta cumplir a)–d), con un máximo de 6 meses; al
    vencer, pasa a H2. Las cifras viven en `governance/paso_a_real.py`. Se
    decide una vez y se escribe acá — no se negocia por sesión bajo presión
    de tiempo.

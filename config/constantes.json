@@ -650,7 +650,7 @@
       "valor": 0.9,
       "evidencia": "provisional_sin_evidencia",
       "afecta_resultado": true,
-      "fuente": "DG-3, decisión del Admin del 29-sep-2026 (addendum al Brief final v3, ítem 1; decision-log 2026-09-29): a) DSR ≥ 0,90, con el mismo N que el pre-registro.",
+      "fuente": "DG-3, decisión del Admin del 29-sep-2026 (addendum al Brief final v3, ítem 1; decision-log 2026-09-29): a) DSR ≥ 0,90, con el mismo N que el pre-registro; desde D2 (14-oct-2026), solo sobre el backtest histórico.",
       "usado_en": [
         "governance.paso_a_real.evaluar"
       ],
@@ -689,7 +689,7 @@
       "valor": 0.9,
       "evidencia": "provisional_sin_evidencia",
       "afecta_resultado": true,
-      "fuente": "DG-3, decisión del Admin del 29-sep-2026 (addendum al Brief final v3, ítem 1; decision-log 2026-09-29): a) PSR ≥ 0,90 sobre retornos diarios de cartera, histórico + demo.",
+      "fuente": "DG-3, decisión del Admin del 29-sep-2026 (addendum al Brief final v3, ítem 1; decision-log 2026-09-29), modificada por D2 del 14-oct-2026 (decision-log 2026-10-17): a) PSR ≥ 0,90 sobre retornos diarios de cartera, solo en el backtest histórico.",
       "usado_en": [
         "governance.paso_a_real.evaluar"
       ],
