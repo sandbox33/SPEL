@@ -3414,3 +3414,90 @@ el brief 14, antes de bajar precios.
 - `config/constantes.json`: el 756 de D11-u deja de estar marcado como interpretación.
 
 D4-c y D2-n no llevan código.
+
+## 2026-10-17 — Tarea 11: H2 según D6, y la fuente de precios que no alcanza
+
+**Fuente:** brief del Admin 11–13, tarea 11. Rama `feature/preregistro-h2` (PR #34), rebasada
+sobre `main` en `2ae82df`.
+
+**El rebase.** Los dos commits de H2 chocaban con `main` en `config/constantes.json` y
+`config/README.md`. Las constantes se resolvieron con las de `main` más las de H2. El README
+arrastraba un desfase previo: decía **138** constantes con el registro de `main` en **172**. Se
+corrigió en un commit aparte, con un test que compara los dos números con el registro.
+
+**Auditoría del documento contra D6, antes de cambiarlo:**
+
+| D6 | el documento del 01-oct | |
+|---|---|---|
+| entropía de hace 2 días, primaria | sección 3: `t − 2`, por la decisión del 29-sep | coincide |
+| la de hace 1 día, secundaria, que cuenta en el N | "La lectura de rezago 1 queda descartada." | **difiere** |
+| ventanas de 1, 7 y 30 días | 1/7/30 en BTC; 1/5/22 en XAU | coincide en BTC; D6 no nombra a XAU |
+| horizontes 1, 5 y 22, con MCS y Diebold–Mariano | un solo horizonte (la varianza de `r_t`) y solo Diebold–Mariano | **difiere** |
+| el día de la semana, solo en entrenamiento | las indicadoras y los promedios salen de la ventana de estimación | coincide; no estaba escrito como regla |
+| calendario 24/7 para BTC | "continuo para BTC" | coincide |
+
+**Lo que se aplicó** (`research/preregistro_h2.md`, `core/preregistro_h2.py`):
+- la secundaria, con su propio rezago en el módulo, y un rechazo a cualquier otro rezago (el 0
+  sería la entropía del mismo día);
+- los horizontes, con la varianza media de las `h` barras como objetivo y sin usar filas cuyo
+  objetivo no terminó;
+- Diebold–Mariano por rezago y horizonte, con Holm sobre las 6 pruebas de cada activo;
+- el MCS sobre `{A, B₂, B₁}`;
+- la regla del día de la semana, escrita;
+- H2 en el registro de ensayos (D3), con dos ensayos que cuentan en el N, pre-registrados y no
+  corridos.
+
+No se duplicó ninguna fórmula: H2 no usa la estadística del Sharpe, y su N es el del registro.
+
+**Interpretaciones nuevas**, que el Admin aprueba al fusionar:
+- las ventanas de XAU son 1/5/22 barras hábiles;
+- los horizontes son barras: en BTC, 5 y 22 no son semana ni mes;
+- la multiplicidad se ajusta por Holm;
+- los parámetros del MCS: nivel 0,90, `T_max`, bloques móviles del largo de los rezagos de
+  Newey–West, 10.000 réplicas y semilla 20261017;
+- si Diebold–Mariano y el MCS discrepan, es no concluyente, el criterio de D5.
+
+La definición de `T_max` se cita de memoria. El paper no se pudo leer, y el PR de evaluación la
+contrasta.
+
+**CONTRADICCIÓN, sin resolver: la fuente de precios.** El documento decía "las velas diarias de
+Deriv que persiste `ingestion/velas.py`":
+- Deriv da 365 días (entrada del 2026-10-05), y la ventana de estimación arranca con 504 barras:
+  no queda ningún pronóstico;
+- la rama `data` no tiene velas diarias (D8);
+- D1 dice que la historia larga sale de TwelveData, validada por el brief 14.
+
+La sección 2 queda **[PENDIENTE DEL ADMIN]**, con una propuesta: las velas de D1 que valide el
+brief 14, y revisar el rezago si la hora de corte abre la barra antes de las 00:00 UTC. El
+pendiente se completa antes de fusionar. La serie GDELT no es la restricción: va del 2013-04-01
+al 2026-10-16. Para escribir esto se leyó su rango y su primera línea; ningún precio.
+
+**Tests editados.** El cambio de criterio obliga a tocar el test del documento, que está en este
+mismo PR:
+
+| línea vieja | línea nueva |
+|---|---|
+| `SHA256_PREREGISTRO = "e4e1d7a2…"` | `SHA256_PREREGISTRO = "7b2c5cea…"` |
+| `def test_el_rezago_es_de_calendario_y_la_lectura_de_rezago_1_no_esta():` | `def test_el_rezago_es_de_calendario_y_el_de_1_dia_es_secundario():` |
+| `assert "La lectura de rezago 1 queda descartada." in texto` | `… not in texto`, y la lectura secundaria tiene que estar |
+
+Además, tres tests de `main` (`tests/test_ensayos.py`, del brief 10) fijaban el tamaño total del
+registro, y registrar H2, que el brief pide, los rompe por construcción. Se editaron **sin
+autorización explícita**, en un commit aparte y revertible, sin cambiar lo que verifican:
+
+| línea vieja | línea nueva |
+|---|---|
+| `assert len(en.que_cuentan()) == 3` | de las 4 sembradas, las que cuentan son las de los 3 previos |
+| `assert len(en.que_cuentan(registro)) == 4` | `== antes + 1`, con `antes` medido |
+| `match=r"ensayos\.jsonl:5"` | `match=rf"ensayos\.jsonl:{n + 1}\b"`, con `n` las líneas del archivo |
+
+Pasan con el registro de `main` y con el nuevo.
+
+**Mutantes:**
+- 18 de H2: el rezago sin validar, True como 1, la secundaria por defecto, el orden de los
+  rezagos, el rezago pedido ignorado, los rezagos HAC, la familia como literal o sin la
+  secundaria, el horizonte, el MCS, la tolerancia y el registro;
+- 3 del README;
+- 2 nuevos del registro, más los 20 del brief 10 vueltos a correr.
+
+Todos atrapados.
