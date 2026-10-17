@@ -2969,10 +2969,10 @@ Cambiaron las entradas, porque los campos se renombraron, y se sumaron casos:
 | `replace(_BORDE, psr=0.5, …)` (tres tests) | `replace(_BORDE, psr_historico=0.5, …)` |
 | — | `{"no_verificables_reconciliacion": -1}` (caso nuevo de evidencia imposible) |
 
-**Pendiente de decisión, no implementado:** un trade cerrado que todavía no tiene ninguna fila de
-reconciliación (`sin_reconciliar`) no entra en d). El brief cuenta discrepancias y
-no_verificables, y no dice nada de los trades sin reconciliar. `conteo_de_marcas` los informa
-aparte.
+**Lo que D2 no decía:** un trade cerrado que todavía no tiene ninguna fila de reconciliación
+(`sin_reconciliar`). El brief 10 contaba discrepancias y no_verificables, y nada más, así que esos
+trades quedaron fuera de d) y `conteo_de_marcas` los informaba aparte. **Lo decide DB-3**
+(última entrada): incumplen d).
 
 ## 2026-10-17 — D3 (14-oct): el registro único de ensayos
 
@@ -3310,3 +3310,70 @@ H1 v2 está en la cola.
   - la latencia;
   - el conteo: primera marca, trades abiertos, sin reconciliar como ok;
   - los tres documentos.
+
+## 2026-10-17 — DB-3 (del auditor bajo delegación, 17-oct): un trade terminado sin reconciliar incumple d)
+
+**Fuente:** brief del Admin 10-B, punto 2. Contesta lo que la entrada de D2 dejó sin decidir.
+
+**Decisión:** un trade terminado `sin_reconciliar` incumple d) de DG-3. Entra como un campo propio
+de `EvidenciaDemo`, `sin_reconciliar`, y no se suma a los no_verificables, para que el veredicto
+diga cuál falta.
+
+**Implementación** (`governance/paso_a_real.py`):
+- `EvidenciaDemo.sin_reconciliar` es obligatorio. Sin valor por defecto, un llamador que no lo
+  pase falla con TypeError en vez de cumplir d) por omisión. Un negativo lanza, como los otros
+  conteos.
+- d) se incumple si cualquiera de los tres conteos es distinto de 0.
+- `Evaluacion.incumplidas_d` nombra lo que falta de d), por campo de `EvidenciaDemo` y en orden:
+  discrepancias, no_verificables, sin reconciliar. Vacío si d) se cumple.
+- `governance/PRINCIPLES.md` #6, `CLAUDE.md` y `BLUEPRINT.md` dicen la d) nueva, y un test lo
+  exige.
+
+**Antes, un defecto de este mismo PR.** `conteo_de_marcas` contaba como ok la última marca ok de
+un trade aunque no trajera `reconciliado_comision`. `reconciliar()` no la cuenta así desde DB-2:
+un ok anterior a DB-2 se reconcilia de nuevo. Con las dos reglas distintas, d) podía cumplirse con
+un trade cuya comisión nunca se contrastó. Ahora las dos funciones usan un solo predicado,
+`reconciliar.ok_vigente`, y ese ok cuenta como sin reconciliar hasta que `reconciliar()` le agrega
+su fila. `reconciliar()` se comporta igual que antes.
+
+**Tests de paso_a_real editados**, con la autorización del brief 10, punto 4, para este mismo PR,
+que el 10-B completa. Ningún assert viejo cambió: cambiaron entradas, y se sumaron casos y
+asserts.
+
+| línea vieja | línea nueva |
+|---|---|
+| `discrepancias_reconciliacion=0, no_verificables_reconciliacion=0,` (`_BORDE`) | `discrepancias_reconciliacion=0, no_verificables_reconciliacion=0, sin_reconciliar=0,` |
+| `discrepancias_reconciliacion=0, no_verificables_reconciliacion=0)` (`test_a_se_mide_solo_sobre_el_historico`) | la misma, más `sin_reconciliar=0`, para que el TypeError venga solo de `psr` y `dsr` |
+| `no_verificables_reconciliacion=conteo["no_verificable"]))` (`test_d_cuenta_desde_la_ultima_marca_global_del_registro`) | la misma, más `sin_reconciliar=conteo["sin_reconciliar"]`, y un assert nuevo sobre `incumplidas_d` |
+| — | `({"sin_reconciliar": 1}, "d")` y `{"sin_reconciliar": -1}` (casos nuevos) |
+
+**Tests nuevos:**
+- el que separa DB-3 de D2: un solo trade, cerrado y sin reconciliar. Con la d) de D2 el
+  veredicto era APTO, y ahora es ZONA_GRIS, con `incumplidas_d == ("sin_reconciliar",)`;
+- cada parte de d) se nombra sola, y las tres juntas van en orden;
+- si d) se cumple, `incumplidas_d` está vacío;
+- `sin_reconciliar` no tiene valor por defecto;
+- los tres documentos dicen "trades terminados sin reconciliar";
+- en `tests/test_integracion_demo_registro.py`: el ok viejo de un registro v1 cuenta como sin
+  reconciliar; la tabla de `ok_vigente`; y lo que el conteo da por ok es justo lo que
+  `reconciliar()` no vuelve a reconciliar.
+
+**Mutantes:** 20, todos atrapados.
+- 12 sobre DB-3:
+  - la d) de D2, que ignora a los sin reconciliar. También la atrapa por sí solo el test que
+    separa las dos: `assert 'APTO' == 'ZONA_GRIS'`;
+  - sumar los sin reconciliar a los no_verificables;
+  - un negativo que no lanza;
+  - un valor por defecto de 0;
+  - otro orden de las partes de d);
+  - un veredicto que no dice qué falta;
+  - el umbral de cada conteo, y una d) que no se agrega cuando falta una sola parte;
+  - las discrepancias fuera de d);
+  - cada uno de los tres documentos sin la d) nueva.
+- 8 sobre `ok_vigente`:
+  - el conteo con la regla vieja, atrapado por una aserción;
+  - el ok viejo contado como no_verificable;
+  - `ok_vigente` sin mirar la comisión, con `[]` en vez de `get`, o aceptando no_verificable;
+  - `reconciliar()` sin `ok_vigente`;
+  - el conteo con la primera marca;
+  - un trade sin fila contado como ok.

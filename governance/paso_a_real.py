@@ -3,8 +3,9 @@ governance/paso_a_real.py
 ===========================
 DG-3: cuándo una hipótesis puede pasar de demo a capital real. Decisión del
 Admin del 29-sep-2026, que REEMPLAZA la del 25-sep ("6 meses de forward en
-demo"), modificada por D2 (14-oct-2026) en a) y d). Ver decision-log.md,
-2026-09-29 y 2026-10-17, y governance/PRINCIPLES.md #6.
+demo"), modificada por D2 (14-oct-2026) en a) y d), y por DB-3 (17-oct-2026)
+en d). Ver decision-log.md, 2026-09-29 y 2026-10-17, y
+governance/PRINCIPLES.md #6.
 
 ══ LAS CUATRO CONDICIONES, TODAS ══
 
@@ -15,10 +16,11 @@ demo"), modificada por D2 (14-oct-2026) en a) y d). Ver decision-log.md,
      tiene las fórmulas).
   b) ≥ 30 días de demo y ≥ 20 operaciones cerradas en demo.
   c) Costos observados en demo ≤ 1,25 × costos modelados.
-  d) Reconciliación demo sin discrepancias NI no_verificables (D2 y DB-1):
-     los dos conteos salen de la marca global `reconciliado` del registro
-     demo, la última de cada trade
-     (integracion_demo.reconciliar.conteo_de_marcas).
+  d) Reconciliación demo sin discrepancias, NI no_verificables (D2 y
+     DB-1), NI trades terminados sin reconciliar (DB-3). Los tres conteos
+     salen de la marca global `reconciliado` del registro demo, la última
+     de cada trade (integracion_demo.reconciliar.conteo_de_marcas). Van por
+     separado, y `Evaluacion.incumplidas_d` dice cuál de los tres falta.
 
 ══ LA LATENCIA, SIN UMBRAL ══
 
@@ -90,6 +92,10 @@ class EvidenciaDemo:
     #: `discrepancia` o `no_verificable` (D2, DB-1).
     discrepancias_reconciliacion: int
     no_verificables_reconciliacion: int
+    #: d) Trades terminados sin una reconciliación que cuente (DB-3). No se
+    #: suman a los no_verificables: el veredicto dice cuál falta. Sin valor
+    #: por defecto, para que nadie cumpla d) por olvidarlo.
+    sin_reconciliar: int
 
 
 @dataclass(frozen=True)
@@ -98,6 +104,11 @@ class Evaluacion:
     #: Las condiciones que faltan, por letra ("a", "b", "c", "d").
     incumplidas: tuple[str, ...]
     vence_el: date
+    #: Lo que falta de d), por nombre de campo de EvidenciaDemo (DB-3), en
+    #: este orden: "discrepancias_reconciliacion",
+    #: "no_verificables_reconciliacion", "sin_reconciliar". Vacío si d) se
+    #: cumple.
+    incumplidas_d: tuple[str, ...]
     #: Lo que D2 nombra y no se evalúa porque no tiene umbral medido.
     sin_evaluar: tuple[str, ...] = ("latencia",)
 
@@ -117,7 +128,7 @@ def evaluar(e: EvidenciaDemo) -> Evaluacion:
     if e.costo_modelado <= 0:
         raise ValueError("costo_modelado tiene que ser positivo: sin él, c) no se puede evaluar")
     if (e.operaciones_cerradas < 0 or e.discrepancias_reconciliacion < 0
-            or e.no_verificables_reconciliacion < 0):
+            or e.no_verificables_reconciliacion < 0 or e.sin_reconciliar < 0):
         raise ValueError("conteos negativos")
 
     incumplidas = []
@@ -128,7 +139,11 @@ def evaluar(e: EvidenciaDemo) -> Evaluacion:
         incumplidas.append("b")
     if not e.costo_observado <= RAZON_MAXIMA_COSTO_OBSERVADO_MODELADO * e.costo_modelado:
         incumplidas.append("c")
-    if e.discrepancias_reconciliacion != 0 or e.no_verificables_reconciliacion != 0:
+    incumplidas_d = tuple(campo for campo, n in (
+        ("discrepancias_reconciliacion", e.discrepancias_reconciliacion),
+        ("no_verificables_reconciliacion", e.no_verificables_reconciliacion),
+        ("sin_reconciliar", e.sin_reconciliar)) if n != 0)
+    if incumplidas_d:
         incumplidas.append("d")
 
     vence_el = sumar_meses(e.inicio_demo, MESES_MAXIMOS_ZONA_GRIS)
@@ -138,4 +153,4 @@ def evaluar(e: EvidenciaDemo) -> Evaluacion:
         veredicto = Veredicto.ZONA_GRIS
     else:
         veredicto = Veredicto.APTO
-    return Evaluacion(veredicto, tuple(incumplidas), vence_el)
+    return Evaluacion(veredicto, tuple(incumplidas), vence_el, incumplidas_d=incumplidas_d)

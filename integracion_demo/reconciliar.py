@@ -240,9 +240,9 @@ def conteo_de_marcas(directorio: Any) -> dict[str, int]:
     de reconciliación, contada: ok, discrepancia, no_verificable, y
     sin_reconciliar si todavía no tiene ninguna. Un ok que no es
     `ok_vigente` (anterior a DB-2) cuenta como sin_reconciliar, porque
-    `reconciliar` lo reconcilia de nuevo. De acá salen los dos conteos de la
-    condición d) de DG-3 (governance/paso_a_real.py, D2 y DB-1). Un trade
-    abierto no cuenta."""
+    `reconciliar` lo reconcilia de nuevo. De acá salen los tres conteos de la
+    condición d) de DG-3 (governance/paso_a_real.py: D2, DB-1 y DB-3). Un
+    trade abierto no cuenta."""
     filas = leer_registro(directorio).filas
     terminales = {e.value for e in EVENTOS_TERMINALES}
     terminados: set[str] = set()

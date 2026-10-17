@@ -40,7 +40,8 @@ una página de reglas prácticas.
    cartera, solo en el backtest histórico, con el N del registro de
    ensayos; b) ≥ 30 días de demo y ≥ 20 operaciones cerradas en demo;
    c) costos observados en demo ≤ 1,25 × costos modelados;
-   d) reconciliación demo sin discrepancias ni no_verificables. La latencia
+   d) reconciliación demo sin discrepancias, sin no_verificables y sin
+   trades terminados sin reconciliar (DB-3, 17-oct-2026). La latencia
    que nombra D2 no tiene umbral medido y todavía no se evalúa. Zona gris: forward hasta cumplir a)–d), con un máximo de 6 meses; al
    vencer, pasa a H2. Las cifras viven en `governance/paso_a_real.py`. Se
    decide una vez y se escribe acá — no se negocia por sesión bajo presión

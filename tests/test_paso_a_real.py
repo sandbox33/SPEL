@@ -38,7 +38,7 @@ _BORDE = EvidenciaDemo(
     fecha=date(2026, 9, 30),                      # 30 días después
     operaciones_cerradas=OPERACIONES_CERRADAS_MINIMAS_DEMO,
     costo_observado=RAZON_MAXIMA_COSTO_OBSERVADO_MODELADO * 8.0, costo_modelado=8.0,
-    discrepancias_reconciliacion=0, no_verificables_reconciliacion=0,
+    discrepancias_reconciliacion=0, no_verificables_reconciliacion=0, sin_reconciliar=0,
 )
 
 
@@ -57,6 +57,7 @@ def test_el_borde_de_las_cuatro_es_apto():
     ({"costo_observado": RAZON_MAXIMA_COSTO_OBSERVADO_MODELADO * 8.0 + 0.001}, "c"),
     ({"discrepancias_reconciliacion": 1}, "d"),
     ({"no_verificables_reconciliacion": 1}, "d"),
+    ({"sin_reconciliar": 1}, "d"),
 ])
 def test_falta_una_y_es_zona_gris(cambio, letra):
     ev = evaluar(replace(_BORDE, **cambio))
@@ -103,6 +104,7 @@ def test_antes_del_vencimiento_sin_cumplir_sigue_el_forward():
     {"operaciones_cerradas": -1},
     {"discrepancias_reconciliacion": -1},
     {"no_verificables_reconciliacion": -1},
+    {"sin_reconciliar": -1},
 ])
 def test_evidencia_imposible_lanza(cambio):
     with pytest.raises(ValueError):
@@ -177,7 +179,8 @@ def test_a_se_mide_solo_sobre_el_historico():
     with pytest.raises(TypeError):
         EvidenciaDemo(psr=0.95, dsr=0.95, inicio_demo=INICIO, fecha=INICIO,
                       operaciones_cerradas=0, costo_observado=1.0, costo_modelado=1.0,
-                      discrepancias_reconciliacion=0, no_verificables_reconciliacion=0)
+                      discrepancias_reconciliacion=0, no_verificables_reconciliacion=0,
+                      sin_reconciliar=0)
 
 
 def test_un_no_verificable_basta_para_incumplir_d():
@@ -218,8 +221,10 @@ def test_d_cuenta_desde_la_ultima_marca_global_del_registro(tmp_path):
     conteo = conteo_de_marcas(_registro_demo(tmp_path))
     assert conteo == {"ok": 2, "discrepancia": 0, "no_verificable": 1, "sin_reconciliar": 1}
     ev = evaluar(replace(_BORDE, discrepancias_reconciliacion=conteo["discrepancia"],
-                         no_verificables_reconciliacion=conteo["no_verificable"]))
+                         no_verificables_reconciliacion=conteo["no_verificable"],
+                         sin_reconciliar=conteo["sin_reconciliar"]))
     assert ev.incumplidas == ("d",)
+    assert ev.incumplidas_d == ("no_verificables_reconciliacion", "sin_reconciliar")
 
 
 def test_una_discrepancia_vigente_cuenta(tmp_path):
@@ -246,3 +251,72 @@ def test_los_documentos_dicen_la_dg3_de_d2(archivo, recorte):
     assert "backtest histórico" in plano
     assert "no_verificables" in plano
     assert "latencia" in plano
+
+
+# ═══ DB-3 (17-oct-2026): un trade terminado sin reconciliar incumple d) ═══
+
+def test_un_trade_sin_reconciliar_basta_para_incumplir_d(tmp_path):
+    """El caso que separa DB-3 de D2: el único trade está cerrado y nadie lo
+    reconcilió. No hay discrepancias ni no_verificables, y con la d) de D2 el
+    veredicto era APTO."""
+    from integracion_demo.reconciliar import conteo_de_marcas
+    from integracion_demo.registro import Registro
+    Registro(tmp_path).agregar(evento="cierre", trade_uuid="A", contract_id=1, outcome="sl",
+                               evidencia="x")
+    conteo = conteo_de_marcas(tmp_path)
+    assert conteo == {"ok": 0, "discrepancia": 0, "no_verificable": 0, "sin_reconciliar": 1}
+    ev = evaluar(replace(_BORDE, discrepancias_reconciliacion=conteo["discrepancia"],
+                         no_verificables_reconciliacion=conteo["no_verificable"],
+                         sin_reconciliar=conteo["sin_reconciliar"]))
+    assert ev.veredicto == Veredicto.ZONA_GRIS
+    assert ev.incumplidas == ("d",)
+    assert ev.incumplidas_d == ("sin_reconciliar",)
+
+
+@pytest.mark.parametrize("campo", [
+    "discrepancias_reconciliacion", "no_verificables_reconciliacion", "sin_reconciliar"])
+def test_el_veredicto_dice_cual_parte_de_d_falta(campo):
+    """Los sin reconciliar no se suman a los no_verificables: cada conteo se
+    nombra solo."""
+    ev = evaluar(replace(_BORDE, **{campo: 2}))
+    assert ev.incumplidas == ("d",)
+    assert ev.incumplidas_d == (campo,)
+
+
+def test_las_tres_partes_de_d_se_listan_en_orden():
+    ev = evaluar(replace(_BORDE, discrepancias_reconciliacion=1,
+                         no_verificables_reconciliacion=1, sin_reconciliar=1))
+    assert ev.incumplidas_d == ("discrepancias_reconciliacion",
+                                "no_verificables_reconciliacion", "sin_reconciliar")
+
+
+def test_si_d_se_cumple_no_falta_ninguna_parte_de_d():
+    for evidencia in (_BORDE, replace(_BORDE, psr_historico=0.5, operaciones_cerradas=0)):
+        ev = evaluar(evidencia)
+        assert "d" not in ev.incumplidas and ev.incumplidas_d == ()
+
+
+def test_sin_reconciliar_es_obligatorio():
+    """Sin valor por defecto: una evidencia que no lo trae no se arma, en vez
+    de cumplir d) por omisión."""
+    import dataclasses
+    campos = {f.name: f for f in dataclasses.fields(EvidenciaDemo)}
+    assert campos["sin_reconciliar"].default is dataclasses.MISSING
+    with pytest.raises(TypeError):
+        EvidenciaDemo(psr_historico=0.95, dsr_historico=0.95, inicio_demo=INICIO,
+                      fecha=INICIO, operaciones_cerradas=0, costo_observado=1.0,
+                      costo_modelado=1.0, discrepancias_reconciliacion=0,
+                      no_verificables_reconciliacion=0)
+
+
+def _tramo_dg3(archivo: str) -> str:
+    if archivo == "governance/PRINCIPLES.md":
+        return _principio_6()
+    texto = (RAIZ / archivo).read_text(encoding="utf-8")
+    i = texto.index("DG-3")
+    return texto[i - 200:i + 600]
+
+
+@pytest.mark.parametrize("archivo", ["governance/PRINCIPLES.md", "CLAUDE.md", "BLUEPRINT.md"])
+def test_los_documentos_dicen_la_d_de_db3(archivo):
+    assert "trades terminados sin reconciliar" in " ".join(_tramo_dg3(archivo).split())
