@@ -247,6 +247,9 @@ decision-log 29-sep-2026, y D2 del 14-oct-2026).
 
 ## Fase 3 — Visualización (después de Fase 1 y 2, no antes)
 
+> **❄️ CONGELADA por D9 (14-oct-2026).** Nada de infraestructura sin edge demostrado
+> (decision-log 2026-10-17).
+
 Grafo con un nodo por fuente de dato, score de confianza visible (0-100).
 Construir esto antes de tener `ingestion/` y `core/` limpios muestra un
 grafo bonito de datos que todavía no son confiables — por eso va tercero,
@@ -280,6 +283,9 @@ existe ruteo de órdenes de ningún tipo.
 punta, con log de auditoría, sin intervención manual.
 
 ## Fase 5 — Escala (Supabase, Flet, GitHub Actions vs. Colab)
+
+> **❄️ CONGELADA por D9 (14-oct-2026).** Nada de infraestructura sin edge demostrado
+> (decision-log 2026-10-17).
 
 Con `ingestion/`, `core/`, `visualization/` y `execution/` ya probados:
 Supabase como bus de señales entre el motor y un frontend Flet auditable.
@@ -315,7 +321,12 @@ prototipo previo, se construye desde cero cuando llegue el momento.
 
 ---
 
-## Fase 6 — Motor de streaming multi-timeframe (propuesta de Altair, 17 ago 2026) — EN EVALUACIÓN, NADA CONSTRUIDO TODAVÍA
+## Fase 6 — Motor de streaming multi-timeframe (propuesta de Altair, 17 ago 2026) — ❄️ CONGELADA (D9)
+
+> **❄️ CONGELADA por D9 (14-oct-2026).** Nada de infraestructura sin edge demostrado, y GDELT
+> queda solo como proxy de volatilidad (decision-log 2026-10-17). Hasta entonces el título decía
+> "EN EVALUACIÓN, NADA CONSTRUIDO TODAVÍA". La tensión abierta de abajo sigue sin cerrar: D9 la
+> toca, y cerrarla es del Admin.
 
 Altair propuso una segunda vía, en paralelo a la macro (GDELT diario, Fases 1-5): un motor que
 opere en 1/5/15/30 min sobre Deriv (forex + herramientas propias) y, en paralelo, un motor

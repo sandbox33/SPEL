@@ -34,10 +34,10 @@ archivo a propósito para no mezclar "estado actual" con "notas de investigació
 ```
 FASE 1 — ingestion/ + core/scoring.py     🔵 CERRADA — checklist cumplido, resultado NEGATIVO
 FASE 2 — Modelo                            ⚪ NO INICIADA — reorientada, ver abajo
-FASE 3 — visualization/ (grafo)            ⚪ NO INICIADA
+FASE 3 — visualization/ (grafo)            ❄️ CONGELADA (D9) — no iniciada
 FASE 4 — execution/ + Deriv real           🟡 Actuator confirmado; gate: modelo F2 o hipótesis H + DG-3
-FASE 5 — Escala (Supabase, Flet)           ⚪ NO INICIADA
-FASE 6 — Motor streaming multi-timeframe   🟡 Infraestructura lista, señal sin construir
+FASE 5 — Escala (Supabase, Flet)           ❄️ CONGELADA (D9) — no iniciada
+FASE 6 — Motor streaming multi-timeframe   ❄️ CONGELADA (D9) — infraestructura lista, señal sin construir
 SERIE H                                    🟡 H1 v1 sellada (v2 en la cola), H2 y H3 en la tanda 11–13; H-ORB-oro ⏸ PAUSADA (D11)
 ```
 
@@ -45,6 +45,10 @@ SERIE H                                    🟡 H1 v1 sellada (v2 en la cola), H
 en dirección y vela de la primera ruptura en el **62,74 %** de 263 días, contra un umbral del
 **90 %** fijado antes de medir (rama `data` en `bc2597a`, decision-log 17-oct). Se reabre con
 **756 días hábiles de M5 de Deriv** (D11-u, `governance/ensayos.py`). El 14-oct había 263.
+
+❄️ **Fases 3, 5 y 6, congeladas (D9, 14-oct).** Nada de infraestructura sin edge demostrado, y
+GDELT queda solo como proxy de volatilidad (decision-log 17-oct). La ingesta diaria de GDELT
+sigue: es el dato de H2.
 
 🔵 **CERRADA no es 🟢 LISTA.** Fase 1 se cierra porque su pregunta quedó contestada, y
 la respuesta fue que no. El pipeline funciona, está medido y tiene `n` suficiente; lo
@@ -435,7 +439,8 @@ breaker y el guard sin modificarlos. La regla de órdenes demo de CLAUDE.md dej�
    (`GDELT_GAP_2026`) — no se corrió el equivalente contra el pipeline nuevo.
 3. **¿El motor GDELT (Fases 1-5) sigue siendo el principal, o el motor rápido
    (Fase 6) cambia la prioridad?** Pregunta abierta desde el 17 ago, todavía sin
-   que Altair la confirme.
+   que Altair la confirme. **D9 (14-oct):** la Fase 6 está congelada y GDELT queda solo
+   como proxy de volatilidad. Cerrar esta incógnita es del Admin.
 4. **`p66_entropy_global_default`** (necesario para `godel_active` vía
    `orchestration/cycle.py`): sin valor por defecto a propósito — `compute_adaptive_percentile`
    documenta que para este umbral no hay default legacy confirmado. Cada llamada real
