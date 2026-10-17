@@ -3501,3 +3501,109 @@ Pasan con el registro de `main` y con el nuevo.
 - 2 nuevos del registro, más los 20 del brief 10 vueltos a correr.
 
 Todos atrapados.
+
+## 2026-10-17 — Resoluciones del auditor (17-oct) a los pendientes de H2, H3 y H1 v2
+
+**Fuente:** brief del Admin 11–13-B. Son decisiones del auditor bajo el criterio delegado del
+Admin (entrada "El criterio del Admin para decidir en su ausencia"), y cierran lo que las tareas
+11, 12 y 13 dejaron pendiente.
+
+**P1 (H2, H3, H1 v2), la fuente de precios.** Las velas diarias de D1 (TwelveData), y solo
+después de que el brief 14 las valide con su compuerta. Si el brief 14 sale rojo para un activo,
+la hipótesis no corre sobre ese activo: no hay fuente de reemplazo sin validar, y la compuerta no
+se relaja.
+
+**P2 (H3), el universo.** H3 conserva su regla de universo (sección 2) y queda **bloqueada**
+hasta que haya historia validada para el universo. No se reduce a K = 2: con BTC como componente
+H1 y el oro como réplica, H3 con K = 2 sería H1 contado dos veces. La ruta prevista: la migración
+de `ingestion/deriv_ws.py` revive la sonda, el universo se congela, y D1 se extiende activo por
+activo con la compuerta del brief 14. Esa extensión es un brief propio, que se decide si H1 v2 o
+H2 muestran algo.
+
+**P3 (H3), el N.** Suman los ensayos del registro que son estrategias: los 3 previos, los de H1 y
+la cartera de H3. Los de H2 no suman: prueban un predictor de volatilidad con Diebold–Mariano y
+MCS, no un Sharpe seleccionado. La regla se declara en `governance/ensayos.py`, con test.
+
+**P4 (H3), la estadística del Sharpe.** La de H1 v2: `core/estadistica_sharpe.py`, con la σ en
+SR₀ y con ρ. Reemplaza las convenciones de 2012 del documento, que declara el cambio y su razón.
+
+**P5 (H3), la zona gris.** No concluyente, y no va a demo, igual que lo intermedio de H1 v2 (D5).
+La razón: con D2, a) se mide solo sobre el histórico, así que la demo no puede rescatar una zona
+gris, y mandarla a demo es ruido operativo.
+
+**P6, interpretaciones aprobadas:**
+- en H2: las ventanas de XAU, los horizontes en barras, Holm, los parámetros del MCS, y que un
+  desacuerdo entre Diebold–Mariano y el MCS sea no concluyente;
+- en H1 v2: el Sharpe de las compuertas es el anualizado.
+
+Y, tal cual:
+
+> H1 v2 es menos estricto que v1 en el vector del brief 10 (PSR(0) 0,913 → 0,987). Se acepta:
+> es una corrección de método, declarada antes de los datos.
+
+**Contra el código y el decision-log, antes de aplicarlas.** Ninguna los contradice:
+- **P1** es la fuente de D1, con la compuerta que fija el brief 14 (D1-p). La historia usable no
+  depende de la fuente: `ingestion/velas.py::profundidad` la mide con las fechas de cualquier
+  serie. El adaptador de TwelveData ya pide la barra diaria sin `timezone` (decisión del Admin
+  del 06-oct).
+- **P3** no cambia `cuenta_en_n`. El brief 11–13 pedía que la secundaria de H2 contara "en el N
+  (D3)", y cuenta: está en el registro con `cuenta_en_n: true` y en la familia de Holm de H2. P3
+  dice en cuál: en el de su familia de pruebas, no en el del DSR de una estrategia. El docstring
+  de `governance/ensayos.py`, que dice "si suma al N del DSR", se corrige con la regla, en el #33.
+- **P5** es la zona gris de las compuertas de H3, la del backtest. La de DG-3 es otra cosa
+  (`governance/paso_a_real.py`: el forward en demo, de 6 meses como máximo, mientras falte alguna
+  condición), y no cambia.
+- **Para el Admin: un roce de P2 con DG-5.** DG-5 (25-sep) dice "H3 es la ruta principal". Con P2,
+  H3 queda bloqueada, y la extensión que la desbloquea se decide si H1 v2 o H2 muestran algo. No
+  es una contradicción: H3 sigue siendo la principal y la bloquean los datos, porque D1 da historia
+  solo a BTC y al oro. Pero el orden de hecho pasa a ser H1 v2 y H2 primero. Si DG-5 pedía otra
+  cosa, lo dice el Admin. El documento de H3 dice las dos.
+
+**Dónde se aplica cada una:** P1 y P6 de H2, en el #34; P1 a P5, en el #33; P1 y P6 de H1 v2, en
+el #45.
+
+## 2026-10-17 — Brief 11–13-B en H2 (#34): P1 y P6
+
+**Fuente:** brief del Admin 11–13-B. Rama `feature/preregistro-h2`.
+
+**Lo aplicado** (`research/preregistro_h2.md`):
+- la sección 2 dice la fuente de P1, y el documento ya no tiene ninguna marca de pendiente del
+  Admin;
+- la sección 3 deja de suponer las barras de Deriv: el rezago está contado para barras de 00:00 a
+  00:00 UTC, y las de D1 cortan donde fije el brief 14;
+- las cinco interpretaciones de P6 dicen **[INTERPRETACIÓN aprobada (P6)]**. La tolerancia cero y
+  Garman–Klass, que P6 no nombra, siguen como interpretaciones que el Admin aprueba al fusionar.
+
+**Dos interpretaciones nuevas**, que el Admin aprueba al fusionar:
+- **Sin BTC no hay conclusión.** Si el brief 14 sale rojo para BTC, H2 no corre sobre BTC (P1), y
+  la sección 9 concluye con la primaria de BTC. XAU es una réplica y no ocupa su lugar.
+- **La hora de corte.** P1 no la nombra. El rezago de 2 días está contado para barras que abren a
+  las 00:00 UTC. Si el brief 14 fija un corte que abre la barra de `t` antes, la entropía de `t−2`
+  podría no estar publicada al abrir: su archivo sale durante `t−1`, y a las 06:30 UTC a veces
+  todavía no está. La evaluación se detiene y pregunta antes de correr. No se decide un rezago
+  nuevo: la propuesta de la tarea 11 era revisar la sección 3 en ese caso, y eso es del Admin.
+
+**El registro de ensayos.** `h2-rezago-2` y `h2-rezago-1` apuntan al sha256 nuevo del documento.
+Son líneas de este PR, que no están en `main`: el registro de `main` sigue siendo un prefijo del de
+la rama, y lo sembrado conserva su sha256.
+
+**El registro de constantes.** Las notas de `HAR_VENTANAS_HABIL`, `HORIZONTES`, `NIVEL_MCS`,
+`REPLICAS_MCS` y `SEMILLA_MCS` dejan de decir [INTERPRETACIÓN] y dicen que la aprobó el auditor
+(P6), como el 756 en la tarea 0.
+
+**Tests.** El brief pide el test actualizado con cada cambio de un documento fijado:
+
+| línea vieja | línea nueva |
+|---|---|
+| `SHA256_PREREGISTRO = "7b2c5cea…"` | `SHA256_PREREGISTRO = "ab369612…"` |
+| — | 4 tests nuevos (8 casos): ninguna marca de pendiente; la fuente de P1; las cinco aprobadas; solo esas |
+
+Ningún test viejo cambió de criterio.
+
+**Mutantes:** 10, cada uno atrapado por su propio test y no solo por el sha256:
+- la marca de pendiente, de vuelta;
+- una fuente de reemplazo, y P1 sin la compuerta del brief 14;
+- la hora de corte, sin detener;
+- Holm y el MCS, sin aprobar;
+- tres interpretaciones que P6 no nombra, marcadas como aprobadas;
+- el registro, con el sha viejo.
