@@ -2831,32 +2831,106 @@ condición queda explícita, tal como la escribe DB-2.
 Sigue sin crudo de la parte B en el repo ni en `data`, y no se reconstruyó. El test contra el
 falso fija que la parte B escribe y compara la cotizada.
 
-## 2026-10-17 — Brief 10: las decisiones del 14-oct que entran al registro, y las que faltan
+## 2026-10-17 — Briefs 10 y 10-B: las decisiones del 14 y del 17-oct, una entrada cada una
 
-**Fuente que pide el brief:** `claude/SPEL_memo_traspaso_2026-10-14.md` §2 y
+**Fuente que pedía el brief 10:** `claude/SPEL_memo_traspaso_2026-10-14.md` §2 y
 `claude/SPEL_plan_y_briefs_2026-10-14.md` §2, con D1–D9 (respondidas por el Admin el 14-oct) y
 D11, D11-u, DB-1 y DB-2 (delegadas en el auditor).
 
-**Esos dos documentos no están al alcance de este PR.** Lo verifiqué así:
+**Esos dos documentos no estaban al alcance, y siguen sin estarlo.** Lo verifiqué así:
 - no están en el repo ni en ninguna rama (`git ls-tree` de todas las ramas remotas);
 - no están en el sistema de archivos;
 - la búsqueda en Google Drive no los encuentra.
 
-El brief prevé el caso ("El Admin te pega las tablas si no las ves"). Este punto queda
-**detenido en lo que depende de ellos**, y el resto sigue.
+El brief 10 registró solo lo que traía su propio texto: D2, D3, D11 y D11-u, con la razón
+pendiente. **El brief 10-B (17-oct) trae el contenido y la razón de las demás**, completa esas
+razones y suma D12 (17-oct), DB-3 (del auditor bajo delegación, 17-oct) y el criterio del Admin
+para decidir en su ausencia.
 
-| decisión | qué entra en este PR |
+| decisión | entrada |
 |---|---|
-| D1, D4, D5, D6, D7, D8, D9 | **nada**: su contenido y su razón están solo en las tablas que faltan |
-| D2 | una entrada con lo que dice el brief 10, punto 4. La razón del Admin, pendiente |
-| D3 | una entrada con lo que dice el brief 10, punto 3. La razón, pendiente |
-| D11, D11-u | una entrada con lo que dice el brief 10. La razón del auditor, pendiente |
+| criterio del Admin para decidir en su ausencia | la siguiente |
+| D1 | historia larga diaria desde TwelveData |
+| D2 | DG-3 cambia en a) y en d) |
+| D3 | el registro único de ensayos |
+| D4 | H-ORB-oro exploratoria: **contradice el decision-log del 06-oct, sin resolver** |
+| D5 | H1 v2 |
+| D6 | H2 (#34) |
+| D7 | H3 (#33) |
+| D8 | los crons de velas y sonda, apagados |
+| D9 | las Fases 3, 5 y 6, congeladas |
+| D11, D11-u | H-ORB-oro pausada, y cuándo se reabre |
+| D12 | H1 sin alternativa declarada |
 | DB-1, DB-2 | ya registradas: entrada del 2026-10-17, "DB-1 y DB-2 implementadas". Se citan, no se repiten |
+| DB-3 | un trade terminado sin reconciliar incumple d) |
+
+**D10 no aparece** ni en el brief 10 ni en el 10-B. Tampoco en el repo: no hay "D10" en los
+mensajes de commit ni en ningún `.md`, `.py` o `.json` de ninguna rama, salvo un handoff legacy
+de las ramas `archive/*` que no tiene relación. Si existe, su entrada falta.
+
+## 2026-10-17 — El criterio del Admin para decidir en su ausencia (14-oct)
+
+**Fuente:** brief del Admin 10-B, punto 1, que pide registrarlo.
+
+Lo que se decide sin el Admin se decide con esto:
+- rigor estadístico;
+- pre-registro antes de mirar datos;
+- ningún criterio se relaja después de ver un resultado;
+- no sobre-parametrizar;
+- edge demostrado antes que infraestructura;
+- cero ruido operativo.
+
+**Las decisiones irreversibles o de capital siguen siendo del Admin.**
+
+En este registro, las decisiones del auditor bajo delegación son D11, D11-u, DB-1, DB-2 y DB-3.
+
+## 2026-10-17 — D1 (14-oct): historia larga diaria de BTC y del oro desde TwelveData
+
+**Fuente:** brief del Admin 10-B, punto 1.
+
+**Decisión:**
+- la historia larga diaria de BTC y del oro sale de TwelveData;
+- se valida contra el año de Deriv, con una coincidencia de al menos el 90 %;
+- antes, una sonda que mida solo profundidad.
+
+**Razón del Admin:** sin 3–5 años de histórico no se valida nada, y la fuente externa tiene que
+ser un proxy fiel del precio ejecutable.
+
+**Contra lo que ya está en el registro:**
+- **Deriv da un año.** Su historia diaria es de 365 días, con `end` ignorado, y las velas
+  intradía tienen el mismo tope (entradas del 2026-10-05, sonda §0.A-2 y sonda §0.A-3 v2, e).
+  Con eso BTC no llega a ningún umbral de H1 ni de H3: 365 < 1.058, el menor.
+- **La profundidad diaria de TwelveData ya tiene una medición**, del 05-oct, en el plan Basic
+  (sonda §0.A-3 v2, f): BTC/USD desde el 2017-08-28, 3.326 filas; XAU/USD desde el 1979-12-26,
+  12.288 filas. Si alcanza o hace falta la sonda nueva, lo decide el Admin. La cola de
+  `ESTADO.md` tiene la sonda de profundidad diaria (brief 8) en el segundo lugar.
+
+**Dos cosas que D1 no fija, y que se fijan antes de mirar:**
+- **La métrica de la coincidencia.** El 90 % de la concordancia del oro M5 mide otra cosa: la
+  dirección y la vela de la primera ruptura del rango de apertura.
+- **Dónde corta el día cada fuente.** Las velas diarias de Deriv caen en múltiplos de 86.400 s,
+  a las 00:00 UTC (sonda §0.A-2). La barra 1d de TwelveData es de solo fecha y va sin
+  `timezone=UTC` (decisión del Admin del 06-oct): su fecha es la convención del día de mercado.
+  Qué ventana cubre esa barra no está medido.
 
 ## 2026-10-17 — D2 (14-oct): DG-3 cambia en a) y en d), y nombra la latencia
 
-**Fuente:** brief del Admin 10, punto 4. **Razón del Admin:** pendiente; está en el memo de
-traspaso §2, que no está en el repo.
+**Fuente:** brief del Admin 10, punto 4; la razón, del brief 10-B.
+
+**Razón del Admin:** la demo valida infraestructura, fricciones, latencia y reconciliación. 30 días
+de demo exigirían un Sharpe ≈ 4,5.
+
+**El 4,5, verificado** con `core/estadistica_sharpe.py`. En SR₀ = 0 la varianza del Sharpe no
+depende de la asimetría ni de la curtosis, y con ρ = 0 vale 1/T. Con T = 30 retornos diarios,
+PSR(0) ≥ 0,90 pide un Sharpe diario ≥ 0,2340: anualizado con √365 da **4,47**, y con √252, 3,71.
+[INTERPRETACIÓN] Va √365 porque los días de demo son de calendario (`paso_a_real.py`). Para
+PSR(0) ≥ 0,95 serían 0,3003 diario, 5,74 y 4,77.
+
+**Para el Admin: un roce con el 25-sep.** La razón dice que la demo valida fricciones. La entrada
+del 2026-09-25 "La demo valida integración, no ejecución" dice que una cuenta demo "no es evidencia
+suficiente de deslizamiento ni de rechazos". c) de DG-3 ya compara los costos de la demo con los
+modelados desde el 29-sep, así que D2 no cambia ningún criterio. Si lo del 25-sep sigue en pie
+para el deslizamiento, lo dice el Admin.
 
 **Qué cambia respecto de la DG-3 del 29-sep:**
 - **a)** PSR ≥ 0,90 y DSR ≥ 0,90 se miden **solo sobre el backtest histórico**. Deja de ser la
@@ -2902,8 +2976,10 @@ aparte.
 
 ## 2026-10-17 — D3 (14-oct): el registro único de ensayos
 
-**Fuente:** brief del Admin 10, punto 3. **Razón del Admin:** pendiente; está en el memo de
-traspaso §2.
+**Fuente:** brief del Admin 10, punto 3; la razón, del brief 10-B.
+
+**Razón del Admin:** el sesgo de pruebas múltiples. Ocultar intentos falsea el DSR (el N entra en
+SR*: `core/estadistica_sharpe.py::sr_estrella`).
 
 **Implementación:** `governance/ensayos.py` y `governance/ensayos.jsonl`.
 - **Formato:** append-only, una línea JSON por ensayo, con id, hipótesis, fecha, sha256 del
@@ -2929,15 +3005,187 @@ traspaso §2.
   N sellado de H1.
 - Lo sembrado queda fijado por sha256 (`f1da9722…`). Lo que se agregue va después.
 
+## 2026-10-17 — D4 (14-oct): H-ORB-oro exploratoria, y una contradicción con el 06-oct
+
+**Fuente:** brief del Admin 10-B, punto 1.
+
+**Decisión:**
+- H-ORB-oro es exploratoria, con un solo rango de 15 min;
+- su barra: retorno neto ≥ 2 × las fricciones totales en Deriv, que D4 define como spread +
+  slippage + swap.
+
+**Razón del Admin:** no sobre-parametrizar, y una barra de filtrado robusta.
+
+**CONTRADICCIÓN, sin resolver.** Las fricciones de D4 no son las que el registro ya tiene para
+los multiplicadores de Deriv:
+- **Falta la comisión.** La decisión a) del Admin del 06-oct (entrada "`integracion_demo/`")
+  dice: "los multiplicadores de Deriv cobran una comisión única, no taker/maker ni funding". Esa
+  comisión está medida: es proporcional al nocional (entrada del 2026-10-05, sonda §0.A-3 v2, c),
+  y κ del oro vale 0,0002 en `ingestion/kappa_deriv.py` (entrada del 2026-10-06, d). D4 no la
+  nombra.
+- **Sobra el swap**, si es financiamiento: la misma decisión dice que no hay funding.
+  [INTERPRETACIÓN] Que el swap de D4 sea el funding del 06-oct es una lectura.
+- **El spread y el slippage no tienen medición** para los multiplicadores en el registro, y del
+  deslizamiento la entrada del 2026-09-25 dice que una demo no es evidencia suficiente.
+
+No se elige entre D4 y el 06-oct: lo decide el Admin. Nada de este PR implementa D4. H-ORB-oro
+está pausada (D11), y sus fricciones se fijan en su pre-registro, antes de mirar, cuando se
+reabra.
+
+**Lo que sí coincide:** el rango de 15 min es el de la concordancia, 3 velas M5 desde las 08:00
+de Europe/London (`tools/concordancia_xauusd.py`, `VELAS_DEL_RANGO = 3`). D4 no dice la hora de
+anclaje.
+
+## 2026-10-17 — D5 (14-oct): H1 v2, con los resultados intermedios no concluyentes
+
+**Fuente:** brief del Admin 10-B, punto 1.
+
+**Decisión**, para H1 v2:
+- los resultados intermedios son **no concluyentes**;
+- la varianza del Sharpe es la de la fórmula generalizada.
+
+**Razón del Admin:** que lo dudoso no pase a demo, y solidez frente a retornos no normales.
+
+**Contra el código y los documentos:**
+- La fórmula generalizada ya está en `core/estadistica_sharpe.py`, con la σ evaluada en SR₀
+  (entrada "Brief 10, puntos 2 y 5").
+- H1 v1 sigue sellada con la fórmula de 2012 (`research/preregistro_h1.md` §9, fijada por
+  sha256). D5 habla de v2, y v1 no se toca.
+- "Intermedio" contesta, para v2, el segundo [PENDIENTE DEL ADMIN] de §10 de v1: qué pasa con
+  0,3 ≤ Sharpe < 0,5, o con Sharpe ≥ 0,5 y PSR o DSR por debajo de 0,90.
+  [INTERPRETACIÓN] Intermedio es lo que ni avanza (las tres compuertas de §10) ni se rechaza
+  (Sharpe < 0,3, D12). El pre-registro de v2 lo escribe antes de mirar.
+
+## 2026-10-17 — D6 (14-oct): H2 (#34), con dos rezagos y tres horizontes
+
+**Fuente:** brief del Admin 10-B, punto 1.
+
+**Decisión**, para H2 (PR #34):
+- ventanas 1/7/30;
+- la entropía de hace 2 días como primaria, y la de hace 1 día como secundaria;
+- horizontes 1, 5 y 22.
+
+**Razón del Admin:** BTC opera 24/7.
+
+**Contra el PR #34** (sin fusionar; `feature/preregistro-h2` en `3dae9c9`):
+- **Ventanas:** coinciden en BTC. Su sección 4 usa 1/7/30 en el calendario continuo (BTC) y
+  1/5/22 en el hábil (XAU). D6 no nombra a XAU.
+- **Rezago de 2 días, primario:** coincide. La sección 3 une la entropía de `t − 2` días de
+  calendario, por la decisión del Admin del 29-sep.
+- **Rezago de 1 día, secundario: no está, y el #34 lo descarta.** Su sección 3 dice que la
+  entropía de `d` se usa "solo para retornos de días ≥ d + 2" y que "la lectura de rezago 1 queda
+  descartada": el archivo GDELT de `t − 1` sale durante el día `t`, no a su comienzo
+  (`DIAS_DE_RETRASO_DE_PUBLICACION = 1` en `ingestion/run_gdelt.py`). Esa decisión del 29-sep
+  está escrita solo en el #34, no en el decision-log de `main`. La entrada del 2026-09-25 ("El
+  1,246× en BTC no es operativo todavía") pide justamente la prueba con `t − 1`.
+- **Horizontes 5 y 22: no están.** El #34 pronostica solo la varianza de `r_t`, a un día.
+
+El #34 se ajusta antes de fusionarse, y no es parte de este PR. Lo que ese ajuste tiene que
+fijar, y D6 no dice:
+- con dos rezagos y tres horizontes hay seis pruebas por activo: cuál es la primaria y cómo se
+  corrige la multiplicidad;
+- en qué unidad van los horizontes en BTC, donde la semana tiene 7 barras y no 5;
+- que la lectura de rezago 1 usa una entropía que al abrir el día `t` todavía no se publicó:
+  sirve como prueba, no como señal operativa.
+
+## 2026-10-17 — D7 (14-oct): H3 (#33) declara las velas del oro que ya están en `data`
+
+**Fuente:** brief del Admin 10-B, punto 1.
+
+**Decisión:** antes de fusionarse, el pre-registro de H3 (PR #33) declara las velas del oro que
+ya están en la rama `data`.
+
+**Razón del Admin:** inmunidad al sesgo retrospectivo, y trazabilidad.
+
+**Por qué hace falta.** El #33 (`feature/preregistro-h3` en `4eadf83`) dice que "este documento
+tiene que existir antes de que haya un precio que mirar" y que "para escribirlo no se leyó
+ninguna vela ni ningún retorno". Hoy hay precios del oro en `data`, y se calcularon cosas con
+ellos.
+
+**Lo que hay** (medido en `data@69a0e45`, el 17-oct; los cuatro archivos no cambian desde
+`bc2597a`, el 14-oct):
+
+| archivo | contenido |
+|---|---|
+| `metrics/velas/frxXAUUSD/300.jsonl` | M5 de Deriv: 70.718 velas, del 2025-10-08 03:30 al 2026-10-14 18:00 UTC |
+| `metrics/velas/frxXAUUSD/revisiones_300.jsonl` | las revisiones de esas velas |
+| `metrics/velas/td_XAUUSD/300.jsonl` | M5 de TwelveData: 499.252 velas, del 2020-03-16 01:10 al 2026-10-14 17:45 UTC |
+| `metrics/calendario/frxXAUUSD/trading_times.jsonl` | el calendario de Deriv |
+
+Entraron con dos corridas de `velas_intradia.yml`, las dos manuales: la `37721686439` del 08-oct
+(tres commits) y la `38610611624` del 14-oct (uno).
+
+**Lo que se calculó con ellas:** la concordancia del rango de apertura
+(`tools/concordancia_xauusd.py`). Corrió en esas dos corridas, y otra vez el 17-oct para el
+brief 10 (entrada "La compuerta de concordancia del oro, roja"). Mira la dirección y la vela de
+la primera ruptura; no calcula el retorno de ninguna regla.
+
+**Lo que no hay:** ninguna vela diaria, del oro ni de otro activo, y nada en
+`metrics/instrumentos/`, porque `velas.yml` y `sonda.yml` nunca escribieron en `data` (D8). El
+universo de H3 sale de la primera sonda posterior al PR #31 (sección 2 del #33), y esa sonda
+todavía no dejó nada.
+
+El #33 se ajusta antes de fusionarse, y no es parte de este PR.
+
+## 2026-10-17 — D8 (14-oct): los crons de "SPEL velas" y "SPEL sonda", apagados
+
+**Fuente:** brief del Admin 10-B, punto 1. **Lo hizo el Admin el 14-oct.**
+
+**Decisión:** apagar los crons de `velas.yml` y `sonda.yml`.
+
+**Razón del Admin:** un rojo diario normaliza el fallo.
+
+**Verificado** el 17-oct, con `GET /repos/sandbox33/SPEL/actions/workflows` y sus corridas:
+
+| workflow | estado | desde | corridas |
+|---|---|---|---|
+| `velas.yml` | `disabled_manually` | 14-oct, 19:44:42 UTC | 7 programadas, del 08 al 14-oct, las 7 en rojo |
+| `sonda.yml` | `disabled_manually` | 14-oct, 19:45:05 UTC | 7 programadas, del 08 al 14-oct, las 7 en rojo |
+
+La última de `velas.yml` (run `38513551134`) cayó en el handshake de `ingestion/deriv_ws.py`:
+"server rejected WebSocket connection: HTTP 520", el mismo 520 de la API legacy, muerta desde el
+01-oct. La última de `sonda.yml` (run `38516631885`) cayó al commitear, porque
+`metrics/instrumentos` no existía. Ninguna de las dos dejó nada en `data`.
+
+**Para el Admin: el repo todavía dice lo contrario.** El apagado vive en la configuración de
+GitHub, no en el repo (DG-1):
+- `velas.yml` y `sonda.yml` conservan su `schedule:` (`15 0 * * *` y `45 0 * * *`);
+- `tests/test_workflows_deriv.py::test_son_diarios` exige ese cron diario;
+- el encabezado de `sonda.yml` dice "El cron puede quedar activo".
+
+Ese test codifica el comportamiento viejo: se reporta, no se edita. Si los workflows se reactivan
+desde GitHub, los crons vuelven tal cual.
+
+## 2026-10-17 — D9 (14-oct): las Fases 3, 5 y 6, congeladas; GDELT, solo proxy de volatilidad
+
+**Fuente:** brief del Admin 10-B, puntos 1 y 3.
+
+**Decisión:**
+- las Fases 3 (visualización), 5 (escala) y 6 (motor multi-timeframe) quedan congeladas;
+- GDELT se usa solo como proxy de volatilidad.
+
+**Razón del Admin:** nada de infraestructura sin edge demostrado.
+
+**Aplicado sin código** (punto 3 del brief): ni `BLUEPRINT.md` ni el semáforo de `ESTADO.md`
+decían que estuvieran congeladas. Ahora cada una de esas secciones de BLUEPRINT lleva la marca, y
+el semáforo dice "❄️ CONGELADA (D9)".
+
+**Lo que no cambia:** la ingesta diaria de GDELT sigue (`gdelt.yml`, activo; en `data` hay
+commits del 15, 16 y 17-oct). Es el dato de H2, que prueba la entropía justamente como predictor
+de volatilidad. La incógnita 3 de `ESTADO.md` (¿el motor GDELT o el motor rápido?) queda con D9
+anotada; cerrarla es del Admin.
+
 ## 2026-10-17 — D11 y D11-u (14-oct, delegadas en el auditor): H-ORB-oro pausada, y cuándo se reabre
 
-**Fuente:** brief del Admin 10, punto 1. **Razón:** pendiente; está en el memo de traspaso §2.
+**Fuente:** brief del Admin 10, punto 1; las razones, del brief 10-B.
 
 - **D11:** H-ORB-oro queda **pausada**. La compuerta de concordancia dio roja (entrada
-  siguiente).
+  siguiente). **Razón:** la compuerta se fijó antes de los datos y no se relaja.
 - **D11-u:** se reabre con **756 días hábiles de velas M5 de Deriv**
   (`governance.ensayos.DIAS_HABILES_M5_DERIV_PARA_REABRIR_H_ORB_ORO`, y
-  `h_orb_oro_se_puede_reabrir`).
+  `h_orb_oro_se_puede_reabrir`). **Razón:** la de D1, sin 3 años de histórico no se valida
+  nada. Deriv da una ventana móvil de ~1 año (entradas del 2026-10-05: 365 días, en diario y en
+  intradía), así que hay que acumular. [INTERPRETACIÓN] 756 = 3 × 252 días hábiles.
 - **Medido sobre la rama `data` en `bc2597a`:** Deriv tiene **263** días hábiles con velas M5,
   del 2025-10-08 al 2026-10-14 (fechas UTC distintas con al menos una vela, todas de lunes a
   viernes). Faltan 493.
@@ -2974,6 +3222,24 @@ antes de medir, que es lo que importa.
 
 La concordancia no es un ensayo de trading, así que **no suma al N**
 (`governance/ensayos.jsonl`, `concordancia-orb-oro`).
+
+## 2026-10-17 — D12 (17-oct): H1 no tiene alternativa declarada
+
+**Fuente:** brief del Admin 10-B, punto 1. La razón no viene escrita aparte.
+
+**Decisión:** la alternativa declarada de H1 es **ninguna**. Si el Sharpe de la serie base es
+< 0,3, la estrategia se rechaza, el proceso se detiene, y no suma ensayos (N) de optimización
+correctiva.
+
+**Contra el pre-registro sellado.** `research/preregistro_h1.md` §10 dice: "Con Sharpe < 0,3 se
+prueba una alternativa declarada y, si también falla, se detiene". La alternativa quedó como
+[PENDIENTE DEL ADMIN] ("Tiene que quedar escrita acá antes de fusionar"), y el documento se
+fusionó sin ella. Está fijado por sha256, así que D12 la contesta desde acá. No lo contradice:
+sin alternativa, "se detiene" aplica directo.
+
+- [INTERPRETACIÓN] "La serie base" es la de BTC: §11 dice que el oro es una réplica, no una
+  variante, y que no suma al N.
+- H1 v2 (D5) escribe D12 en su propio texto.
 
 ## 2026-10-17 — Brief 10, puntos 2 y 5: la estadística del Sharpe y las constantes nuevas
 
