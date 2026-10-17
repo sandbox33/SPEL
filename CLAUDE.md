@@ -40,9 +40,11 @@ estándar de ingeniería: hazlas. Tu escrutinio va al código y a los datos:
 - Capital de referencia: 100 USD (DG-2).
 - Órdenes reales: prohibidas hasta que una hipótesis H apruebe sus
   compuertas, cumpla DG-3 en demo (`governance/paso_a_real.py`: PSR y DSR
-  ≥ 0,90 sobre histórico + demo, ≥ 30 días y ≥ 20 operaciones cerradas,
-  costos ≤ 1,25 × modelados, reconciliación limpia; máximo 6 meses) y
-  llegue la Fase 4.
+  ≥ 0,90 solo sobre el backtest histórico, ≥ 30 días y ≥ 20 operaciones
+  cerradas, costos ≤ 1,25 × modelados, reconciliación sin discrepancias,
+  no_verificables ni trades terminados sin reconciliar; la latencia de D2,
+  sin umbral todavía; máximo 6 meses)
+  y llegue la Fase 4.
 - Órdenes demo: solo desde `integracion_demo/`, con OTP emitido para una
   cuenta cuyo `account_type` sea `demo` según `GET /accounts`, y conexión solo
   a `/ws/demo`. Fuera de ahí, el acceso a Deriv es de solo lectura.

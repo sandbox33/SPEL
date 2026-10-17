@@ -54,7 +54,8 @@ Sin contract_id (rechazada, no enviada, o enviada sin respuesta):
   · Un trade ya marcado `ok` no se vuelve a reconciliar; uno en
     `discrepancia` o `no_verificable` sí, y suma otra fila. Un `ok` escrito
     antes de DB-2 (sin `reconciliado_comision`) no cuenta como ok: se
-    reconcilia de nuevo, en una fila nueva.
+    reconcilia de nuevo, en una fila nueva. `ok_vigente` es esa regla, y
+    `conteo_de_marcas` usa la misma.
 """
 
 from __future__ import annotations
@@ -156,6 +157,14 @@ def marca_comision(envio: Optional[dict], terminal: dict,
     return ReconciliadoComision.DISCREPANCIA.value, detalle
 
 
+def ok_vigente(fila: dict) -> bool:
+    """Si una fila de reconciliación deja al trade en ok. Un ok anterior a
+    DB-2 no traía `reconciliado_comision` y no cuenta: el trade se reconcilia
+    de nuevo, y hasta entonces está sin reconciliar."""
+    return (fila["reconciliado"] == Reconciliado.OK.value
+            and fila.get("reconciliado_comision") is not None)
+
+
 def marca_global(profit: str, comision: str) -> str:
     if Reconciliado.DISCREPANCIA.value in (profit, comision):
         return Reconciliado.DISCREPANCIA.value
@@ -196,9 +205,7 @@ def reconciliar(registro: Registro, *, profit_table: list[dict], statement: list
         elif f["evento"] == Evento.ENVIO.value:
             envio.setdefault(f["trade_uuid"], f)
         elif f["evento"] == Evento.RECONCILIACION.value:
-            # Un ok anterior a DB-2 no traía la marca de la comisión: no cuenta.
-            if (f["reconciliado"] == Reconciliado.OK.value
-                    and f.get("reconciliado_comision") is not None):
+            if ok_vigente(f):
                 ok_previo.add(f["trade_uuid"])
             else:
                 ok_previo.discard(f["trade_uuid"])
@@ -226,3 +233,31 @@ def reconciliar(registro: Registro, *, profit_table: list[dict], statement: list
             reconciliado_comision=comision,
             evidencia=json.dumps(evidencia, ensure_ascii=False, sort_keys=True)))
     return nuevas
+
+
+def conteo_de_marcas(directorio: Any) -> dict[str, int]:
+    """Por trade terminado, la marca global `reconciliado` de su ÚLTIMA fila
+    de reconciliación, contada: ok, discrepancia, no_verificable, y
+    sin_reconciliar si todavía no tiene ninguna. Un ok que no es
+    `ok_vigente` (anterior a DB-2) cuenta como sin_reconciliar, porque
+    `reconciliar` lo reconcilia de nuevo. De acá salen los tres conteos de la
+    condición d) de DG-3 (governance/paso_a_real.py: D2, DB-1 y DB-3). Un
+    trade abierto no cuenta."""
+    filas = leer_registro(directorio).filas
+    terminales = {e.value for e in EVENTOS_TERMINALES}
+    terminados: set[str] = set()
+    ultima: dict[str, dict] = {}
+    for f in filas:
+        if f["evento"] in terminales:
+            terminados.add(f["trade_uuid"])
+        elif f["evento"] == Evento.RECONCILIACION.value:
+            ultima[f["trade_uuid"]] = f
+    conteo = {Reconciliado.OK.value: 0, Reconciliado.DISCREPANCIA.value: 0,
+              Reconciliado.NO_VERIFICABLE.value: 0, "sin_reconciliar": 0}
+    for uuid in terminados:
+        f = ultima.get(uuid)
+        marca = "sin_reconciliar" if f is None else f["reconciliado"]
+        if marca == Reconciliado.OK.value and not ok_vigente(f):
+            marca = "sin_reconciliar"
+        conteo[marca if marca in conteo else "sin_reconciliar"] += 1
+    return conteo

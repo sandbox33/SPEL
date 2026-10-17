@@ -1,6 +1,6 @@
 {
   "schema_version": "1.1.0",
-  "actualizado": "2026-10-14",
+  "actualizado": "2026-10-17",
   "constantes": [
     {
       "nombre": "EPSILON_BREAKEVEN",
@@ -163,15 +163,15 @@
     {
       "nombre": "ENSAYOS_PREVIOS_FALLIDOS",
       "modulo": "core.preregistro_h1",
-      "categoria": "parametro",
+      "categoria": "derivada",
       "evidencia": "provisional_sin_evidencia",
       "afecta_resultado": true,
       "fuente": "research/preregistro_h1.md (fusionado antes del backtest; ver tests/test_preregistro_h1.py).",
       "usado_en": [
         "core.preregistro_h1.N_INGENUO"
       ],
-      "notas": "Máscara Gödel, proxy de transfer entropy, EMA 20/63.",
-      "valor": 3
+      "notas": "Máscara Gödel, proxy de transfer entropy, EMA 20/63. Vale 3: tests/test_ensayos.py lo exige, y tests/test_preregistro_h1.py lo compara con 'Suman **3**' del documento sellado. Derivada desde el brief del Admin 10 (D3).",
+      "expresion": "governance.ensayos.previos_fallidos(): los fallidos con hipótesis 'previa a la Serie H' que cuentan en el N, en governance/ensayos.jsonl"
     },
     {
       "nombre": "ENTRENAMIENTO_INICIAL_BARRAS",
@@ -650,7 +650,7 @@
       "valor": 0.9,
       "evidencia": "provisional_sin_evidencia",
       "afecta_resultado": true,
-      "fuente": "DG-3, decisión del Admin del 29-sep-2026 (addendum al Brief final v3, ítem 1; decision-log 2026-09-29): a) DSR ≥ 0,90, con el mismo N que el pre-registro.",
+      "fuente": "DG-3, decisión del Admin del 29-sep-2026 (addendum al Brief final v3, ítem 1; decision-log 2026-09-29): a) DSR ≥ 0,90, con el mismo N que el pre-registro; desde D2 (14-oct-2026), solo sobre el backtest histórico.",
       "usado_en": [
         "governance.paso_a_real.evaluar"
       ],
@@ -689,7 +689,7 @@
       "valor": 0.9,
       "evidencia": "provisional_sin_evidencia",
       "afecta_resultado": true,
-      "fuente": "DG-3, decisión del Admin del 29-sep-2026 (addendum al Brief final v3, ítem 1; decision-log 2026-09-29): a) PSR ≥ 0,90 sobre retornos diarios de cartera, histórico + demo.",
+      "fuente": "DG-3, decisión del Admin del 29-sep-2026 (addendum al Brief final v3, ítem 1; decision-log 2026-09-29), modificada por D2 del 14-oct-2026 (decision-log 2026-10-17): a) PSR ≥ 0,90 sobre retornos diarios de cartera, solo en el backtest histórico.",
       "usado_en": [
         "governance.paso_a_real.evaluar"
       ],
@@ -2576,6 +2576,103 @@
         "ingestion.reintentos.es_status_reintentable"
       ],
       "notas": "[INTERPRETACIÓN] del brief."
+    },
+    {
+      "nombre": "EULER_MASCHERONI",
+      "modulo": "core.estadistica_sharpe",
+      "categoria": "parametro",
+      "valor": 0.5772156649015329,
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "La constante γ de Euler–Mascheroni que usa SR* en research/preregistro_h1.md §9. Verificada el 17-oct-2026 contra Σ_{k≤n} 1/k − ln n − 1/(2n) con n = 10⁶, a 1e-10 (tests/test_estadistica_sharpe.py::test_euler_mascheroni).",
+      "usado_en": [
+        "core.estadistica_sharpe.sr_estrella"
+      ],
+      "notas": "Literal y no np.euler_gamma: el módulo no importa numpy (brief del Admin 10, punto 2)."
+    },
+    {
+      "nombre": "RUTA_ENSAYOS",
+      "modulo": "governance.ensayos",
+      "categoria": "derivada",
+      "expresion": "Path(__file__).resolve().parent / 'ensayos.jsonl'",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 10, punto 3 (D3: registro único de ensayos), 17-oct-2026.",
+      "usado_en": [
+        "governance.ensayos.leer",
+        "governance.ensayos.agregar"
+      ],
+      "notas": "Absoluta: depende de dónde esté clonado el repo, como REGISTRY_PATH."
+    },
+    {
+      "nombre": "CAMPOS_ENSAYO",
+      "modulo": "governance.ensayos",
+      "categoria": "etiqueta",
+      "valor": [
+        "id",
+        "hipotesis",
+        "fecha",
+        "preregistro_sha256",
+        "activo",
+        "estado",
+        "cuenta_en_n",
+        "fuente",
+        "nota"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 10, punto 3 (D3: registro único de ensayos), 17-oct-2026. El brief nombra id, hipótesis, fecha, sha256 del pre-registro, activo, estado y si cuenta en el N; fuente y nota se agregan para que ningún ensayo entre sin su evidencia.",
+      "usado_en": [
+        "governance.ensayos.validar",
+        "governance.ensayos.agregar"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "ESTADOS_ENSAYO",
+      "modulo": "governance.ensayos",
+      "categoria": "etiqueta",
+      "valor": [
+        "aprobado",
+        "compuerta_roja",
+        "en_curso",
+        "fallido",
+        "pre-registrado"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 10, punto 3 (D3: registro único de ensayos), 17-oct-2026.",
+      "usado_en": [
+        "governance.ensayos.validar",
+        "governance.ensayos.previos_fallidos"
+      ],
+      "notas": "Conjunto cerrado: un estado nuevo pasa por acá."
+    },
+    {
+      "nombre": "HIPOTESIS_PREVIA_A_LA_SERIE_H",
+      "modulo": "governance.ensayos",
+      "categoria": "etiqueta",
+      "valor": "previa a la Serie H",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 10, punto 3 (D3: registro único de ensayos), 17-oct-2026. research/preregistro_h1.md §9: 'Ensayos previos sobre BTC, ya fallidos y documentados'.",
+      "usado_en": [
+        "governance.ensayos.previos_fallidos"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "DIAS_HABILES_M5_DERIV_PARA_REABRIR_H_ORB_ORO",
+      "modulo": "governance.ensayos",
+      "categoria": "parametro",
+      "valor": 756,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "D11-u: H-ORB-oro se reabre con 756 días hábiles de M5 de Deriv. Decisión delegada por el Admin en el auditor el 14-oct-2026, registrada por el brief del Admin 10; la razón, del brief 10-B (17-oct-2026): la de D1, sin 3 años de histórico no se valida nada, y Deriv da una ventana móvil de ~1 año (decision-log 2026-10-05: 365 días, en diario y en intradía), así que hay que acumular. Decision-log 2026-10-17.",
+      "usado_en": [
+        "governance.ensayos.h_orb_oro_se_puede_reabrir"
+      ],
+      "notas": "[INTERPRETACIÓN] 756 = 3 × 252 días hábiles. Al 14-oct-2026 Deriv tiene 263 días comunes con TwelveData en la concordancia (data@bc2597a)."
     }
   ]
 }
