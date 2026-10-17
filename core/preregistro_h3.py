@@ -20,11 +20,16 @@ documento y su propio sha256: si H3 importara de `core/preregistro_h1.py`,
 un cambio en H1 movería los números de H3 sin tocar su documento, que es
 justo lo que un pre-registro existe para impedir. Además, cuando este
 módulo se fusiona, el de H1 todavía no está en `main`.
+
+Los ensayos previos no se duplican: salen del registro de ensayos, la
+única fuente del N (D3, P3), igual que en H1.
 """
 
 from __future__ import annotations
 
 import math
+
+from governance.ensayos import previos_fallidos
 
 #: Lookbacks de la rejilla, en barras diarias. Los mismos que H1.
 REJILLA_H3: tuple[int, ...] = (10, 20, 40, 80, 160, 320)
@@ -79,8 +84,9 @@ OPERACIONES_CERRADAS_MINIMAS_DEMO = 20
 RAZON_MAXIMA_COSTO_OBSERVADO_MODELADO = 1.25
 MESES_MAXIMOS_ZONA_GRIS = 6
 
-#: Ensayos previos sobre BTC, fallidos y documentados.
-ENSAYOS_PREVIOS_FALLIDOS = 3
+#: Ensayos previos sobre BTC, fallidos y documentados: los del registro de
+#: ensayos (D3, P3). No se escriben a mano.
+ENSAYOS_PREVIOS_FALLIDOS = previos_fallidos()
 
 #: Variantes de H3 que suman al N.
 VARIANTES_H3 = 1

@@ -30,7 +30,7 @@ DOC = RAIZ / "research" / "preregistro_h3.md"
 
 #: Si cambia, el documento cambió. Después de fusionado, eso es un
 #: experimento nuevo: preregistro_h3_v2.md, no una edición de este.
-SHA256_PREREGISTRO = "40a05d967108a43152e5dd0704d1dfc2f6a27e30cfcbb034edfb1fde1c1d0d19"
+SHA256_PREREGISTRO = "53a1d5a0d5a2b59af3a0c3277ef821a17d4918aef1e504678d27f9c2fceed9d8"
 
 
 def _texto() -> str:
@@ -198,10 +198,12 @@ def test_las_reglas_dependen_solo_de_longitudes_conteos_k_y_volatilidades():
 
 
 def test_el_modulo_no_importa_nada_que_haga_un_backtest():
+    """El registro de ensayos no hace backtest: es la única fuente del N
+    (D3, P3), de donde salen los previos."""
     arbol = ast.parse((RAIZ / "core" / "preregistro_h3.py").read_text(encoding="utf-8"))
     importados = {a.name for n in ast.walk(arbol) if isinstance(n, ast.Import) for a in n.names}
     importados |= {n.module for n in ast.walk(arbol) if isinstance(n, ast.ImportFrom)}
-    assert importados <= {"__future__", "math"}, importados
+    assert importados <= {"__future__", "math", "governance.ensayos"}, importados
 
 
 # ═══ Brief 11–13, tarea 12: D7, D2 y el sizing ═════════════════════════════
@@ -241,7 +243,6 @@ def test_el_paso_a_real_es_el_de_d2_y_db3():
     assert "solo en el backtest histórico" in s12
     assert "sin discrepancias, no_verificables ni trades terminados sin reconciliar" in s12
     assert "La latencia que nombra D2 no tiene umbral todavía" in s12
-    assert "**Con D2 no tiene camino a real:**" in s12
 
 
 def test_las_cifras_de_dg3_son_las_de_governance():
@@ -269,3 +270,86 @@ def test_h3_esta_en_el_registro_de_ensayos_con_este_documento():
     e = de_h3[0]
     assert e["estado"] == "pre-registrado" and e["cuenta_en_n"] is True
     assert e["preregistro_sha256"] == SHA256_PREREGISTRO
+
+
+# ═══ Brief 11–13-B (17-oct-2026): P1 a P5 ═════════════════════════════════
+
+def test_no_queda_ninguna_marca_de_pendiente_del_admin():
+    """Eran tres: la historia del universo, el N y la estadística del Sharpe."""
+    assert "PENDIENTE DEL ADMIN" not in _texto()
+
+
+def test_p1_la_fuente_de_precios():
+    s2 = _seccion("## 2. Universo")
+    assert ("**Los precios (P1, auditor, 17-oct-2026):** las velas diarias de D1 (TwelveData) "
+            "de cada activo, y solo después de que el brief 14 las valide con su compuerta.") in s2
+    assert ("H3 no corre sobre ese activo: no hay fuente de reemplazo sin validar, y la "
+            "compuerta no se relaja.") in s2
+
+
+def test_p2_h3_queda_bloqueada_y_no_se_reduce_a_k_2():
+    """Antes, la sección 2 dejaba tres salidas sin elegir, una de ellas K = 2.
+    P2 conserva la regla de universo y bloquea H3."""
+    s2 = _seccion("## 2. Universo")
+    assert "**H3 queda bloqueada (P2, auditor, 17-oct-2026)**" in s2
+    assert "**H3 no se reduce a K = 2**" in s2 and "H1 contado dos veces" in s2
+    assert "Esa extensión es un brief propio, que se decide si H1 v2 o H2 muestran algo." in s2
+    assert "limitar H3 a los activos con historia de D1" not in _plano()
+    assert "Entra **todo instrumento no sintético con MULTUP según la sonda de instrumentos**" in s2
+
+
+def test_p3_el_n_son_las_estrategias_del_registro_y_h2_no_suma():
+    from governance import ensayos
+    s11 = _seccion("## 11. Número de ensayos para el DSR")
+    assert "`governance/ensayos.py::que_cuentan_en_el_dsr()`" in s11
+    assert "**Los de H2 no suman.**" in s11
+    del_dsr = {e["id"]: e for e in ensayos.que_cuentan_en_el_dsr()}
+    assert {"previo-mascara-godel", "previo-proxy-transfer-entropy", "previo-ema-20-63",
+            "h3-cartera"} <= set(del_dsr)
+    assert all(e["hipotesis"] != "H2" for e in del_dsr.values())
+
+
+def test_los_previos_salen_del_registro_y_no_son_un_literal():
+    """Como en H1 (D3): el 3 ya no se escribe a mano en el módulo."""
+    from governance.ensayos import previos_fallidos
+    assert pre.ENSAYOS_PREVIOS_FALLIDOS == previos_fallidos() == 3
+    arbol = ast.parse((RAIZ / "core" / "preregistro_h3.py").read_text(encoding="utf-8"))
+    asignacion = next(n for n in arbol.body if isinstance(n, ast.Assign)
+                      and [getattr(t, "id", None) for t in n.targets] == ["ENSAYOS_PREVIOS_FALLIDOS"])
+    assert isinstance(asignacion.value, ast.Call)
+    assert getattr(asignacion.value.func, "id", None) == "previos_fallidos"
+
+
+def test_p4_la_estadistica_es_la_de_h1_v2_y_el_cambio_esta_declarado():
+    """Antes: el PSR de 2012, con la σ en el Sharpe observado y T−1. Ahora:
+    core/estadistica_sharpe.py, con la σ en SR₀, T y ρ."""
+    from core import estadistica_sharpe as es
+    s11 = _seccion("## 11. Número de ensayos para el DSR")
+    assert "**Convenciones**, las mismas de H1:" not in s11
+    assert "**La estadística del Sharpe (P4)** es la de H1 v2 (D5): `core/estadistica_sharpe.py`" in s11
+    assert "**El cambio, a propósito y antes de ver datos (P4).**" in s11
+    assert "con la σ evaluada en el Sharpe **observado** y `T−1`. Ahora la σ se evalúa en **SR₀**" in s11
+    assert "No es más estricto en todos los casos" in s11
+    for llamada, funcion in (("`psr(SR, 0, t=T, asimetria=γ₃, curtosis=γ₄, rho=ρ)`", es.psr),
+                             ("`dsr(SR, t=T, asimetria=γ₃, curtosis=γ₄, varianza_ensayos=V, "
+                              "n_efectivo=N, rho=ρ)`", es.dsr)):
+        assert llamada in s11, llamada
+        nombres = [a.split("=")[0] for a in llamada.strip("`").split("(", 1)[1].rstrip(")").split(", ")
+                   if "=" in a]
+        assert set(nombres) <= set(inspect.signature(funcion).parameters), nombres
+
+
+def test_p5_la_zona_gris_no_es_concluyente_y_no_va_a_demo():
+    """Antes, la zona gris iba a forward en demo. Con P5 no va: con D2, la
+    demo no cambia a), así que no la puede rescatar."""
+    s12 = _seccion("## 12. Compuertas")
+    assert "**No concluyente: no va a demo** (P5, auditor, 17-oct-2026)" in s12
+    assert "También va a forward en demo" not in s12
+    assert "**Con D2 no tiene camino a real:**" not in s12
+
+
+def test_h3_en_el_registro_queda_bloqueada_y_sin_pendiente():
+    from governance import ensayos
+    e = next(e for e in ensayos.leer() if e["id"] == "h3-cartera")
+    assert "pendiente del Admin" not in e["activo"]
+    assert "bloqueada hasta que haya historia validada para el universo (P2)" in e["nota"]

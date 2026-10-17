@@ -570,15 +570,15 @@
     {
       "nombre": "ENSAYOS_PREVIOS_FALLIDOS",
       "modulo": "core.preregistro_h3",
-      "categoria": "parametro",
+      "categoria": "derivada",
       "evidencia": "provisional_sin_evidencia",
       "afecta_resultado": true,
       "fuente": "research/preregistro_h3.md (fusionado antes del PR #31; ver tests/test_preregistro_h3.py).",
       "usado_en": [
         "core.preregistro_h3.N_INGENUO"
       ],
-      "notas": "Máscara Gödel, proxy de transfer entropy, EMA 20/63.",
-      "valor": 3
+      "notas": "Máscara Gödel, proxy de transfer entropy, EMA 20/63. Vale 3: tests/test_preregistro_h3.py lo exige y lo compara con 'más los **3** ensayos previos' del documento. Derivada desde el brief del Admin 11–13-B (P3), como la de H1 desde el brief 10 (D3).",
+      "expresion": "governance.ensayos.previos_fallidos(): los fallidos con hipótesis 'previa a la Serie H' que cuentan en el N, en governance/ensayos.jsonl"
     },
     {
       "nombre": "FRACCION_MAXIMA_SALTADA",

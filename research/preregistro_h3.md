@@ -1,18 +1,23 @@
 # Pre-registro H3 — tendencia multiactivo
 
 **Escrito el 29-sep-2026, en el PR-H3 del Brief final v3, antes de que se fusione el PR #31.
-Revisado dos veces, todavía sin fusionar:**
+Revisado tres veces, todavía sin fusionar:**
 - el 01-oct-2026, con dos decisiones del Admin del 29-sep: el sizing (sección 6) y las
   condiciones del paso de demo a real (DG-3, sección 12);
 - el 17-oct-2026, por el brief 11–13. Declara los precios del oro que ya están en `data` (D7,
   sección 2), reescribe el paso a real según D2 (sección 12) y justifica el sizing por
-  volatilidad (sección 6).
+  volatilidad (sección 6);
+- el 17-oct-2026, otra vez, con las resoluciones del auditor de ese día (brief 11–13-B): la
+  fuente de precios (P1) y H3 bloqueada hasta que haya historia para su universo (P2), en la
+  sección 2; el N del registro de ensayos (P3) y la estadística del Sharpe de H1 v2 (P4), en
+  la 11; y la zona gris no concluyente (P5), en la 12.
 
 Este documento tenía que existir antes de que hubiera un precio que mirar. Para escribirlo no
 se leyó ninguna vela ni ningún retorno: solo reglas. Desde entonces entraron en `data` velas
 M5 del oro, y la sección 2 dice cuáles son y qué se calculó con ellas.
 
-**H3 es la ruta principal** de la Serie H (DG-5, decision-log 25-sep-2026).
+**H3 es la ruta principal** de la Serie H (DG-5, decision-log 25-sep-2026). Desde el 17-oct
+está **bloqueada** hasta que haya historia validada para su universo (P2, sección 2).
 
 Este documento **no se modifica después de fusionarse.** `tests/test_preregistro_h3.py` fija
 su sha256 y verifica que cada número de `core/preregistro_h3.py` esté escrito acá.
@@ -25,10 +30,8 @@ H1. Por eso las reglas que H3 toma de H1 están escritas acá completas: lo que 
 este texto, no el de H1.
 
 Las marcas **[INTERPRETACIÓN]** señalan una lectura del brief que el Admin aprueba al
-fusionar. Las marcas **[PENDIENTE DEL ADMIN]** señalan algo que el brief no fija o que choca
-con los datos o con el decision-log, y que se completa **antes** de fusionar, en este mismo
-PR. Quedan tres: la historia del universo (sección 2), y el N y la estadística del Sharpe
-(sección 11).
+fusionar. **No queda nada pendiente del Admin:** la historia del universo, el N y la
+estadística del Sharpe los resolvió el auditor el 17-oct (P2, P3 y P4).
 
 ---
 
@@ -58,20 +61,26 @@ que registre el sha256; ningún cálculo de H3 corre antes de que esté fusionad
 de congelada, el universo no cambia: un instrumento que aparezca más tarde entra, si
 entra, en un experimento nuevo.
 
-**[PENDIENTE DEL ADMIN] La historia del universo.** Con las fuentes de hoy, ningún activo
-llega a la condición de arriba:
+**Los precios (P1, auditor, 17-oct-2026):** las velas diarias de D1 (TwelveData) de cada
+activo, y solo después de que el brief 14 las valide con su compuerta. Si el brief 14 sale
+rojo para un activo, H3 no corre sobre ese activo: no hay fuente de reemplazo sin validar, y la
+compuerta no se relaja. **[INTERPRETACIÓN]** Dejar afuera un activo en rojo no es elegir por
+precios: la compuerta compara dos fuentes del mismo precio (D1) y no mira ninguna regla de H3.
+
+**H3 queda bloqueada (P2, auditor, 17-oct-2026)** hasta que haya historia validada para el
+universo. Con las fuentes de hoy, ningún activo llega a la condición de arriba:
 - Deriv da **365 días** de historia diaria (decision-log 2026-10-05), y la rejilla mínima pide
   **766** barras;
 - la sonda nunca escribió `metrics/instrumentos/` en `data`, y su cron está apagado hasta la
   migración de `ingestion/deriv_ws.py` (D8, D8-r): todavía no hay universo que congelar;
 - D1 da historia larga desde TwelveData, validada por el brief 14, **solo a BTC y al oro**.
 
-Hay tres salidas, y este documento no elige ninguna:
-- limitar H3 a los activos con historia de D1 (K = 2);
-- extender D1 a todo el universo, con la validación del brief 14 activo por activo;
-- acumular velas de Deriv hasta las 766 barras.
+La regla de universo de esta sección no cambia, y **H3 no se reduce a K = 2**: con BTC como
+componente H1 (sección 11) y el oro como réplica de H1, H3 con K = 2 sería H1 contado dos veces.
 
-La decide el Admin, antes de fusionar.
+**La ruta prevista (P2):** la migración de `ingestion/deriv_ws.py` revive la sonda, el universo
+se congela como dice arriba, y D1 se extiende activo por activo con la compuerta del brief 14.
+Esa extensión es un brief propio, que se decide si H1 v2 o H2 muestran algo.
 
 ### Precios que ya están en `data` (D7)
 
@@ -251,13 +260,20 @@ No es un ensayo y **no suma al N**.
 
 ## 11. Número de ensayos para el DSR
 
-**El N de H3 incluye los ensayos de H1 y cada variante de H3.**
+**El N de H3 sale del registro de ensayos (D3), y suman los ensayos que son estrategias (P3,
+auditor, 17-oct-2026):** los que devuelve `governance/ensayos.py::que_cuentan_en_el_dsr()`. Son
+los ensayos de H1 y cada variante de H3:
 
 - Los de H1, con el método que declara su pre-registro: los ensayos de su rejilla y su
   ensemble agrupados por la razón de participación de su matriz de correlación de
   retornos, `⌈k² / Σᵢⱼ ρᵢⱼ²⌉`, más los **3** ensayos previos sobre BTC ya fallidos
   (máscara Gödel, proxy de transfer entropy, EMA 20/63).
 - Las variantes de H3: **una**, la cartera de la sección 4.
+- **Los de H2 no suman.** Prueban un predictor de volatilidad con Diebold–Mariano y MCS, no un
+  Sharpe seleccionado. En el registro cuentan en el N de su propia familia de pruebas.
+
+Una hipótesis nueva que entre al registro y cuente se declara estrategia o no en
+`governance/ensayos.py`: sin eso, el conteo falla.
 
 **H1 queda como componente de H3**: si BTC entra al universo por las reglas de la
 sección 2, sus señales por lookback son las de H1. Se declara así, y por eso los ensayos
@@ -266,28 +282,34 @@ de H1 suman al N de H3.
 El reporte muestra además el DSR con **N = 11** contado ingenuamente (los seis lookbacks
 y el ensemble de H1, los tres previos y la cartera de H3), como cota pesimista.
 
-**[PENDIENTE DEL ADMIN] El N y el registro de ensayos (D3).** D3 hace del registro la única
-fuente del N, y el registro ya tiene más que lo de arriba: los 3 previos, los dos rezagos de H2
-y, desde este PR, la cartera de H3. Falta decidir qué ensayos del registro suman al N de H3.
-La propuesta: los que cuentan en el registro y son estrategias —los 3 previos, los de H1 y la
-cartera de H3—, sin los de H2, que prueban un predictor de volatilidad.
+**La estadística del Sharpe (P4)** es la de H1 v2 (D5): `core/estadistica_sharpe.py`, la única
+implementación (brief 10), sobre los retornos netos diarios de la cartera.
 
-**[PENDIENTE DEL ADMIN] La estadística del Sharpe.** Las convenciones de abajo son las de H1
-v1, sellado: la σ se evalúa en el SR observado y con `T−1`. D5 cambia las de H1 v2 al módulo
-`core/estadistica_sharpe.py` (σ en SR₀, con la autocorrelación ρ), la única implementación de
-la estadística del Sharpe (brief 10). Con las de abajo, H3 necesitaría una segunda
-implementación. La propuesta: las de H1 v2.
+- `T` días evaluados; Sharpe por barra `SR = r̄ / σ`; anualizado con `√A` (sección 5).
+- Los momentos de la serie, con `T` en el denominador: `m_k = (1/T) · Σ (r − r̄)^k`,
+  `σ² = m₂`, `γ₃ = m₃ / m₂^(3/2)` y `γ₄ = m₄ / m₂²` (la curtosis, no el exceso).
+- **ρ, estimado de la serie:** `ρ = Σ_{t=2}^{T} (r_t − r̄)(r_{t−1} − r̄) / Σ_{t=1}^{T} (r_t − r̄)²`, la
+  autocorrelación de orden 1 de los mismos retornos.
+- **PSR(0)** = `psr(SR, 0, t=T, asimetria=γ₃, curtosis=γ₄, rho=ρ)`: la σ se evalúa en SR₀ = 0.
+- **DSR** = `dsr(SR, t=T, asimetria=γ₃, curtosis=γ₄, varianza_ensayos=V, n_efectivo=N, rho=ρ)`, es
+  decir PSR(SR*), con `SR* = √V · ((1−γ)·Φ⁻¹(1 − 1/N) + γ·Φ⁻¹(1 − 1/(N·e)))`, donde `V` es la
+  varianza de los Sharpe por barra de los ensayos, `γ` la constante de Euler–Mascheroni y `N`
+  el de arriba.
 
-**Convenciones**, las mismas de H1:
+**El cambio, a propósito y antes de ver datos (P4).** Este documento usaba las convenciones de
+H1 v1: el PSR de Bailey y López de Prado (2012),
+`Φ( (SR − SR*) · √(T−1) / √(1 − γ₃·SR + (γ₄−1)/4 · SR²) )`, con la σ evaluada en el Sharpe
+**observado** y `T−1`. Ahora la σ se evalúa en **SR₀**, con `T` y con ρ, por tres razones:
+- **El PSR prueba la hipótesis nula SR = SR₀**, y su denominador es el desvío del estimador bajo
+  esa nula: el de SR₀, no el del Sharpe que salió.
+- **ρ corrige la varianza por la autocorrelación** de los retornos diarios, que una cartera de
+  tendencia puede tener.
+- **Una sola implementación, la misma que la de H1**, su componente: con las de 2012, H3
+  necesitaba una segunda.
 
-- Sharpe por barra sobre los retornos netos diarios de la cartera; anualizado con `√A`.
-- PSR (Bailey y López de Prado, 2012):
-  `PSR(SR*) = Φ( (SR − SR*) · √(T−1) / √(1 − γ₃·SR + (γ₄−1)/4 · SR²) )`, con SR por
-  barra, `T` barras evaluadas, `γ₃` asimetría y `γ₄` curtosis (no el exceso).
-- DSR (Bailey y López de Prado, 2014): `PSR(SR*)` con
-  `SR* = √V · ((1−γ)·Φ⁻¹(1 − 1/N) + γ·Φ⁻¹(1 − 1/(N·e)))`, donde `V` es la varianza de
-  los Sharpe por barra de los ensayos, `γ` la constante de Euler–Mascheroni y `N` el de
-  arriba.
+No es más estricto en todos los casos: con el vector del brief 10, la de 2012 da PSR(0) = 0,913
+y esta, 0,987 con ρ = 0 (`tests/test_estadistica_sharpe.py`). Pasa lo mismo que en H1 v2, donde
+el auditor lo aceptó como una corrección de método, declarada antes de los datos (P6).
 
 ## 12. Compuertas
 
@@ -295,11 +317,11 @@ implementación. La propuesta: las de H1 v2.
   cartera supera al benchmark en Sharpe neto **o** en Calmar (CAGR / MaxDD). "Avanzar"
   significa **forward en demo** con las reglas congeladas, no capital real.
 - **Detener → H2:** Sharpe neto **< 0,3**. No se prueba ninguna variante de tendencia.
-- **Zona gris:** cualquier otro caso. También va a forward en demo con las reglas
-  congeladas, con la misma salida que el caso de avanzar. **Con D2 no tiene camino a real:**
-  a) se mide solo sobre el histórico, que el forward no cambia, así que una zona gris nunca la
-  cumple. Su forward valida infraestructura, fricciones, latencia y reconciliación, y al
-  vencer pasa a H2.
+- **Zona gris:** cualquier otro caso. **No concluyente: no va a demo** (P5, auditor,
+  17-oct-2026), igual que lo intermedio de H1 v2 (D5). Con D2, a) se mide solo sobre el
+  histórico, que la demo no cambia, así que la demo no puede rescatar una zona gris, y mandarla
+  a demo sería ruido operativo. Qué sigue lo decide el Admin, y una corrida nueva es otro
+  experimento (sección 13).
 - **Paso de demo a real** (DG-3: decision-log 29-sep-2026, con D2 del 14-oct y DB-3 del
   17-oct; `governance/paso_a_real.py`). Exige **todas**:
   - a) **PSR ≥ 0,90** y **DSR ≥ 0,90** sobre retornos diarios de cartera, **solo en el
