@@ -3126,12 +3126,12 @@
       ],
       "evidencia": "provisional_sin_evidencia",
       "afecta_resultado": true,
-      "fuente": "P3, decisión del auditor del 17-oct-2026 bajo el criterio delegado del Admin (brief del Admin 11–13-B): al N del DSR suman los ensayos que son estrategias, los 3 previos, los de H1 y la cartera de H3. Decision-log 2026-10-17.",
+      "fuente": "P3, decisión del auditor del 17-oct-2026 bajo el criterio delegado del Admin (brief del Admin 11–13-B): al N del DSR de H3 suman los ensayos del registro que son estrategias: los 3 previos, los de H1 y la cartera de H3. Decision-log 2026-10-17.",
       "usado_en": [
         "governance.ensayos.es_estrategia",
         "governance.ensayos.que_cuentan_en_el_dsr"
       ],
-      "notas": "Una hipótesis que cuenta y no está acá ni en HIPOTESIS_QUE_NO_SON_ESTRATEGIA hace fallar el conteo. H-ORB-oro no está: su única línea no cuenta."
+      "notas": "Solo las estrategias pueden sumar al N de un DSR, y cuáles suman lo dice cada pre-registro: H3, todas (P3); H1, las suyas y los previos. Una hipótesis que cuenta y no está acá ni en HIPOTESIS_QUE_NO_SON_ESTRATEGIA hace fallar el conteo. H-ORB-oro no está: su única línea no cuenta."
     },
     {
       "nombre": "HIPOTESIS_QUE_NO_SON_ESTRATEGIA",

@@ -3693,7 +3693,12 @@ Se resolvieron a mano, sin perder nada de ninguno de los dos lados.
 - `HIPOTESIS_DE_ESTRATEGIA` = {previa a la Serie H, H1, H3} y `HIPOTESIS_QUE_NO_SON_ESTRATEGIA` =
   {H2}, disjuntas;
 - `es_estrategia(e)` da la clase por la hipótesis;
-- `que_cuentan_en_el_dsr()` devuelve los que cuentan y son estrategias.
+- `que_cuentan_en_el_dsr()` devuelve los que cuentan y son estrategias: los únicos que pueden sumar
+  al N de un DSR.
+
+Cuáles suman lo dice cada pre-registro. El de H3 los suma todos, que es lo que fija P3. El de H1,
+en v1 sellado y en v2, suma los suyos y los previos (sección 9), y P3 no lo cambia: no incluye la
+cartera de H3, que no corrió.
 
 Es un criterio y no un campo, porque un campo nuevo obligaría a reescribir las líneas sembradas,
 fijadas por sha256. `cuenta_en_n` no cambia en ninguna línea; cambia lo que dice el docstring.

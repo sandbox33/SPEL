@@ -19,9 +19,9 @@ CAMPOS_ENSAYO:
                         null si no hubo pre-registro.
   · activo              sobre qué activo(s) se midió.
   · estado              uno de ESTADOS_ENSAYO.
-  · cuenta_en_n         si suma a un N de pruebas múltiples: al del DSR si
-                        además es una estrategia (P3, abajo); si no, al de su
-                        propia familia de pruebas.
+  · cuenta_en_n         si suma a un N de pruebas múltiples: si además es
+                        una estrategia, al de un DSR (P3, abajo); si no, al
+                        de su propia familia de pruebas.
   · fuente              dónde está la evidencia (decision-log, run, commit).
   · nota                texto libre.
 
@@ -33,10 +33,13 @@ modo "a", y tests/test_ensayos.py fija el sha256 de lo sembrado.
 
 ══ ESTRATEGIAS (P3) ══
 
-Al N del DSR de una estrategia suman los ensayos que cuentan y son
-estrategias, los de `que_cuentan_en_el_dsr`: prueban un Sharpe
-seleccionado. Los de H2 no suman: prueban un predictor de volatilidad con
-Diebold–Mariano y MCS, y cuentan en el N de su propia familia de pruebas
+Un ensayo es una estrategia si prueba un Sharpe seleccionado. Los que
+cuentan y son estrategias, los de `que_cuentan_en_el_dsr`, son los únicos
+que pueden sumar al N de un DSR, y cuáles suman lo dice el pre-registro de
+cada hipótesis: el de H3 los suma todos (P3), y el de H1, los suyos y los
+previos (research/preregistro_h1.md, sección 9). Los de H2 no suman a
+ningún DSR: prueban un predictor de volatilidad con Diebold–Mariano y MCS,
+y cuentan en el N de su propia familia de pruebas
 (research/preregistro_h2.md, sección 7). Lo decidió el auditor el
 17-oct-2026 (P3, brief del Admin 11–13-B).
 
@@ -153,8 +156,9 @@ def agregar(entrada: dict, ruta: Optional[Path] = None) -> dict:
 
 
 def que_cuentan(ruta: Optional[Path] = None) -> list[dict]:
-    """Los ensayos que suman a algún N: al del DSR los que son estrategias
-    (`que_cuentan_en_el_dsr`), y al de su propia familia los demás (P3)."""
+    """Los ensayos que suman a algún N: al de un DSR los que son
+    estrategias (`que_cuentan_en_el_dsr`), y al de su propia familia los
+    demás (P3)."""
     return [e for e in leer(ruta) if e["cuenta_en_n"]]
 
 
@@ -170,8 +174,9 @@ def es_estrategia(e: dict) -> bool:
 
 
 def que_cuentan_en_el_dsr(ruta: Optional[Path] = None) -> list[dict]:
-    """Los ensayos que suman al N del DSR de una estrategia (P3): los que
-    cuentan y son estrategias.
+    """Los ensayos que cuentan y son estrategias (P3): los únicos que
+    pueden sumar al N de un DSR. Cuáles suman lo dice cada pre-registro; el
+    de H3 los suma todos.
 
     Devuelve líneas, no ensayos. Un ensayo que cambia de estado suma una
     línea nueva (ver APPEND-ONLY), y el registro todavía no dice cuál
