@@ -349,7 +349,7 @@
       "afecta_resultado": true,
       "fuente": "research/preregistro_h2.md, sección 4: componentes diario, semanal y mensual del HAR en calendario hábil.",
       "usado_en": [],
-      "notas": "[INTERPRETACIÓN] D6 no nombra a XAU: las mismas tres ventanas —un día, una semana, un mes— en barras hábiles. Sin consumidor hasta el PR de evaluación de H2."
+      "notas": "D6 no nombra a XAU: las mismas tres ventanas —un día, una semana, un mes— en barras hábiles. Interpretación aprobada por el auditor el 17-oct-2026 (P6, decision-log). Sin consumidor hasta el PR de evaluación de H2."
     },
     {
       "nombre": "REZAGO_ENTROPIA_DIAS_CALENDARIO",
@@ -424,7 +424,7 @@
         "core.preregistro_h2.rezagos_hac",
         "core.preregistro_h2.PRUEBAS_POR_ACTIVO"
       ],
-      "notas": "[INTERPRETACIÓN] D6 da los números y no la unidad: son barras, días de calendario en BTC y hábiles en XAU.",
+      "notas": "D6 da los números y no la unidad: son barras, días de calendario en BTC y hábiles en XAU. Interpretación aprobada por el auditor el 17-oct-2026 (P6, decision-log).",
       "categoria": "parametro",
       "valor": [
         1,
@@ -450,7 +450,7 @@
       "evidencia": "provisional_sin_evidencia",
       "afecta_resultado": true,
       "usado_en": [],
-      "notas": "[INTERPRETACIÓN] D6 pide el MCS y no fija sus parámetros: se fijan en el documento, antes de mirar. Sin consumidor hasta el PR de evaluación de H2.",
+      "notas": "D6 pide el MCS y no fija sus parámetros: se fijan en el documento, antes de mirar. Interpretación aprobada por el auditor el 17-oct-2026 (P6, decision-log). Sin consumidor hasta el PR de evaluación de H2.",
       "categoria": "parametro",
       "valor": 0.9,
       "fuente": "research/preregistro_h2.md, sección 7: nivel del Model Confidence Set (α del MCS = 0,10)."
@@ -461,7 +461,7 @@
       "evidencia": "provisional_sin_evidencia",
       "afecta_resultado": true,
       "usado_en": [],
-      "notas": "[INTERPRETACIÓN], como NIVEL_MCS. Sin consumidor hasta el PR de evaluación de H2.",
+      "notas": "Interpretación aprobada por el auditor el 17-oct-2026 (P6), como NIVEL_MCS. Sin consumidor hasta el PR de evaluación de H2.",
       "categoria": "parametro",
       "valor": 10000,
       "fuente": "research/preregistro_h2.md, sección 7: réplicas del bootstrap de bloques móviles del MCS."
@@ -472,7 +472,7 @@
       "evidencia": "provisional_sin_evidencia",
       "afecta_resultado": true,
       "usado_en": [],
-      "notas": "[INTERPRETACIÓN], como NIVEL_MCS. Sin consumidor hasta el PR de evaluación de H2.",
+      "notas": "Interpretación aprobada por el auditor el 17-oct-2026 (P6), como NIVEL_MCS. Sin consumidor hasta el PR de evaluación de H2.",
       "categoria": "parametro",
       "valor": 20261017,
       "fuente": "research/preregistro_h2.md, sección 7: semilla del bootstrap del MCS, fijada antes de mirar."

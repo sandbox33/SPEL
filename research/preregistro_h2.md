@@ -1,11 +1,13 @@
 # Pre-registro H2 — la entropía GDELT como predictor de volatilidad
 
-**Escrito el 29-sep-2026, en el PR-H2 del Brief final v3. Revisado dos veces, todavía sin
+**Escrito el 29-sep-2026, en el PR-H2 del Brief final v3. Revisado tres veces, todavía sin
 fusionar:**
 - el 01-oct-2026, con la decisión del Admin del 29-sep sobre el rezago (sección 3);
 - el 17-oct-2026, con D6, la decisión del Admin del 14-oct (brief 11). Trae el rezago de 1 día
   como secundario, los horizontes 1, 5 y 22 con MCS y Diebold–Mariano, y el día de la semana
-  estimado solo en entrenamiento.
+  estimado solo en entrenamiento;
+- el 17-oct-2026, otra vez, con las resoluciones del auditor de ese día (brief 11–13-B): la
+  fuente de precios (P1, sección 2) y las interpretaciones que aprobó (P6).
 
 El código de evaluación va en otro PR, después de este. Para escribirlo no se calculó ninguna
 relación entre entropía y volatilidad, y no se miró ningún precio. De la serie GDELT se miraron
@@ -20,9 +22,9 @@ Cualquier cambio de modelo, pérdida, test o muestra después de ver un resultad
 experimento nuevo: `preregistro_h2_v2.md`, sin borrar este.
 
 Las marcas **[INTERPRETACIÓN]** señalan una lectura del brief que el Admin aprueba al
-fusionar. Las marcas **[PENDIENTE DEL ADMIN]** señalan algo que el brief no fija o que
-choca con los datos, y que se completa **antes** de fusionar, en este mismo PR. La del
-rezago la resolvió el Admin el 29-sep. **Queda una: la fuente de precios (sección 2).**
+fusionar. Las que dicen **[INTERPRETACIÓN aprobada (P6)]** ya las aprobó el auditor el 17-oct,
+antes de fusionar. **No queda nada pendiente del Admin:** el rezago lo decidió el Admin el
+29-sep, y la fuente de precios, el auditor el 17-oct (P1).
 
 ---
 
@@ -49,8 +51,11 @@ cómo se hace esa prueba.
 - **Entropía:** `entropy_shannon` de `metrics/gdelt_series/BTC.jsonl` y `XAU.jsonl` en la
   rama `data`, leída con `ingestion/gdelt_series.py::read_series()`. Un día con
   `insufficient_events` no tiene entropía.
-- **Precios: [PENDIENTE DEL ADMIN]** La fuente de las velas diarias. Este documento decía "las
-  velas diarias de Deriv que persiste `ingestion/velas.py`", y con ellas H2 no corre:
+- **Precios (P1, auditor, 17-oct-2026): las velas diarias de D1 (TwelveData), y solo después
+  de que el brief 14 las valide con su compuerta.** Si el brief 14 sale rojo para un activo,
+  H2 no corre sobre ese activo: no hay fuente de reemplazo sin validar, y la compuerta no se
+  relaja. Este documento decía "las velas diarias de Deriv que persiste `ingestion/velas.py`",
+  y con ellas H2 no corre:
   - Deriv da **365 días** de historia diaria, con `end` ignorado (decision-log 2026-10-05,
     sonda §0.A-2), y la ventana de estimación arranca con **504** barras (sección 4). No queda
     ningún pronóstico fuera de muestra.
@@ -59,10 +64,13 @@ cómo se hace esa prueba.
     validada contra el año de Deriv con una coincidencia de al menos el 90 %. El brief 14 fija
     la métrica y la hora de corte, antes de bajar precios (D1-p).
 
-  **Propuesta de este PR, que no se aplica sin el Admin:** las velas diarias de D1 que valide
-  el brief 14. Si la hora de corte que fije el brief 14 abre la barra del día `t` antes de las
-  00:00 UTC, la sección 3 se revisa antes de correr: el rezago está contado para barras que
-  abren a esa hora, como las de Deriv.
+  **[INTERPRETACIÓN]** Si el brief 14 sale rojo para BTC, H2 no tiene conclusión: la sección 9
+  concluye con la primaria de BTC, y XAU es una réplica que no ocupa su lugar (sección 8).
+
+  **[INTERPRETACIÓN] La hora de corte**, que P1 no nombra. El rezago de la sección 3 está
+  contado para barras que abren a las 00:00 UTC, como las de Deriv. Si la que fije el brief 14
+  abre la barra del día `t` antes de esa hora, la evaluación se detiene y pregunta antes de
+  correr: la entropía de `t−2` podría no estar publicada al abrir la barra.
 - `r_t` es el retorno logarítmico de cierre a cierre entre dos velas consecutivas del
   calendario del activo (continuo, 24/7, para BTC (D6); hábil para XAU, donde el lunes abarca
   el fin de semana). Si falta una vela que el calendario esperaba, el retorno que la cruzaría
@@ -82,10 +90,10 @@ no la del jueves que daría correr dos velas hábiles.
 
 Por qué 2: el archivo del día `t−1` sale **durante** el día `t`, no a su comienzo.
 `ingestion/run_gdelt.py` lo fija en `DIAS_DE_RETRASO_DE_PUBLICACION = 1`, y la reconciliación
-de 404 existe porque a las 06:30 UTC a veces todavía no está. Las velas diarias de Deriv van de
-00:00 a 00:00 UTC, así que al abrir el día `t` la entropía de `t−1` no se conoce y la de `t−2`
-sí. Con esto la prueba responde si la entropía sirve con la información disponible a la hora
-de decidir.
+de 404 existe porque a las 06:30 UTC a veces todavía no está. Con barras que van de 00:00 a
+00:00 UTC, como las diarias de Deriv, al abrir el día `t` la entropía de `t−1` no se conoce y la
+de `t−2` sí. Las de D1 cortan donde fije el brief 14 (sección 2). Con esto la prueba responde si
+la entropía sirve con la información disponible a la hora de decidir.
 
 **La lectura secundaria (D6)** usa la entropía de la fecha `t − 1`, con la misma unión por fecha
 y la misma tolerancia. Es una entropía que al abrir `t` todavía no se publicó, así que **no es
@@ -119,15 +127,15 @@ mismas velas. Sus componentes, en barras del calendario del activo:
 | continuo (BTC) | **1** | **7** | **30** |
 | hábil (XAU) | **1** | **5** | **22** |
 
-D6 fija las ventanas de 1, 7 y 30 días, porque BTC opera 24/7. **[INTERPRETACIÓN]** En XAU son
-las mismas tres —un día, una semana, un mes— contadas en barras hábiles, porque D6 no nombra a
-XAU.
+D6 fija las ventanas de 1, 7 y 30 días, porque BTC opera 24/7.
+**[INTERPRETACIÓN aprobada (P6)]** En XAU son las mismas tres —un día, una semana, un mes—
+contadas en barras hábiles, porque D6 no nombra a XAU.
 
 **Horizontes (D6): `h` = 1, 5 y 22 barras del calendario del activo.** El objetivo de horizonte
 `h` es la varianza media de las `h` barras que empiezan en `t`:
-`v̄_{t,h} = (1/h) · Σ_{j=0}^{h−1} v_{t+j}`. **[INTERPRETACIÓN]** D6 da los números y no la
-unidad. Son barras: en BTC, días de calendario, así que 5 y 22 no son una semana ni un mes, a
-diferencia de las ventanas; en XAU, días hábiles.
+`v̄_{t,h} = (1/h) · Σ_{j=0}^{h−1} v_{t+j}`. **[INTERPRETACIÓN aprobada (P6)]** D6 da los
+números y no la unidad. Son barras: en BTC, días de calendario, así que 5 y 22 no son una
+semana ni un mes, a diferencia de las ventanas; en XAU, días hábiles.
 
 - **Modelo A (HAR-RV):**
   `ln v̄_{t,h} = a + b_d · ln v_(d) + b_w · ln v_(w) + b_m · ln v_(m) + día_de_la_semana + ε`,
@@ -194,12 +202,12 @@ menos: `E[d_t] > 0`.
 
 **Familia y multiplicidad.** Por activo hay **6** pruebas de Diebold–Mariano: 2 rezagos × 3
 horizontes. La secundaria cuenta en el N (D6, D3), así que entra en la misma familia que la
-primaria. **[INTERPRETACIÓN]** Los 6 p-valores se ajustan por **Holm**, y una prueba rechaza si
-su p ajustado queda debajo de 0,05.
+primaria. **[INTERPRETACIÓN aprobada (P6)]** Los 6 p-valores se ajustan por **Holm**, y una
+prueba rechaza si su p ajustado queda debajo de 0,05.
 
 **Model Confidence Set** de Hansen, Lunde y Nason (2011), por activo y horizonte, sobre
-`{A, B₂, B₁}` y con las mismas pérdidas. **[INTERPRETACIÓN]** Lo que D6 no fija queda fijado
-acá, antes de mirar:
+`{A, B₂, B₁}` y con las mismas pérdidas. **[INTERPRETACIÓN aprobada (P6)]** Lo que D6 no fija
+queda fijado acá, antes de mirar:
 - nivel **0,90**, es decir α del MCS = 0,10;
 - el estadístico `T_max`, con su regla de eliminación;
 - bootstrap de bloques móviles, con bloques del mismo largo que los rezagos de Newey–West;
@@ -228,8 +236,8 @@ Por horizonte, con la **primaria** de BTC. La lectura del MCS:
 | no rechaza | en contra | **no aporta** |
 | cualquier otra combinación | | **no concluyente** |
 
-**[INTERPRETACIÓN]** D6 pide comparar con MCS y con Diebold–Mariano, y no dice qué pasa si
-discrepan. Lo dudoso no cuenta como hallazgo: es el criterio que D5 fija para H1 v2.
+**[INTERPRETACIÓN aprobada (P6)]** D6 pide comparar con MCS y con Diebold–Mariano, y no dice qué
+pasa si discrepan. Lo dudoso no cuenta como hallazgo: es el criterio que D5 fija para H1 v2.
 
 - **Aporta en al menos un horizonte:** la entropía tiene contenido predictivo sobre la
   volatilidad más allá de HAR-RV, en ese horizonte. El 1,246× pasa a ser candidato para el

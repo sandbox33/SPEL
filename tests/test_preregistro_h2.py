@@ -24,7 +24,7 @@ DOC = RAIZ / "research" / "preregistro_h2.md"
 
 #: Si cambia, el documento cambió. Después de fusionado, eso es un
 #: experimento nuevo: preregistro_h2_v2.md, no una edición de este.
-SHA256_PREREGISTRO = "7b2c5ceaa85b04db7d1b6fe6270752a568166de359a9ee35fc56cf17aa732790"
+SHA256_PREREGISTRO = "ab3696123f6f8d99fc45cad8517ce892ce6d797454cd586eb2f1dcef4fc9c10f"
 
 
 def _texto() -> str:
@@ -234,3 +234,51 @@ def test_h2_esta_en_el_registro_de_ensayos_con_este_documento():
     for e in de_h2.values():
         assert e["estado"] == "pre-registrado" and e["cuenta_en_n"] is True
         assert e["preregistro_sha256"] == SHA256_PREREGISTRO
+
+
+# ═══ Brief 11–13-B (17-oct-2026): P1 y P6 ═════════════════════════════════
+
+def test_no_queda_ninguna_marca_de_pendiente_del_admin():
+    """La última era la fuente de precios, y la cierra P1."""
+    assert "PENDIENTE DEL ADMIN" not in _texto()
+
+
+def test_la_fuente_de_precios_es_la_de_p1():
+    """Antes, la sección 2 dejaba la fuente pendiente, con una propuesta. P1
+    la fija: las velas de D1, solo con la compuerta del brief 14 en verde, y
+    sin fuente de reemplazo para un activo en rojo."""
+    texto = " ".join(_texto().split())
+    assert ("**Precios (P1, auditor, 17-oct-2026): las velas diarias de D1 (TwelveData), y solo "
+            "después de que el brief 14 las valide con su compuerta.**") in texto
+    assert ("H2 no corre sobre ese activo: no hay fuente de reemplazo sin validar, y la "
+            "compuerta no se relaja.") in texto
+    assert "Propuesta de este PR, que no se aplica sin el Admin" not in texto
+    assert "la evaluación se detiene y pregunta antes de correr" in texto
+
+
+P6_APROBADAS = (
+    "En XAU son las mismas tres",
+    "D6 da los números y no la unidad.",
+    "Los 6 p-valores se ajustan por **Holm**",
+    "Lo que D6 no fija queda fijado acá",
+    "D6 pide comparar con MCS y con Diebold–Mariano",
+)
+
+
+@pytest.mark.parametrize("despues", P6_APROBADAS)
+def test_las_interpretaciones_de_p6_estan_aprobadas(despues):
+    assert f"**[INTERPRETACIÓN aprobada (P6)]** {despues}" in " ".join(_texto().split())
+
+
+def test_solo_las_de_p6_dicen_aprobada():
+    """P6 aprueba cinco. Las demás —la tolerancia cero, Garman–Klass y las dos
+    nuevas de la sección 2— las sigue aprobando el Admin al fusionar."""
+    texto = " ".join(_texto().split())
+    assert "Las que dicen **[INTERPRETACIÓN aprobada (P6)]** ya las aprobó el auditor" in texto
+    # Las cinco marcas, más la vez que el encabezado explica la marca.
+    assert texto.count("[INTERPRETACIÓN aprobada (P6)]") == len(P6_APROBADAS) + 1
+    for sin_aprobar in ("**[INTERPRETACIÓN] Tolerancia cero**",
+                        '**[INTERPRETACIÓN]** "HAR-RV con los mismos datos"',
+                        "**[INTERPRETACIÓN]** Si el brief 14 sale rojo para BTC",
+                        "**[INTERPRETACIÓN] La hora de corte**"):
+        assert sin_aprobar in texto, sin_aprobar

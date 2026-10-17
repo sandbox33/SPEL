@@ -49,8 +49,9 @@ PRUEBAS_POR_ACTIVO = len(REZAGOS_DIAS_CALENDARIO) * len(HORIZONTES)
 #: Alfa de Diebold–Mariano, unilateral, para la familia de cada activo.
 ALFA_DIEBOLD_MARIANO = 0.05
 
-#: [INTERPRETACIÓN] El Model Confidence Set: nivel, réplicas del bootstrap
-#: de bloques móviles y semilla, fijados antes de mirar (sección 7).
+#: El Model Confidence Set: nivel, réplicas del bootstrap de bloques móviles
+#: y semilla, fijados antes de mirar (sección 7). Interpretación aprobada por
+#: el auditor el 17-oct-2026 (P6).
 NIVEL_MCS = 0.90
 REPLICAS_MCS = 10_000
 SEMILLA_MCS = 20261017
