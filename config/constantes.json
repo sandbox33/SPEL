@@ -1,6 +1,6 @@
 {
   "schema_version": "1.1.0",
-  "actualizado": "2026-10-14",
+  "actualizado": "2026-10-17",
   "constantes": [
     {
       "nombre": "EPSILON_BREAKEVEN",
@@ -2576,6 +2576,19 @@
         "ingestion.reintentos.es_status_reintentable"
       ],
       "notas": "[INTERPRETACIÓN] del brief."
+    },
+    {
+      "nombre": "EULER_MASCHERONI",
+      "modulo": "core.estadistica_sharpe",
+      "categoria": "parametro",
+      "valor": 0.5772156649015329,
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "La constante γ de Euler–Mascheroni que usa SR* en research/preregistro_h1.md §9. Verificada el 17-oct-2026 contra Σ_{k≤n} 1/k − ln n − 1/(2n) con n = 10⁶, a 1e-10 (tests/test_estadistica_sharpe.py::test_euler_mascheroni).",
+      "usado_en": [
+        "core.estadistica_sharpe.sr_estrella"
+      ],
+      "notas": "Literal y no np.euler_gamma: el módulo no importa numpy (brief del Admin 10, punto 2)."
     }
   ]
 }
