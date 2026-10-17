@@ -344,9 +344,11 @@ def publicar(titulo: str, bloque: dict) -> None:
 async def ingerir(*, key: str, write: bool, abrir: Callable[[str], Any] = DerivAdapter._default_connector,
                   adapter: Optional[TwelveDataAdapter] = None,
                   limitador: Optional[Limitador] = None) -> list[dict]:
-    td = adapter or TwelveDataAdapter(api_key=key, timeout_s=30.0)
+    # El mismo limitador cuenta las páginas y los reintentos (issue #39).
+    lim = limitador or Limitador(LLAMADAS_POR_MINUTO_TD, TOPE_CREDITOS_TD)
+    td = adapter or TwelveDataAdapter(api_key=key, timeout_s=30.0, limitador=lim)
     bloques = []
-    rep, res = await ingerir_td(td, write=write, limitador=limitador)
+    rep, res = await ingerir_td(td, write=write, limitador=lim)
     bloques.append(bloque_datos("twelvedata", rep, res))
     try:
         rep, res = await ingerir_deriv(abrir, write=write)

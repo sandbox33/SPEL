@@ -10,15 +10,15 @@
 > Este archivo se lee primero en cada chat nuevo. Frente a un chat que lo contradiga sin
 > evidencia, gana el archivo; frente al código, gana el código.
 
-**Última actualización:** 16 oct 2026 — tanda A–D, tarea A: `test_el_ping_es_un_parametro` deja de depender del reloj, rebasada sobre `main` con la tarea D ya fusionada (brief del Admin 9-R), en la rama `claude/tanda-a-ping-determinista`.
+**Última actualización:** 16 oct 2026 — tanda A–D, tarea C: reintentos con Retry-After en `fetch_pagina` (issue #39), apilada sobre la tarea A (brief del Admin 9-R), en la rama `claude/tanda-c-reintentos`.
 
 **Commit de referencia:** `ed70664` (merge del PR #43).
 
-**Tests:** **1706** recolectados en `tests/`, en 57 archivos, medido con
+**Tests:** **1769** recolectados en `tests/`, en 58 archivos, medido con
 `pytest --collect-only -q tests/` el 16-oct-2026 sobre esta rama. Más 74 en `research/tests/`,
 que no bloquean.
 
-Desfase: **ninguno**. El commit de referencia es el merge del PR #43 (tarea D), el último de `main`, y esta actualización entra con el PR #40 (tarea A). El PR #42 (tarea C) se apila sobre este, y el #41 (tarea B) sobre el #42. Los PRs #33 y #34 siguen abiertos y
+Desfase: **ninguno**. El commit de referencia es el merge del PR #43 (tarea D), el último de `main`. Esta rama se apila sobre la del PR #40 (tarea A) y entra con el PR #42; el #41 (tarea B) se apila sobre esta. Los PRs #33 y #34 siguen abiertos y
 en pausa. `tests/test_estado_al_dia.py` falla si hay **más
 de 3 PRs fusionados** desde el commit de referencia de arriba (DG-6).
 
@@ -56,8 +56,8 @@ Eso no reabre Fase 1 ni cambia su resultado; ordena el código para que coincida
 
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-**1706 recolectados en `tests/`, en 57 archivos**, contados con `pytest --collect-only -q`
-el 16-oct-2026 sobre la rama `claude/tanda-a-ping-determinista`, no copiados de ningún
+**1769 recolectados en `tests/`, en 58 archivos**, contados con `pytest --collect-only -q`
+el 16-oct-2026 sobre la rama `claude/tanda-c-reintentos`, no copiados de ningún
 documento. Sin credenciales se saltan 6, cada uno por su propio `skipif`: el test `live` de
 TwelveData, el guardián de secretos de `tests/test_sources.py`, las dos sondas de endpoints de
 Deriv, la 3b de TwelveData y la orden demo de la parte B.
@@ -88,6 +88,7 @@ corridas seguidas sin intermitencia.
 | `ingestion/deriv_publico.py` + `ingestion/limitador.py` | Canal público de Deriv y paginación de velas, y el limitador de TwelveData, portados de las sondas | (en los de arriba) | ✅ |
 | `tools/concordancia_xauusd.py` | Rango de apertura 08:00 Londres y primera ruptura hasta las 12:00 por fuente, filtro de calendario, métricas y compuerta del 90 %; ningún desenlace (guarda AST + serie espía) | 38 + 24 | 🟡 sin datos reales todavía |
 | `ingestion/adapters.py::TwelveDataAdapter.fetch_pagina` | XAU/USD en el mapa (evidencia 3b, autorización del 06-oct (4)); página con `start/end_date` y cierre por la hora del servidor; vacías: el 404 "data not found" y el 400 "No data is available on the specified dates" (prefijo exacto) | 30 | ✅ offline |
+| `ingestion/reintentos.py` | Reintentos de `fetch_pagina` (issue #39): 429, 500/502/503/504 y cortes de red; espera del `Retry-After` o, si no viene, 60 s para un 429 y backoff 2·2ⁿ (tope 30 s); a lo sumo 3 reintentos y 180 s de espera; cada reintento consume un turno del `Limitador`; sin limitador no reintenta | 63 | ✅ offline; 🟡 ningún 429 ni 5xx real visto todavía; que TwelveData mande `Retry-After` no está verificado |
 | `ingestion/velas.py` + `.github/workflows/velas.yml` | Velas diarias de BTC y oro en la rama `data`, profundidad usable, `leer_velas()` en polars | 33 + 6 | 🟡 ídem; además, Deriv entrega 365 días de historia (sonda §0.A-2) |
 | `core/preregistro_h1.py` + `research/preregistro_h1.md` | Reglas del experimento H1, fijadas antes del backtest | 26 | 🟡 dos cláusulas PENDIENTES del Admin |
 | `ingestion/kappa_deriv.py` | κ = comisión/nocional de MULTUP por activo, máximo medido en la cuenta real (sonda §0.A-3b, decision-log 06-oct) | 6 | ✅ dato medido, sin consumidor todavía |

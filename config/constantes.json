@@ -1,6 +1,6 @@
 {
   "schema_version": "1.1.0",
-  "actualizado": "2026-10-08",
+  "actualizado": "2026-10-14",
   "constantes": [
     {
       "nombre": "EPSILON_BREAKEVEN",
@@ -2493,6 +2493,89 @@
         "tools.verificar_siembra.main"
       ],
       "notas": "Se comparan dentro del rango sembrado, no sobre el archivo entero: los días que CI agrega después no ponen la verificación en rojo."
+    },
+    {
+      "nombre": "MAX_REINTENTOS",
+      "modulo": "ingestion.reintentos",
+      "categoria": "parametro",
+      "valor": 3,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Issue #39 (Admin, 08-oct-2026) y brief del Admin del 14-oct-2026 (9), tarea C: el issue deja el valor por defecto 'a confirmar'.",
+      "usado_en": [
+        "ingestion.reintentos.reintentar"
+      ],
+      "notas": "Reintentos después de la primera llamada; cada uno pide turno al Limitador."
+    },
+    {
+      "nombre": "ESPERA_TOTAL_MAX_S",
+      "modulo": "ingestion.reintentos",
+      "categoria": "parametro",
+      "valor": 180.0,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Issue #39 (Admin, 08-oct-2026) y brief del Admin del 14-oct-2026 (9), tarea C: el brief pide un tope de espera total sin fijar el valor.",
+      "usado_en": [
+        "ingestion.reintentos.reintentar"
+      ],
+      "notas": "Si la próxima espera lo pasa, no se espera y se lanza."
+    },
+    {
+      "nombre": "ESPERA_429_SIN_RETRY_AFTER_S",
+      "modulo": "ingestion.reintentos",
+      "categoria": "parametro",
+      "valor": 60.0,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Issue #39 (Admin, 08-oct-2026) y brief del Admin del 14-oct-2026 (9), tarea C: el issue fija 60 s para un 429 sin Retry-After.",
+      "usado_en": [
+        "ingestion.reintentos.espera_de"
+      ],
+      "notas": "La ventana de cuota de TwelveData es por minuto; que TwelveData mande Retry-After no está verificado."
+    },
+    {
+      "nombre": "BACKOFF_BASE_S",
+      "modulo": "ingestion.reintentos",
+      "categoria": "parametro",
+      "valor": 2.0,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Issue #39 (Admin, 08-oct-2026) y brief del Admin del 14-oct-2026 (9), tarea C: backoff exponencial corto, sin valor fijado.",
+      "usado_en": [
+        "ingestion.reintentos.espera_de"
+      ],
+      "notas": "Esperas de 2, 4, 8 s para un 5xx o un corte de red."
+    },
+    {
+      "nombre": "BACKOFF_MAX_S",
+      "modulo": "ingestion.reintentos",
+      "categoria": "parametro",
+      "valor": 30.0,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Issue #39 (Admin, 08-oct-2026) y brief del Admin del 14-oct-2026 (9), tarea C: backoff acotado, sin valor fijado.",
+      "usado_en": [
+        "ingestion.reintentos.espera_de"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "STATUS_5XX_REINTENTABLES",
+      "modulo": "ingestion.reintentos",
+      "categoria": "parametro",
+      "valor": [
+        500,
+        502,
+        503,
+        504
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Issue #39 (Admin, 08-oct-2026) y brief del Admin del 14-oct-2026 (9), tarea C: 'errores transitorios de red/5xx'. 501 y 505 quedan fuera porque no son transitorios.",
+      "usado_en": [
+        "ingestion.reintentos.es_status_reintentable"
+      ],
+      "notas": "[INTERPRETACIÓN] del brief."
     }
   ]
 }
