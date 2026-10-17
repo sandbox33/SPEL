@@ -2723,3 +2723,110 @@ contrato "0.02" como string.
   tarea C.
 - El "Próximo paso" de ESTADO.md reescrito con la cola del brief 9-R (tarea 4).
 - `governance/paso_a_real.py` no se tocó.
+
+## 2026-10-17 — DB-1 y DB-2 implementadas: la comisión cotizada contra la del contrato (brief 9-R2)
+
+**Contexto:** brief del Admin 9-R2. Aprueba la propuesta del 16-oct, con una corrección: DB-1
+compara **dos** comisiones, no tres.
+- `commission_usd` sale del mismo contrato que `commission_cruda`.
+- `commission_modelada` es el modelo κ, que vigila la condición c), no la d).
+
+### El cambio
+
+- **`Ejecutor.comprar(..., commission_cotizada=None)`**, con el mismo patrón que
+  `quote_at_signal`.
+  - Guarda el valor en el `Trade` y lo escribe crudo en la fila de `envío`, como `str(valor)`
+    sin redondear. El float 0.02 queda "0.02", y 0.1+0.2−0.28 queda "0.020000000000000018".
+  - `Registro.agregar` rechaza una `commission_cotizada` que no sea str.
+- **Columnas nuevas:** `commission_cotizada`, `reconciliado_profit` y `reconciliado_comision`.
+  `SCHEMA_VERSION` pasa de 1 a 2.
+- **`Reconciliado` suma `no_verificable`.** `reconciliado_profit` solo acepta ok o
+  discrepancia. `ReconciliadoComision` acepta ok, discrepancia, no_verificable y no_aplica.
+- **`reconciliar`** compara, en Decimal desde el texto, la cotizada (fila de `envío` del mismo
+  `trade_uuid`) con `commission_cruda` (fila de cierre):
+  - `ok`: diferencia ≤ 0,005;
+  - `discrepancia`: más que eso;
+  - `no_verificable`: falta alguna o no es un número finito;
+  - `no_aplica`: no hubo contrato y no hay compra cerca.
+- **Marca global:** `ok` solo si profit es ok y la comisión es ok o no_aplica; `discrepancia`
+  si cualquiera lo es; `no_verificable` en todo lo demás.
+- La evidencia de la fila trae la cotizada, la del contrato y la diferencia. Se quitó la nota
+  vieja "la comisión no se reconcilia".
+- **La parte B** (`tests/test_integracion_demo_orden_live.py`) le pasa a `comprar`
+  `commission_cotizada=prop.get("commission")`.
+- `governance/paso_a_real.py` y `execution/` no se tocaron.
+
+### Interpretaciones
+
+- **Una orden sin `contract_id` CON una compra cerca en `statement`:** la comisión es
+  `no_verificable`, no `no_aplica`. El contrato pudo existir y su comisión no se ve. El global
+  ya es discrepancia por el profit.
+- **Un `ok` escrito antes de DB-2** (fila de reconciliación sin `reconciliado_comision`) no
+  cuenta como ok: el trade se reconcilia de nuevo en una fila nueva, que da `no_verificable`
+  porque el envío viejo no trae la cotizada. Las filas viejas no se tocan ni se rellenan.
+- **`no_verificable` se vuelve a reconciliar**, como una discrepancia, y un `ok` no se repite.
+- **`SCHEMA_VERSION` 2** marca las filas con las columnas nuevas. Las de la versión 1 no las
+  tienen, y así se distinguen.
+
+### Tests editados: el assert viejo y el nuevo
+
+Todos en `tests/test_integracion_demo_registro.py`.
+
+| test | assert viejo | assert nuevo |
+|---|---|---|
+| `test_los_campos_del_brief_estan_todos` | `set(CAMPOS) - set(brief) == {"evento", "evidencia"}` | `== {"evento", "evidencia", "commission_cotizada", "reconciliado_profit", "reconciliado_comision"}` |
+| `test_reconciliar_ok_agrega_una_linea_y_no_edita` | `[n["reconciliado"] for n in nuevas] == ["ok"]` | `[(reconciliado, reconciliado_profit, reconciliado_comision) …] == [("ok", "ok", "ok")]` |
+| `test_reconciliar_tolera_medio_centavo_y_no_mas` | `…["reconciliado"] == "ok"` y `== "discrepancia"` | `(reconciliado, reconciliado_profit) == ("ok", "ok")` y `== ("discrepancia", "discrepancia")` |
+| `test_una_discrepancia_se_vuelve_a_reconciliar` | `marcas == ["discrepancia", "ok"]` | `marcas == [("discrepancia", "discrepancia", "ok"), ("ok", "ok", "ok")]` (global, profit, comisión) |
+| `test_una_rechazada_con_una_compra_cerca_es_discrepancia` | `reconciliar(r2, …)[0]["reconciliado"] == "ok"` | `(reconciliado, reconciliado_profit, reconciliado_comision) == ("ok", "ok", "no_aplica")`; y para la compra cerca, se agregó `(profit, comisión) == ("discrepancia", "no_verificable")` |
+
+**Además, un cambio fuera de los cinco, que se reporta:** el fixture `_cerrado` del mismo archivo.
+- Desde ahora arma la fila de `envío` con `commission_cotizada="0.02"` y el cierre con
+  `commission_cruda="0.02"` (parametrizables).
+- Sin eso, ningún trade cerrado llega a `ok`, y `test_reconciliar_no_repite_un_ok` (que el brief
+  9-R mantiene) fallaría.
+- No se cambió ningún assert fuera de los cinco tests.
+
+### Tests nuevos (criterio viejo contra nuevo)
+
+- **`tests/test_integracion_demo_registro.py`:**
+  - str contra float;
+  - un float largo comparado por su texto;
+  - la frontera de medio centavo (0,015, 0,025, 0,0149, 0,0251), y que en float sería
+    discrepancia;
+  - los cuatro valores;
+  - la marca global en las 8 combinaciones;
+  - `no_verificable` que se vuelve a reconciliar;
+  - el envío del mismo trade;
+  - un registro de la versión 1 sin la columna, y su `ok` viejo;
+  - las marcas fuera de su conjunto.
+- **`tests/test_integracion_demo_ejecucion.py`:** `comprar` guarda la cotizada cruda solo en el
+  envío, y la operación entera reconcilia la comisión.
+- **`tests/test_integracion_demo_orden_live.py`:** la parte B, contra el falso, reconcilia la
+  comisión en `ok` (el profit da discrepancia porque el falso no trae nada en `profit_table`).
+
+### Mutantes
+
+22 en total, 21 atrapados:
+- frontera `<`;
+- Decimal desde el float binario y resta en float;
+- falta uno es ok;
+- NaN aceptado;
+- compra cerca como no_aplica y no_aplica como no_verificable;
+- tres de la marca global;
+- un ok viejo que cuenta y no_verificable que no se repite;
+- envío de otro trade;
+- la columna sin escribir;
+- los tres controles del registro;
+- la versión;
+- `comprar` que no escribe o redondea;
+- la parte B que no la pasa.
+
+**El que sobrevive es equivalente.** Quitar `profit == ok` de la regla de ok no cambia nada,
+porque la discrepancia se descarta antes y el profit solo puede valer ok o discrepancia. La
+condición queda explícita, tal como la escribe DB-2.
+
+### Punto 6 de 9-R
+
+Sigue sin crudo de la parte B en el repo ni en `data`, y no se reconstruyó. El test contra el
+falso fija que la parte B escribe y compara la cotizada.

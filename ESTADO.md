@@ -10,15 +10,15 @@
 > Este archivo se lee primero en cada chat nuevo. Frente a un chat que lo contradiga sin
 > evidencia, gana el archivo; frente al código, gana el código.
 
-**Última actualización:** 16 oct 2026 — brief del Admin 9-R, tareas 3 y 4: la implementación de DB-1/DB-2 quedó DETENIDA (la comisión cotizada no está en el registro) y el próximo paso se reescribió con la cola real; apilada sobre la tarea C, en la rama `claude/tanda-b-reconciliacion`.
+**Última actualización:** 17 oct 2026 — brief del Admin 9-R2: DB-1 y DB-2 implementadas (la comisión cotizada contra la del contrato, `reconciliado_profit`, `reconciliado_comision` y un global en que `no_verificable` nunca es `ok`), en la rama `claude/tanda-b-reconciliacion`.
 
 **Commit de referencia:** `ed70664` (merge del PR #43).
 
-**Tests:** **1769** recolectados en `tests/`, en 58 archivos, medido con
-`pytest --collect-only -q tests/` el 16-oct-2026 sobre esta rama. Más 74 en `research/tests/`,
+**Tests:** **1813** recolectados en `tests/`, en 58 archivos, medido con
+`pytest --collect-only -q tests/` el 17-oct-2026 sobre esta rama. Más 74 en `research/tests/`,
 que no bloquean.
 
-Desfase: **ninguno**. El commit de referencia es el merge del PR #43 (tarea D), el último de `main`. Esta rama se apila sobre las de los PRs #40 (tarea A) y #42 (tarea C), y entra con el PR #41. Los PRs #33 y #34 siguen abiertos y
+Desfase: **dos PRs** (#40 y #42) fusionados después del commit de referencia, que es el merge del PR #43 (tarea D) como pide el brief 9-R2; DG-6 admite hasta 3. Esta actualización entra con el PR #41. Los PRs #33 y #34 siguen abiertos y
 en pausa. `tests/test_estado_al_dia.py` falla si hay **más
 de 3 PRs fusionados** desde el commit de referencia de arriba (DG-6).
 
@@ -56,8 +56,8 @@ Eso no reabre Fase 1 ni cambia su resultado; ordena el código para que coincida
 
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-**1769 recolectados en `tests/`, en 58 archivos**, contados con `pytest --collect-only -q`
-el 16-oct-2026 sobre la rama `claude/tanda-b-reconciliacion`, no copiados de ningún
+**1813 recolectados en `tests/`, en 58 archivos**, contados con `pytest --collect-only -q`
+el 17-oct-2026 sobre la rama `claude/tanda-b-reconciliacion`, no copiados de ningún
 documento. Sin credenciales se saltan 6, cada uno por su propio `skipif`: el test `live` de
 TwelveData, el guardián de secretos de `tests/test_sources.py`, las dos sondas de endpoints de
 Deriv, la 3b de TwelveData y la orden demo de la parte B.
@@ -101,9 +101,9 @@ corridas seguidas sin intermitencia.
 | `execution/circuit_breaker.py` + `execution_guard.py` | Guardrails duros — congelados hasta F4 | 14 + 17 | ✅ |
 | `governance/persistence.py` + `secrets.py` | 5 streams (TRADE_LEDGER desde el PR #25), SecretKey único | 19 + 10 | ✅ |
 | `governance/estado.py` + `tests/test_estado_al_dia.py` | Control anti-desfase de este archivo (DG-6) | 16 | ✅ |
-| `integracion_demo/otp.py` + `conexion.py` | OTP solo para la cuenta que `GET /accounts` dice demo, URL solo `/ws/demo`, un OTP nuevo por conexión, reconexión con backoff, ping como parámetro | 108 (con `ejecucion.py`) | ✅ offline; ✅ conectó en vivo una vez: parte B, 08-oct, run 37716067033 (1 OTP, 1 conexión; el servidor la cerró a los 59,7 s sin mensajes) |
+| `integracion_demo/otp.py` + `conexion.py` | OTP solo para la cuenta que `GET /accounts` dice demo, URL solo `/ws/demo`, un OTP nuevo por conexión, reconexión con backoff, ping como parámetro | 113 (con `ejecucion.py`) | ✅ offline; ✅ conectó en vivo una vez: parte B, 08-oct, run 37716067033 (1 OTP, 1 conexión; el servidor la cerró a los 59,7 s sin mensajes) |
 | `integracion_demo/ejecucion.py` | Lista blanca de ocho mensajes; `buy` solo MULTUP/MULTDOWN con `stop_loss`; un `buy` sin respuesta no se reintenta | ídem | ✅ offline; ✅ una orden demo en vivo (parte B, 08-oct): MULTUP frxXAUUSD, stake 1 ×100, SL 0,10, vendida a los 62 s, profit −0,03 USD |
-| `integracion_demo/registro.py` + `reconciliar.py` | Registro demo JSONL con cadena de hashes y crudo aparte (porta `trade_ledger.py`, no lo importa); reconciliación con `profit_table` y `statement` | 73 | ✅ offline; 🔴 la reconciliación marca `ok` aunque la comisión no se contrastó (DB-1/DB-2 decididas el 14-oct; su implementación, detenida el 16-oct: la comisión cotizada no está en el registro, ver decision-log); 🟡 parser de `proposal_open_contract` sin fijar |
+| `integracion_demo/registro.py` + `reconciliar.py` | Registro demo JSONL con cadena de hashes y crudo aparte (porta `trade_ledger.py`, no lo importa); reconciliación con `profit_table` y `statement`, y comisión cotizada contra la del contrato (DB-1/DB-2, `SCHEMA_VERSION` 2): `reconciliado_profit`, `reconciliado_comision` y un global en que `no_verificable` nunca es `ok` | 111 | ✅ offline; 🟡 la condición d) de DG-3 todavía cuenta solo discrepancias (el cableado con `no_verificable` es del brief 10); 🟡 parser de `proposal_open_contract` sin fijar |
 | `tests/test_integracion_demo_orden_live.py` | Parte B: UNA orden demo, 07..16-oct-2026, job `orden_demo` de `live-tests.yml` | 13 | ✅ corrió una vez: 08-oct, run 37716067033, job `orden_demo`, 1 passed en 124,7 s; informe en el decision-log del 14-oct |
 | `tests/test_guarda_integracion_demo.py` | `buy`/`sell`/`contract_update` solo en `integracion_demo/`; el paquete no nombra el canal real ni importa `execution/` ni lo congelado de `core/` | 34 | ✅ |
 | `tests/test_reglas_ordenes_demo.py` | La regla de órdenes demo de CLAUDE.md (OTP para una cuenta demo según `GET /accounts`, solo `/ws/demo`) y DG-7/DG-8 en el decision-log | 3 | ✅ |
@@ -516,9 +516,8 @@ salvedad que hay que resolver **antes** de revertir.
 ## ▶️ PRÓXIMO PASO CONCRETO
 
 **Brief 10 (gobernanza).** Cablea la condición d) de DG-3 con `no_verificable`
-(`governance/paso_a_real.py`) y registra la pausa de H-ORB-oro (D11). Antes, DB-2 necesita una
-decisión: la comisión cotizada no está en el registro de la demo, así que la tarea 3 del brief
-9-R quedó detenida (decision-log del 16-oct).
+(`governance/paso_a_real.py`) y registra la pausa de H-ORB-oro (D11). Las marcas que va a leer
+ya existen: `reconciliado_comision` y el global con `no_verificable` (DB-1/DB-2, brief 9-R2).
 
 La cola, en orden:
 
