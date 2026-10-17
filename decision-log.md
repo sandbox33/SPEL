@@ -2438,3 +2438,49 @@ Subir a v7 es otro PR, si el Admin lo quiere.
 - setup-python@v5;
 - checkout fijado por sha;
 - una acción nueva.
+
+## 2026-10-14 — Tarea A de la tanda del 14-oct: `test_el_ping_es_un_parametro` era intermitente por el test, no por `conexion.py`
+
+**Contexto:** brief del Admin del 14-oct-2026 (9), tarea A. La corrida 37729552559 de
+`SPEL Tests` (push a `main`, `6c1d29c`) falló en el intento 1 con `1 failed, 1675 passed`: en
+`tests/test_integracion_demo_ejecucion.py:314`, `assert len(pings) >= 2` dio 1. El intento 2
+pasó con 1676. El test pedía al menos 2 pings en 80 ms reales con `intervalo_ping_s=0.01`.
+
+### Diagnóstico (medido, Python 3.11 local; CI corre 3.12)
+
+- **El período real del ping es el intervalo más lo que tarda el pedido.** `_latir` duerme
+  `intervalo_ping_s` y después hace `pedir({"ping": 1})`, que termina con `al_recibir`. En los
+  tests `al_recibir` es `Registro.guardar_crudo`, que hace `fsync` dentro del bucle de eventos
+  (`integracion_demo/registro.py`, `_agregar_linea`). 30 corridas del test original:
+  - `fsync` p50 0,39 ms, p99 3,57 ms; pedido completo p50 0,73 ms, p99 3,95 ms;
+  - período entre pings p50 10,97 ms, p99 22,36 ms; entre 4 y 7 pings en 80 ms, nunca menos de 2.
+- **Con un `fsync` más lento, el fallo se reproduce.** Sumando una espera al `fsync`: con 20 ms
+  llegan 3 pings; con 40 ms, 2; con 60 ms, 1 en las 30 de 30 corridas.
+- **El `continue` de `_latir` no interviene:** en este test nadie más pide, y el lock estuvo libre
+  en las 210 revisiones de 30 corridas.
+- **El `_Falso` responde sin esperar nada:** `send` encola la respuesta y `recv` la saca.
+- **En la corrida de CI** el test entero duró 138 ms (timestamps del log: 04:52:47.7656 →
+  04:52:47.9038), consistente con las dos ventanas de 80 y 50 ms del test más poco más. El
+  bucle del test no estuvo trabado; lo que no alcanzó fue el segundo ping. El `fsync` del runner
+  no está medido: la causa en CI es una inferencia, no una medición.
+
+**El defecto está en el test**, que suponía que un ping cuesta mucho menos que 10 ms en cualquier
+disco. `conexion.py` hace lo que dice su docstring: guarda cada respuesta cruda antes de
+parsearla y duerme el intervalo entre pings. No se tocó.
+
+**Observación, sin cambio:** como el `fsync` corre dentro del bucle de eventos, en vivo el
+intervalo efectivo del ping es el pedido más el `fsync` del disco del runner. Para un ping de
+mantenimiento no cambia nada mientras el intervalo quede lejos del cierre por inactividad.
+
+### El cambio
+
+- `test_el_ping_es_un_parametro` espera hasta 2 pings con un tope de 2 s, en vez de dormir 80 ms.
+  El criterio es el mismo: con `intervalo_ping_s=0.01` llegan al menos 2 pings. La mitad "sin
+  intervalo no hay ping" quedó igual.
+- Test nuevo, `test_el_ping_llega_aunque_guardar_el_crudo_tarde`: con un `fsync` de 100 ms, en
+  80 ms llega un solo ping (el criterio viejo fallaba ahí) y esperando llegan 2.
+
+### Mutantes (sobre `conexion.py`, los cuatro atrapados)
+
+No latir nunca, de dos formas (sin crear la tarea y con el bucle vacío); latir una sola vez;
+latir aunque no haya intervalo.

@@ -10,17 +10,15 @@
 > Este archivo se lee primero en cada chat nuevo. Frente a un chat que lo contradiga sin
 > evidencia, gana el archivo; frente al código, gana el código.
 
-**Última actualización:** 14 oct 2026 — tanda A–D del brief del Admin del 14-oct-2026 (9), tarea D: runners fijos en `ubuntu-24.04` y `checkout@v5` / `setup-python@v6` (Node 24), en la rama `claude/tanda-d-runners`.
+**Última actualización:** 16 oct 2026 — tanda A–D, tarea A: `test_el_ping_es_un_parametro` deja de depender del reloj, rebasada sobre `main` con la tarea D ya fusionada (brief del Admin 9-R), en la rama `claude/tanda-a-ping-determinista`.
 
-**Commit de referencia:** `6c1d29c` (merge del PR #38).
+**Commit de referencia:** `ed70664` (merge del PR #43).
 
-**Tests:** **1705** recolectados en `tests/`, en 57 archivos, medido con
-`pytest --collect-only -q tests/` el 14-oct-2026 sobre esta rama. Más 74 en `research/tests/`,
+**Tests:** **1706** recolectados en `tests/`, en 57 archivos, medido con
+`pytest --collect-only -q tests/` el 16-oct-2026 sobre esta rama. Más 74 en `research/tests/`,
 que no bloquean.
 
-Desfase: **ninguno**. El commit de referencia es el merge del PR #38, el último de `main`, y
-esta actualización entra con el PR de la tarea D. Las tareas A, B y C van en PRs aparte, cada
-uno desde `main`: los cuatro tocan este encabezado. Los PRs #33 y #34 siguen abiertos y
+Desfase: **ninguno**. El commit de referencia es el merge del PR #43 (tarea D), el último de `main`, y esta actualización entra con el PR #40 (tarea A). El PR #42 (tarea C) se apila sobre este, y el #41 (tarea B) sobre el #42. Los PRs #33 y #34 siguen abiertos y
 en pausa. `tests/test_estado_al_dia.py` falla si hay **más
 de 3 PRs fusionados** desde el commit de referencia de arriba (DG-6).
 
@@ -58,8 +56,8 @@ Eso no reabre Fase 1 ni cambia su resultado; ordena el código para que coincida
 
 ## 📍 MÓDULOS REALES EN `main` HOY (verificado, no listado de memoria)
 
-**1705 recolectados en `tests/`, en 57 archivos**, contados con `pytest --collect-only -q`
-el 14-oct-2026 sobre la rama de la tarea D, no copiados de ningún
+**1706 recolectados en `tests/`, en 57 archivos**, contados con `pytest --collect-only -q`
+el 16-oct-2026 sobre la rama `claude/tanda-a-ping-determinista`, no copiados de ningún
 documento. Sin credenciales se saltan 6, cada uno por su propio `skipif`: el test `live` de
 TwelveData, el guardián de secretos de `tests/test_sources.py`, las dos sondas de endpoints de
 Deriv, la 3b de TwelveData y la orden demo de la parte B.
@@ -102,7 +100,7 @@ corridas seguidas sin intermitencia.
 | `execution/circuit_breaker.py` + `execution_guard.py` | Guardrails duros — congelados hasta F4 | 14 + 17 | ✅ |
 | `governance/persistence.py` + `secrets.py` | 5 streams (TRADE_LEDGER desde el PR #25), SecretKey único | 19 + 10 | ✅ |
 | `governance/estado.py` + `tests/test_estado_al_dia.py` | Control anti-desfase de este archivo (DG-6) | 16 | ✅ |
-| `integracion_demo/otp.py` + `conexion.py` | OTP solo para la cuenta que `GET /accounts` dice demo, URL solo `/ws/demo`, un OTP nuevo por conexión, reconexión con backoff, ping como parámetro | 107 (con `ejecucion.py`) | ✅ offline; 🟡 nunca conectó en vivo |
+| `integracion_demo/otp.py` + `conexion.py` | OTP solo para la cuenta que `GET /accounts` dice demo, URL solo `/ws/demo`, un OTP nuevo por conexión, reconexión con backoff, ping como parámetro | 108 (con `ejecucion.py`) | ✅ offline; 🟡 nunca conectó en vivo |
 | `integracion_demo/ejecucion.py` | Lista blanca de ocho mensajes; `buy` solo MULTUP/MULTDOWN con `stop_loss`; un `buy` sin respuesta no se reintenta | ídem | ✅ offline; 🟡 la parte B no corrió |
 | `integracion_demo/registro.py` + `reconciliar.py` | Registro demo JSONL con cadena de hashes y crudo aparte (porta `trade_ledger.py`, no lo importa); reconciliación con `profit_table` y `statement` | 73 | ✅ offline; 🟡 parser de `proposal_open_contract` sin fijar |
 | `tests/test_integracion_demo_orden_live.py` | Parte B: UNA orden demo, 07..16-oct-2026, job `orden_demo` de `live-tests.yml` | 13 | 🟡 escrito, no disparado |
@@ -516,12 +514,11 @@ salvedad que hay que resolver **antes** de revertir.
 
 ## ▶️ PRÓXIMO PASO CONCRETO
 
-**Fusionado este PR, el Admin vuelve a disparar `SPEL velas intradía del oro`**
-(`velas_intradia.yml`). La primera corrida (08-oct, run 37721686439) escribió Deriv, y
-TwelveData se cortó en el 400 del fondo sin escribir nada. Con la regla nueva, TwelveData baja
-la historia desde 2020 (unas 101 llamadas) y la concordancia publica sus cuatro bloques: datos,
-calendario, concordancia y compuerta. Con eso se cierra la pregunta de las 33.605 contra 23.160
-velas, y la compuerta del 90 % dice si TwelveData sirve como historia del ORB del oro.
+**Registrar la segunda corrida de `SPEL velas intradía del oro`** (`velas_intradia.yml`). El
+Admin la volvió a disparar el 14-oct sobre `6c1d29c` (run 38610611624, terminó en éxito); su
+informe —datos, calendario, concordancia y compuerta del 90 %— no está leído ni registrado y
+espera el brief que lo haga. La primera corrida (08-oct, run 37721686439) escribió Deriv, y
+TwelveData se cortó en el 400 del fondo sin escribir nada.
 
 La parte B (PR #36) ya corrió: el 08-oct, run 37716067033, job `orden_demo` en verde. Su
 informe espera el brief que lo registre.
