@@ -259,7 +259,8 @@ async def _operar(e: Ejecutor, c: ConexionDemo, registro: Registro, *,
         "validation_params": prop.get("validation_params")}
 
     trade = await e.comprar(orden, quote_at_signal=num(prop.get("spot")),
-                            t_senal_ms=int(time.time() * 1000))
+                            t_senal_ms=int(time.time() * 1000),
+                            commission_cotizada=prop.get("commission"))
     filas = leer_registro(registro.directorio).filas
     out["compra"] = {"estado": trade.estado, "contract_id": trade.contract_id,
                      "latencia_ms": filas[-1].get("latencia_ms"),
@@ -489,3 +490,17 @@ def test_la_orden_demo_tiene_su_propio_job():
     assert orden["concurrency"] == {"group": "orden-demo", "cancel-in-progress": False}
     corre = [s["run"] for s in orden["steps"] if "run" in s][-1]
     assert corre == "python -m pytest tests/test_integracion_demo_orden_live.py -m live -v"
+
+
+async def test_la_parte_b_reconcilia_la_comision_cotizada(tmp_path):
+    """DB-1 (brief 9-R2): la parte B le pasa a comprar la commission de la
+    cotización, y la reconciliación la contrasta con la del contrato."""
+    informe, _, _, _ = await _correr(tmp_path)
+    envio = next(f for f in leer_registro(tmp_path).filas if f["evento"] == "envio")
+    assert envio["commission_cotizada"] == "0.02"
+    fila = next(f for f in leer_registro(tmp_path).filas if f["evento"] == "reconciliacion")
+    assert fila["reconciliado_comision"] == "ok"
+    # El falso no trae nada en profit_table: el profit, y con él el global, es discrepancia.
+    assert (fila["reconciliado_profit"], fila["reconciliado"]) == ("discrepancia", "discrepancia")
+    assert json.loads(informe["reconciliacion"][0]["evidencia"])["comision"] == {
+        "cotizada": "0.02", "contrato": "0.02", "diferencia": "0.00"}

@@ -218,6 +218,8 @@ class Trade:
     orden: Orden
     quote_at_signal: Optional[float]
     t_senal_ms: Optional[int]
+    #: La comisión de la cotización con que se compró, cruda (DB-1).
+    commission_cotizada: Optional[str] = None
     contract_id: Optional[int] = None
     buy_transaction_id: Optional[int] = None
     t_envio_ms: Optional[int] = None
@@ -293,11 +295,19 @@ class Ejecutor:
             "multiplier": orden.multiplier, "limit_order": lo}}
 
     async def comprar(self, orden: Orden, *, quote_at_signal: Optional[float] = None,
-                      t_senal_ms: Optional[int] = None) -> Trade:
+                      t_senal_ms: Optional[int] = None,
+                      commission_cotizada: Any = None) -> Trade:
         """Manda UNA orden. Nunca lanza por lo que conteste Deriv ni por la
-        red: el resultado queda en `trade.estado` y en el registro."""
+        red: el resultado queda en `trade.estado` y en el registro.
+
+        `commission_cotizada` es la `commission` de la `proposal` con que se
+        decidió comprar, tal como llegó (Deriv la manda como float). Se
+        guarda cruda, como str, en la fila de `envío`, y la reconciliación
+        la compara con la del contrato (DB-1, brief 9-R2)."""
         trade = Trade(trade_uuid=str(uuid.uuid4()), orden=orden,
-                      quote_at_signal=quote_at_signal, t_senal_ms=t_senal_ms)
+                      quote_at_signal=quote_at_signal, t_senal_ms=t_senal_ms,
+                      commission_cotizada=(None if commission_cotizada is None
+                                           else str(commission_cotizada)))
         payload = self.payload_de_compra(orden)
         try:
             validar_mensaje(payload)
@@ -306,7 +316,7 @@ class Ejecutor:
             self._fila(trade, Evento.NO_ENVIADA, outcome=Outcome.NO_EJECUTADA.value,
                        evidencia=f"{type(exc).__name__}: {exc}")
             return trade
-        self._fila(trade, Evento.ENVIO)
+        self._fila(trade, Evento.ENVIO, commission_cotizada=trade.commission_cotizada)
         trade.t_envio_ms = self.reloj_ms()
         try:
             crudo, sha = await self.conexion.pedir(payload)
