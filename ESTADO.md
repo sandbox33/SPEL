@@ -10,17 +10,17 @@
 > Este archivo se lee primero en cada chat nuevo. Frente a un chat que lo contradiga sin
 > evidencia, gana el archivo; frente al código, gana el código.
 
-**Última actualización:** 17 oct 2026 — brief del Admin 11–13-B, en la rama `feature/preregistro-h2` (PR #34): H2 con la fuente de precios que fijó el auditor (P1, las velas de D1 que valide el brief 14) y las interpretaciones que aprobó (P6), sin ningún pendiente del Admin. Antes, la tarea 11: H2 según D6, pre-registrada en el registro de ensayos, y las resoluciones del auditor a lo que dejó el #44 (tarea 0). El #33 (H3) y el #45 (H1 v2) van apilados encima.
+**Última actualización:** 17 oct 2026 — brief del Admin 11–13, tarea 12, en la rama `feature/preregistro-h3` (PR #33), apilada sobre la 11 (PR #34): H3 según D7 y D2, pre-registrada en el registro de ensayos, con tres pendientes del Admin. La 11 trajo H2 según D6, con la fuente de precios que fijó el auditor (P1), y las resoluciones del auditor del 17-oct. La 13 (H1 v2) va encima.
 
 **Commit de referencia:** `2ae82df` (merge del PR #44, el del brief 10).
 
-**Tests:** **1992** recolectados en `tests/`, en 61 archivos, medido con
+**Tests:** **2068** recolectados en `tests/`, en 62 archivos, medido con
 `pytest --collect-only -q tests/` el 17-oct-2026 sobre esta rama. Más 74 en `research/tests/`,
 que no bloquean.
 
 Desfase: **ninguno**. El commit de referencia es el merge del PR #44, el último de `main`, y esta
-actualización entra con el PR #34 (tarea 11). El #33 (tarea 12) y el #45 (tarea 13) van apilados
-encima, en ese orden. `tests/test_estado_al_dia.py` falla si hay **más
+actualización entra con el PR #33 (tarea 12), apilado sobre el #34 (tarea 11). El #45 (tarea 13)
+va encima. Se fusionan en ese orden. `tests/test_estado_al_dia.py` falla si hay **más
 de 3 PRs fusionados** desde el commit de referencia de arriba (DG-6).
 
 
@@ -39,7 +39,7 @@ FASE 3 — visualization/ (grafo)            ❄️ CONGELADA (D9) — no inicia
 FASE 4 — execution/ + Deriv real           🟡 Actuator confirmado; gate: modelo F2 o hipótesis H + DG-3
 FASE 5 — Escala (Supabase, Flet)           ❄️ CONGELADA (D9) — no iniciada
 FASE 6 — Motor streaming multi-timeframe   ❄️ CONGELADA (D9) — infraestructura lista, señal sin construir
-SERIE H                                    🟡 H1 v1 sellada; H2 pre-registrada (#34), espera las velas de D1 que valide el brief 14 (P1); H3 y H1 v2 en la tanda; H-ORB-oro ⏸ PAUSADA (D11)
+SERIE H                                    🟡 H1 v1 sellada; H2 (#34) y H3 (#33) pre-registradas: H2 espera las velas de D1 que valide el brief 14 (P1), H3 con pendientes; H1 v2 en la tanda; H-ORB-oro ⏸ PAUSADA (D11)
 ```
 
 ⏸ **H-ORB-oro, pausada (D11).** Su compuerta de datos dio roja: TwelveData y Deriv coinciden
@@ -104,6 +104,7 @@ corridas seguidas sin intermitencia.
 | `ingestion/velas.py` + `.github/workflows/velas.yml` | Velas diarias de BTC y oro en la rama `data`, profundidad usable, `leer_velas()` en polars | 33 + 6 | 🟡 ídem; además, Deriv entrega 365 días de historia (sonda §0.A-2); 🔴 cron apagado en GitHub por el Admin el 14-oct (D8), tras 7 corridas en rojo. El YAML y `test_son_diarios` no se tocan: lo reactiva el brief de migración de `deriv_ws.py` (D8-r) |
 | `core/preregistro_h1.py` + `research/preregistro_h1.md` | Reglas del experimento H1, fijadas antes del backtest | 26 | 🟡 dos cláusulas PENDIENTES del Admin |
 | `core/preregistro_h2.py` + `research/preregistro_h2.md` | H2 según D6: entropía de `t−2` primaria y de `t−1` secundaria, horizontes 1, 5 y 22, Diebold–Mariano con Holm y MCS, el día de la semana solo en entrenamiento | 58 | 🟡 pre-registrada, no corrida; corre con las velas diarias de D1, cuando el brief 14 las valide (P1). Si sale rojo para BTC, no hay conclusión |
+| `core/preregistro_h3.py` + `research/preregistro_h3.md` | H3: la regla de tendencia de H1 en cada activo de un universo por reglas, voto por activo, sizing 0,25/√K por volatilidad con escalador de cartera; D7 declara el oro que ya está en `data`; el paso a real según D2 y DB-3 | 76 | 🟡 pre-registrada, no corrida; tres [PENDIENTE DEL ADMIN]: la historia del universo, el N y la estadística del Sharpe |
 | `ingestion/kappa_deriv.py` | κ = comisión/nocional de MULTUP por activo, máximo medido en la cuenta real (sonda §0.A-3b, decision-log 06-oct) | 6 | ✅ dato medido, sin consumidor todavía |
 | `ingestion/source_registry.py` | Registro versionado de cobertura por fuente | 34 | ✅ |
 | `tools/measure_godel_samples.py` | Mide el `n` post-máscara | 75 | ✅ |
@@ -121,7 +122,7 @@ corridas seguidas sin intermitencia.
 | `tests/test_guarda_integracion_demo.py` | `buy`/`sell`/`contract_update` solo en `integracion_demo/`; el paquete no nombra el canal real ni importa `execution/` ni lo congelado de `core/` | 34 | ✅ |
 | `tests/test_reglas_ordenes_demo.py` | La regla de órdenes demo de CLAUDE.md (OTP para una cuenta demo según `GET /accounts`, solo `/ws/demo`) y DG-7/DG-8 en el decision-log | 3 | ✅ |
 | `governance/paso_a_real.py` | DG-3 con D2 y DB-3: a) PSR y DSR solo sobre el histórico; d) sin discrepancias, no_verificables ni trades terminados sin reconciliar, contados desde el registro demo (`reconciliar.conteo_de_marcas`), y `incumplidas_d` dice cuál falta; la latencia, sin umbral (`sin_evaluar`); zona gris de 6 meses | 43 | ✅; 🟡 la latencia de D2 sin umbral medido |
-| `governance/ensayos.py` + `ensayos.jsonl` | Registro único de ensayos (D3), append-only: los 3 previos fallidos, la concordancia del oro (no cuenta en el N) y los dos rezagos de H2, pre-registrados; `ENSAYOS_PREVIOS_FALLIDOS` de H1 se deriva de acá | 35 | ✅ |
+| `governance/ensayos.py` + `ensayos.jsonl` | Registro único de ensayos (D3), append-only: los 3 previos fallidos, la concordancia del oro (no cuenta en el N), los dos rezagos de H2 y la cartera de H3, pre-registrados; `ENSAYOS_PREVIOS_FALLIDOS` de H1 se deriva de acá | 35 | ✅ |
 | `config/constantes.json` | Registro de las 138 constantes de módulo, verificado contra el código en las dos direcciones | 30 | ✅ |
 | `tests/test_registro_linguistico*.py` | Español neutro: sin voseo en `.py` y en `.md` | 84 + 5 | ✅ |
 | `tools/heartbeat.py` + `.github/workflows/heartbeat.yml` | Trigger `schedule:` real — **desactivado a propósito**, ver Fase 6 | 19 | ✅ código, 🔴 apagado |
@@ -536,8 +537,9 @@ H1 v1 queda sellada con su fórmula de 2012.
 
 La 11 (H2 según D6) está en el #34. Su fuente de precios la fijó el auditor el 17-oct (P1, brief
 11–13-B): las velas diarias de D1, solo después de que el brief 14 las valide, y sin fuente de
-reemplazo para un activo en rojo. La 12 (#33: D7, DG-3 según D2) y la 13 (#45, H1 v2: D5 y D12)
-van apiladas encima, con P1 a P5 en H3 y P1 en H1 v2.
+reemplazo para un activo en rojo. La 12 (H3: D7, DG-3 según D2)
+está en el #33, con tres pendientes del Admin: la historia del universo, el N y la estadística del
+Sharpe. La 13 (#45, H1 v2: D5 y D12) va apilada encima.
 
 Lo que el #44 dejó para el Admin lo resolvió el auditor el 17-oct: D4-c, D2-n, D8-r y D1-p
 (decision-log). Los pendientes de la tanda, también: P1 a P6 (decision-log).
