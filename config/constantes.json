@@ -3116,6 +3116,39 @@
       "notas": ""
     },
     {
+      "nombre": "HIPOTESIS_DE_ESTRATEGIA",
+      "modulo": "governance.ensayos",
+      "categoria": "etiqueta",
+      "valor": [
+        "H1",
+        "H3",
+        "previa a la Serie H"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "P3, decisión del auditor del 17-oct-2026 bajo el criterio delegado del Admin (brief del Admin 11–13-B): al N del DSR suman los ensayos que son estrategias, los 3 previos, los de H1 y la cartera de H3. Decision-log 2026-10-17.",
+      "usado_en": [
+        "governance.ensayos.es_estrategia",
+        "governance.ensayos.que_cuentan_en_el_dsr"
+      ],
+      "notas": "Una hipótesis que cuenta y no está acá ni en HIPOTESIS_QUE_NO_SON_ESTRATEGIA hace fallar el conteo. H-ORB-oro no está: su única línea no cuenta."
+    },
+    {
+      "nombre": "HIPOTESIS_QUE_NO_SON_ESTRATEGIA",
+      "modulo": "governance.ensayos",
+      "categoria": "etiqueta",
+      "valor": [
+        "H2"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "P3, decisión del auditor del 17-oct-2026 (brief del Admin 11–13-B): los ensayos de H2 prueban un predictor de volatilidad con Diebold–Mariano y MCS, no un Sharpe seleccionado, y no suman al N del DSR. Decision-log 2026-10-17.",
+      "usado_en": [
+        "governance.ensayos.es_estrategia"
+      ],
+      "notas": "H2 cuenta en el N de su propia familia de pruebas (research/preregistro_h2.md, sección 7)."
+    },
+    {
       "nombre": "DIAS_HABILES_M5_DERIV_PARA_REABRIR_H_ORB_ORO",
       "modulo": "governance.ensayos",
       "categoria": "parametro",
