@@ -40,6 +40,13 @@ primera línea del id. Una línea con el mismo id y otro valor en alguno es
 un error, al leer y al agregar. cuenta_en_n está entre ellos porque, si
 cambiara, un cambio de estado cambiaría el N.
 
+Un ensayo que llegó a un estado terminal (ESTADOS_TERMINALES) no vuelve a
+uno abierto (ESTADOS_ABIERTOS: pre-registrado, en_curso): terminó, y
+volver a correrlo es otro ensayo, con otro id. Se juzga contra el último
+estado del id, al leer y al agregar (brief del Admin 15, punto 7). Pasar de
+un terminal a otro no está prohibido: el brief prohíbe volver a un estado
+previo, no eso.
+
 `agregar` solo abre el archivo en modo "a", y tests/test_ensayos.py fija el
 sha256 de lo sembrado.
 
@@ -93,6 +100,15 @@ CAMPOS_FIJOS_POR_ID: tuple[str, ...] = (
 #: Los estados posibles de un ensayo.
 ESTADOS_ENSAYO = frozenset({"pre-registrado", "en_curso", "fallido", "aprobado",
                             "compuerta_roja"})
+
+#: Los estados de un ensayo que todavía no terminó (brief del Admin 15).
+ESTADOS_ABIERTOS = frozenset({"pre-registrado", "en_curso"})
+
+#: [INTERPRETACIÓN] Terminal es todo estado que no es abierto: fallido y
+#: compuerta_roja, que nombra el brief, y aprobado, que también termina el
+#: ensayo. Un estado que se agregue nace terminal. "rechazado", que el brief
+#: también nombra, no es un estado del registro.
+ESTADOS_TERMINALES = ESTADOS_ENSAYO - ESTADOS_ABIERTOS
 
 #: La familia de los ensayos anteriores a la Serie H, los que
 #: research/preregistro_h1.md §9 suma como "ensayos previos".
@@ -150,12 +166,21 @@ def _mismo_ensayo(primera: dict, e: dict) -> None:
                              f"y el registro es append-only")
 
 
+def _transicion(anterior: dict, e: dict) -> None:
+    """Lanza si `e` lleva a un ensayo de un estado terminal a uno abierto:
+    un ensayo que terminó no vuelve a empezar."""
+    if anterior["estado"] in ESTADOS_TERMINALES and e["estado"] in ESTADOS_ABIERTOS:
+        raise ValueError(f"id {e['id']!r}: {anterior['estado']!r} es terminal y no vuelve "
+                         f"a {e['estado']!r}; volver a correrlo es otro ensayo, con otro id")
+
+
 def leer(ruta: Optional[Path] = None) -> list[dict]:
     """Todas las líneas, validadas y en el orden del archivo: la historia,
     cambios de estado incluidos. Lanza si una línea no es JSON, no valida,
-    o repite un id con otro valor en un campo fijo. Para contar, `vigentes`."""
+    repite un id con otro valor en un campo fijo, o lo saca de un estado
+    terminal hacia uno abierto. Para contar, `vigentes`."""
     ruta = Path(ruta) if ruta is not None else RUTA_ENSAYOS
-    entradas, primeras = [], {}
+    entradas, primeras, ultimas = [], {}, {}
     for n, linea in enumerate(ruta.read_text(encoding="utf-8").splitlines(), start=1):
         if not linea.strip():
             continue
@@ -163,9 +188,11 @@ def leer(ruta: Optional[Path] = None) -> list[dict]:
             e = validar(json.loads(linea))
             if e["id"] in primeras:
                 _mismo_ensayo(primeras[e["id"]], e)
+                _transicion(ultimas[e["id"]], e)
         except (json.JSONDecodeError, ValueError) as exc:
             raise ValueError(f"{ruta.name}:{n}: {exc}") from exc
         primeras.setdefault(e["id"], e)
+        ultimas[e["id"]] = e
         entradas.append(e)
     return entradas
 
@@ -182,14 +209,15 @@ def vigentes(ruta: Optional[Path] = None) -> list[dict]:
 
 def agregar(entrada: dict, ruta: Optional[Path] = None) -> dict:
     """Agrega UNA línea al final. Nunca reescribe: valida la entrada y, si
-    su id ya existe, que sea un cambio de estado del mismo ensayo, antes de
-    abrir el archivo en modo "a"."""
+    su id ya existe, que sea un cambio de estado del mismo ensayo y que no
+    lo saque de un estado terminal, antes de abrir el archivo en modo "a"."""
     ruta = Path(ruta) if ruta is not None else RUTA_ENSAYOS
     validar(entrada)
     previas = leer(ruta) if ruta.exists() else []
-    primera = next((p for p in previas if p["id"] == entrada["id"]), None)
-    if primera is not None:
-        _mismo_ensayo(primera, entrada)
+    mismas = [p for p in previas if p["id"] == entrada["id"]]
+    if mismas:
+        _mismo_ensayo(mismas[0], entrada)
+        _transicion(mismas[-1], entrada)
     linea = json.dumps({c: entrada[c] for c in CAMPOS_ENSAYO}, ensure_ascii=False)
     with ruta.open("a", encoding="utf-8") as f:
         f.write(linea + "\n")

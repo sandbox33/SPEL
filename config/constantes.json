@@ -3551,6 +3551,35 @@
         "governance.ensayos.h_orb_oro_se_puede_reabrir"
       ],
       "notas": "756 = 3 × 252 días hábiles, confirmado por el auditor el 17-oct-2026 (decision-log). Al 14-oct-2026 Deriv tiene 263 días comunes con TwelveData en la concordancia (data@bc2597a)."
+    },
+    {
+      "nombre": "ESTADOS_ABIERTOS",
+      "modulo": "governance.ensayos",
+      "categoria": "etiqueta",
+      "valor": [
+        "en_curso",
+        "pre-registrado"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 15 (18-oct-2026), punto 7: un estado terminal no vuelve a un estado previo. Los previos a un resultado son estos dos.",
+      "usado_en": [
+        "governance.ensayos._transicion"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "ESTADOS_TERMINALES",
+      "modulo": "governance.ensayos",
+      "categoria": "derivada",
+      "expresion": "ESTADOS_ENSAYO - ESTADOS_ABIERTOS",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 15 (18-oct-2026), punto 7: fallido, rechazado, compuerta_roja \"y los que ya existan con ese sentido\".",
+      "usado_en": [
+        "governance.ensayos._transicion"
+      ],
+      "notas": "[INTERPRETACIÓN] Todo estado que no es abierto: también aprobado, que termina el ensayo, y cualquiera que se agregue. \"rechazado\" no es un estado del registro y no se agregó."
     }
   ]
 }
