@@ -11,7 +11,7 @@ pre-registro.
 `governance/ensayos.jsonl`, una línea JSON por ensayo, con los campos de
 CAMPOS_ENSAYO:
 
-  · id                  único, nunca se reusa.
+  · id                  el del ensayo. Solo se repite en sus cambios de estado.
   · hipotesis           la hipótesis o la familia ("H1", "H-ORB-oro", o
                         HIPOTESIS_PREVIA_A_LA_SERIE_H para lo anterior).
   · fecha               ISO (AAAA-MM-DD): cuándo se midió.
@@ -25,11 +25,23 @@ CAMPOS_ENSAYO:
   · fuente              dónde está la evidencia (decision-log, run, commit).
   · nota                texto libre.
 
-══ APPEND-ONLY ══
+══ APPEND-ONLY, Y UN ENSAYO POR ID ══
 
-Nunca se edita ni se borra una línea: un ensayo que cambia de estado suma
-una línea nueva con otro id que lo cite. `agregar` solo abre el archivo en
-modo "a", y tests/test_ensayos.py fija el sha256 de lo sembrado.
+Nunca se edita ni se borra una línea. Un ensayo que cambia de estado suma
+una línea nueva con el MISMO id: es un cambio de estado, no un ensayo
+nuevo, y no suma. Lo vigente de cada ensayo es su última línea
+(`vigentes`), y el N y todo conteo salen de ahí (brief del Admin 14, 14a).
+Antes, un cambio de estado iba con otro id que citaba al anterior, y contar
+líneas lo contaba dos veces.
+
+Un cambio de estado no cambia de ensayo: los campos de CAMPOS_FIJOS_POR_ID
+—hipótesis, activo, sha256 del pre-registro y cuenta_en_n— son los de la
+primera línea del id. Una línea con el mismo id y otro valor en alguno es
+un error, al leer y al agregar. cuenta_en_n está entre ellos porque, si
+cambiara, un cambio de estado cambiaría el N.
+
+`agregar` solo abre el archivo en modo "a", y tests/test_ensayos.py fija el
+sha256 de lo sembrado.
 
 ══ ESTRATEGIAS (P3) ══
 
@@ -71,6 +83,12 @@ RUTA_ENSAYOS = Path(__file__).resolve().parent / "ensayos.jsonl"
 CAMPOS_ENSAYO: tuple[str, ...] = (
     "id", "hipotesis", "fecha", "preregistro_sha256", "activo", "estado",
     "cuenta_en_n", "fuente", "nota")
+
+#: Los campos que un cambio de estado no cambia (14a): hipótesis, activo y
+#: sha256 del pre-registro, por el brief; y cuenta_en_n, para que un cambio
+#: de estado no cambie el N.
+CAMPOS_FIJOS_POR_ID: tuple[str, ...] = (
+    "hipotesis", "activo", "preregistro_sha256", "cuenta_en_n")
 
 #: Los estados posibles de un ensayo.
 ESTADOS_ENSAYO = frozenset({"pre-registrado", "en_curso", "fallido", "aprobado",
@@ -122,33 +140,56 @@ def validar(e: Any) -> dict:
     return e
 
 
+def _mismo_ensayo(primera: dict, e: dict) -> None:
+    """Lanza si `e` repite el id de `primera` con otro valor en un campo
+    fijo: no es un cambio de estado, es otro ensayo con un id ya usado."""
+    for c in CAMPOS_FIJOS_POR_ID:
+        if e[c] != primera[c]:
+            raise ValueError(f"id repetido {e['id']!r} con otro {c} ({e[c]!r}; antes "
+                             f"{primera[c]!r}): un cambio de estado no cambia de ensayo, "
+                             f"y el registro es append-only")
+
+
 def leer(ruta: Optional[Path] = None) -> list[dict]:
-    """Todas las entradas, validadas y en el orden del archivo. Lanza si una
-    línea no es JSON, no valida, o repite un id."""
+    """Todas las líneas, validadas y en el orden del archivo: la historia,
+    cambios de estado incluidos. Lanza si una línea no es JSON, no valida,
+    o repite un id con otro valor en un campo fijo. Para contar, `vigentes`."""
     ruta = Path(ruta) if ruta is not None else RUTA_ENSAYOS
-    entradas, vistos = [], set()
+    entradas, primeras = [], {}
     for n, linea in enumerate(ruta.read_text(encoding="utf-8").splitlines(), start=1):
         if not linea.strip():
             continue
         try:
             e = validar(json.loads(linea))
+            if e["id"] in primeras:
+                _mismo_ensayo(primeras[e["id"]], e)
         except (json.JSONDecodeError, ValueError) as exc:
             raise ValueError(f"{ruta.name}:{n}: {exc}") from exc
-        if e["id"] in vistos:
-            raise ValueError(f"{ruta.name}:{n}: id repetido {e['id']!r}")
-        vistos.add(e["id"])
+        primeras.setdefault(e["id"], e)
         entradas.append(e)
     return entradas
 
 
+def vigentes(ruta: Optional[Path] = None) -> list[dict]:
+    """El estado vigente de cada ensayo: la última línea de cada id, en el
+    orden en que cada id apareció por primera vez. Un ensayo, una entrada:
+    el N y todo conteo salen de acá (14a)."""
+    ultima: dict[str, dict] = {}
+    for e in leer(ruta):
+        ultima[e["id"]] = e
+    return list(ultima.values())
+
+
 def agregar(entrada: dict, ruta: Optional[Path] = None) -> dict:
-    """Agrega UNA línea al final. Nunca reescribe: valida la entrada y que
-    su id sea nuevo antes de abrir el archivo en modo "a"."""
+    """Agrega UNA línea al final. Nunca reescribe: valida la entrada y, si
+    su id ya existe, que sea un cambio de estado del mismo ensayo, antes de
+    abrir el archivo en modo "a"."""
     ruta = Path(ruta) if ruta is not None else RUTA_ENSAYOS
     validar(entrada)
     previas = leer(ruta) if ruta.exists() else []
-    if any(p["id"] == entrada["id"] for p in previas):
-        raise ValueError(f"id repetido {entrada['id']!r}: el registro es append-only")
+    primera = next((p for p in previas if p["id"] == entrada["id"]), None)
+    if primera is not None:
+        _mismo_ensayo(primera, entrada)
     linea = json.dumps({c: entrada[c] for c in CAMPOS_ENSAYO}, ensure_ascii=False)
     with ruta.open("a", encoding="utf-8") as f:
         f.write(linea + "\n")
@@ -156,10 +197,10 @@ def agregar(entrada: dict, ruta: Optional[Path] = None) -> dict:
 
 
 def que_cuentan(ruta: Optional[Path] = None) -> list[dict]:
-    """Los ensayos que suman a algún N: al de un DSR los que son
-    estrategias (`que_cuentan_en_el_dsr`), y al de su propia familia los
-    demás (P3)."""
-    return [e for e in leer(ruta) if e["cuenta_en_n"]]
+    """Los ensayos que suman a algún N, en su estado vigente: al de un DSR
+    los que son estrategias (`que_cuentan_en_el_dsr`), y al de su propia
+    familia los demás (P3)."""
+    return [e for e in vigentes(ruta) if e["cuenta_en_n"]]
 
 
 def es_estrategia(e: dict) -> bool:
@@ -174,20 +215,16 @@ def es_estrategia(e: dict) -> bool:
 
 
 def que_cuentan_en_el_dsr(ruta: Optional[Path] = None) -> list[dict]:
-    """Los ensayos que cuentan y son estrategias (P3): los únicos que
-    pueden sumar al N de un DSR. Cuáles suman lo dice cada pre-registro; el
-    de H3 los suma todos.
-
-    Devuelve líneas, no ensayos. Un ensayo que cambia de estado suma una
-    línea nueva (ver APPEND-ONLY), y el registro todavía no dice cuál
-    reemplaza a cuál: contar líneas lo contaría dos veces. Hoy ninguno
-    cambió de estado."""
+    """Los ensayos que cuentan y son estrategias (P3), en su estado
+    vigente: los únicos que pueden sumar al N de un DSR. Cuáles suman lo
+    dice cada pre-registro; el de H3 los suma todos."""
     return [e for e in que_cuentan(ruta) if es_estrategia(e)]
 
 
 def previos_fallidos(ruta: Optional[Path] = None) -> int:
-    """Los ensayos fallidos anteriores a la Serie H que cuentan en el N: los
-    "3 ensayos previos" de research/preregistro_h1.md §9."""
+    """Los ensayos fallidos anteriores a la Serie H que cuentan en el N, por
+    su estado vigente: los "3 ensayos previos" de research/preregistro_h1.md
+    §9."""
     return sum(1 for e in que_cuentan(ruta)
                if e["hipotesis"] == HIPOTESIS_PREVIA_A_LA_SERIE_H and e["estado"] == "fallido")
 

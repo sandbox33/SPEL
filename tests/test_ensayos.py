@@ -11,6 +11,10 @@ registro, y el registro es la única fuente del N.
 Y desde P3 (brief del Admin 11–13-B): todo lo que contaba sumaba al N del
 DSR. Ahora suma solo lo que además es una estrategia; los ensayos de H2
 cuentan en el N de su familia.
+
+Y desde la 14a (brief del Admin 14): un cambio de estado iba con otro id, y
+contar líneas lo contaba dos veces. Ahora repite el id, y todo conteo sale
+del último estado de cada id.
 """
 
 from __future__ import annotations
@@ -163,6 +167,106 @@ def test_en_el_registro_lo_que_cuenta_suma_al_dsr_salvo_h2():
     assert {"previo-mascara-godel", "previo-proxy-transfer-entropy", "previo-ema-20-63"} <= del_dsr
     for e in en.que_cuentan():
         assert (e["id"] in del_dsr) is (e["hipotesis"] != "H2"), e["id"]
+
+
+# ═══ 14a: un ensayo por id, en su último estado ════════════════════════════
+
+def _cambio(e: dict, **cambios) -> dict:
+    """Una línea de cambio de estado: el mismo ensayo, con lo que cambió."""
+    return {**{c: e[c] for c in en.CAMPOS_ENSAYO}, **cambios}
+
+
+def _lineas(ruta) -> int:
+    return len(ruta.read_bytes().splitlines())
+
+
+def test_un_cambio_de_estado_no_cambia_el_n(registro):
+    """El criterio viejo: un cambio de estado era una línea nueva, y cada
+    línea que contaba sumaba. Ahora es el mismo id y no suma."""
+    antes = (len(en.que_cuentan(registro)), len(en.que_cuentan_en_el_dsr(registro)),
+             en.previos_fallidos(registro), len(en.vigentes(registro)))
+    lineas = _lineas(registro)
+    for e in en.que_cuentan(registro):
+        en.agregar(_cambio(e, fecha="2026-10-20", nota="cambio de estado de prueba",
+                           estado="en_curso" if e["estado"] == "pre-registrado" else e["estado"]),
+                   registro)
+    assert _lineas(registro) == lineas + antes[0]
+    assert (len(en.que_cuentan(registro)), len(en.que_cuentan_en_el_dsr(registro)),
+            en.previos_fallidos(registro), len(en.vigentes(registro))) == antes
+
+
+def test_el_estado_vigente_es_el_ultimo(registro):
+    en.agregar(_entrada(id="h1-lookback-10", estado="pre-registrado"), registro)
+    e = en.vigentes(registro)[-1]
+    en.agregar(_cambio(e, estado="en_curso", fecha="2026-10-21"), registro)
+    en.agregar(_cambio(e, estado="fallido", fecha="2026-10-22"), registro)
+    assert [x["estado"] for x in en.leer(registro) if x["id"] == "h1-lookback-10"] == [
+        "pre-registrado", "en_curso", "fallido"]
+    vigente = [x for x in en.vigentes(registro) if x["id"] == "h1-lookback-10"]
+    assert [(x["estado"], x["fecha"]) for x in vigente] == [("fallido", "2026-10-22")]
+    assert [x["id"] for x in en.que_cuentan(registro)].count("h1-lookback-10") == 1
+
+
+def test_los_previos_se_cuentan_por_su_ultimo_estado(registro):
+    en.agregar(_entrada(id="otro-previo", hipotesis=en.HIPOTESIS_PREVIA_A_LA_SERIE_H,
+                        preregistro_sha256=None, estado="pre-registrado"), registro)
+    assert en.previos_fallidos(registro) == 3
+    e = en.vigentes(registro)[-1]
+    en.agregar(_cambio(e, estado="fallido"), registro)
+    assert en.previos_fallidos(registro) == 4
+    en.agregar(_cambio(e, estado="aprobado"), registro)
+    assert en.previos_fallidos(registro) == 3
+
+
+def test_vigentes_tiene_un_ensayo_por_id_en_el_orden_de_aparicion(registro):
+    ids = list(dict.fromkeys(e["id"] for e in en.leer(registro)))
+    primero = en.vigentes(registro)[0]
+    en.agregar(_cambio(primero, nota="cambio de estado del primero"), registro)
+    assert [e["id"] for e in en.vigentes(registro)] == ids
+    assert en.vigentes(registro)[0]["nota"] == "cambio de estado del primero"
+
+
+@pytest.mark.parametrize("campo, otro", [
+    ("hipotesis", "H3"),
+    ("activo", "XAU"),
+    ("preregistro_sha256", "b" * 64),
+    ("cuenta_en_n", False),
+])
+def test_un_id_con_otro_campo_fijo_no_entra(registro, campo, otro):
+    """Un id repetido con otra hipótesis, otro activo, otro sha256 de
+    pre-registro u otro cuenta_en_n es otro ensayo con un id ya usado."""
+    en.agregar(_entrada(id="h1-lookback-20"), registro)
+    e = en.vigentes(registro)[-1]
+    antes = registro.read_bytes()
+    with pytest.raises(ValueError, match=rf"id repetido 'h1-lookback-20' con otro {campo}"):
+        en.agregar(_cambio(e, **{campo: otro}), registro)
+    assert registro.read_bytes() == antes
+
+
+@pytest.mark.parametrize("campo, otro", [
+    ("hipotesis", "H3"),
+    ("activo", "XAU"),
+    ("preregistro_sha256", "b" * 64),
+    ("cuenta_en_n", False),
+])
+def test_un_id_con_otro_campo_fijo_en_el_archivo_no_se_lee(registro, campo, otro):
+    en.agregar(_entrada(id="h1-lookback-40"), registro)
+    e = en.vigentes(registro)[-1]
+    with registro.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(_cambio(e, **{campo: otro})) + "\n")
+    n = _lineas(registro)
+    with pytest.raises(ValueError, match=rf"ensayos\.jsonl:{n}: id repetido 'h1-lookback-40' con otro {campo}"):
+        en.leer(registro)
+
+
+def test_un_cambio_de_estado_de_lo_sembrado_no_lo_reescribe(registro):
+    """Lo sembrado no se reescribe: un cambio de estado de un ensayo sembrado
+    va al final, y el prefijo conserva su sha256."""
+    previo = next(e for e in en.leer(registro) if e["id"] == "previo-ema-20-63")
+    en.agregar(_cambio(previo, nota="revisado", fecha="2026-10-20"), registro)
+    lineas = registro.read_bytes().splitlines(keepends=True)
+    assert hashlib.sha256(b"".join(lineas[:N_SEMBRADAS])).hexdigest() == SEMBRADO_SHA256
+    assert json.loads(lineas[-1])["id"] == "previo-ema-20-63"
 
 
 # ═══ Append-only ═══════════════════════════════════════════════════════════
