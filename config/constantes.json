@@ -2045,6 +2045,19 @@
       "notas": ""
     },
     {
+      "nombre": "ORO_M5",
+      "modulo": "ingestion.velas_intradia",
+      "categoria": "derivada",
+      "expresion": "SerieTD(SIMBOLO_TD, TIMEFRAME_TD, SERIE_TD, GRANULARIDAD_M5, Calendario.HABIL, INICIO_TD)",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Las constantes del M5 del oro, agrupadas para que ingerir_td reciba la serie como parámetro y las velas diarias de D1 reusen la misma escritura (brief del Admin 14, 14b). No tiene valor propio: cada campo es el de su constante registrada.",
+      "usado_en": [
+        "ingestion.velas_intradia.ingerir_td"
+      ],
+      "notas": ""
+    },
+    {
       "nombre": "PAUSA_DERIV_S",
       "modulo": "ingestion.velas_intradia",
       "categoria": "parametro",

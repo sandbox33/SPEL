@@ -21,6 +21,11 @@ Admin del 06-oct-2026 (4), punto 1):
     sondas §0.A-2 y §0.A-3b) por `/ws/public`. No usa `deriv_ws.py`, que
     sigue en la API legacy.
 
+La descarga y la escritura sirven también para las velas diarias de D1 y
+la muestra horaria de BTC (ingestion/velas_d1.py, brief del Admin 14, 14b):
+`SerieTD` dice qué serie de TwelveData, e `ingerir_deriv` recibe el símbolo,
+la granularidad y el calendario. Sin parámetros, todo es el M5 del oro.
+
 ══ SOLO SE ESCRIBE UNA DESCARGA CONTIGUA ══
 
 Se pagina hacia atrás desde la última vela cerrada. Si la descarga se corta
@@ -78,6 +83,7 @@ import hashlib
 import json
 import sys
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
@@ -128,6 +134,23 @@ CORTES_DE_FONDO: frozenset[str] = frozenset({
     "respuesta vacía", "la página no retrocedió", "se llegó a la epoch 0"})
 
 
+@dataclass(frozen=True)
+class SerieTD:
+    """Una serie de TwelveData que se baja y se guarda: el símbolo y el
+    timeframe del adapter, la carpeta en metrics/velas, la granularidad, el
+    calendario y el inicio de la historia ("YYYY-MM-DD HH:MM:SS", UTC)."""
+    simbolo: str
+    timeframe: str
+    serie: str
+    granularidad: int
+    calendario: str
+    inicio: str
+
+
+#: El M5 del oro, lo que este módulo baja desde el 06-oct.
+ORO_M5 = SerieTD(SIMBOLO_TD, TIMEFRAME_TD, SERIE_TD, GRANULARIDAD_M5, Calendario.HABIL, INICIO_TD)
+
+
 def ruta_calendario(simbolo: str = SIMBOLO_DERIV) -> Path:
     return (Path(stream_path(PersistenceStream.METRICS)) / "calendario" / simbolo
             / "trading_times.jsonl")
@@ -145,8 +168,8 @@ def sha256_de_archivo(ruta: Path) -> Optional[str]:
     return hashlib.sha256(ruta.read_bytes()).hexdigest() if ruta.exists() else None
 
 
-def _ultima_guardada(serie: str) -> Optional[int]:
-    filas = _leer_filas(ruta_serie(serie, GRANULARIDAD_M5))
+def _ultima_guardada(serie: str, granularidad: int = GRANULARIDAD_M5) -> Optional[int]:
+    filas = _leer_filas(ruta_serie(serie, granularidad))
     return max(f["epoch"] for f in filas) if filas else None
 
 
@@ -170,7 +193,9 @@ def vacia_cierra_la_descarga(filas_previa: Optional[int], end_date: str, desde: 
 
 async def descargar_td(adapter: TwelveDataAdapter, *, desde: int, hasta: int,
                        limitador: Limitador,
-                       outputsize: int = TWELVEDATA_MAX_OUTPUTSIZE) -> tuple[list[dict], dict]:
+                       outputsize: int = TWELVEDATA_MAX_OUTPUTSIZE,
+                       simbolo: str = SIMBOLO_TD,
+                       timeframe: str = TIMEFRAME_TD) -> tuple[list[dict], dict]:
     """Pagina hacia atrás desde `hasta` hasta `desde`, como la 3b: las dos
     fechas en cada pedido. `hasta` es solo el borde del primer pedido; qué
     vela cerró lo decide la cabecera Date. Devuelve (velas crudas, resumen).
@@ -186,7 +211,7 @@ async def descargar_td(adapter: TwelveDataAdapter, *, desde: int, hasta: int,
             res["corte"] = f"tope de {limitador.tope} créditos: la descarga quedó incompleta"
             break
         try:
-            p = await adapter.fetch_pagina(SIMBOLO_TD, TIMEFRAME_TD, start_date=_fmt(desde),
+            p = await adapter.fetch_pagina(simbolo, timeframe, start_date=_fmt(desde),
                                            end_date=fin, outputsize=outputsize)
         except AdapterException as exc:
             paginas.append({"end_date": fin, "error": f"{type(exc).__name__}: {exc}"})
@@ -235,15 +260,27 @@ async def descargar_td(adapter: TwelveDataAdapter, *, desde: int, hasta: int,
     return list(velas.values()), res
 
 
+def inicio_de_la_descarga(serie: SerieTD) -> int:
+    """La primera época que se pide: la siguiente a la última vela guardada
+    o, si no hay ninguna, el inicio de la serie."""
+    ultima = _ultima_guardada(serie.serie, serie.granularidad)
+    if ultima is not None:
+        return ultima + serie.granularidad
+    return _epoch_de(serie.inicio)
+
+
 async def ingerir_td(adapter: TwelveDataAdapter, *, write: bool,
                      limitador: Optional[Limitador] = None,
-                     outputsize: int = TWELVEDATA_MAX_OUTPUTSIZE) -> tuple[ReporteSimbolo, dict]:
+                     outputsize: int = TWELVEDATA_MAX_OUTPUTSIZE,
+                     serie: SerieTD = ORO_M5) -> tuple[ReporteSimbolo, dict]:
+    """Baja `serie` desde `inicio_de_la_descarga` y escribe solo una
+    descarga contigua."""
     lim = limitador or Limitador(LLAMADAS_POR_MINUTO_TD, TOPE_CREDITOS_TD)
-    ultima = _ultima_guardada(SERIE_TD)
-    desde = ultima + GRANULARIDAD_M5 if ultima is not None else _epoch_de(INICIO_TD)
+    desde = inicio_de_la_descarga(serie)
     crudas, res = await descargar_td(adapter, desde=desde, hasta=int(time.time()),
-                                     limitador=lim, outputsize=outputsize)
-    rep = ReporteSimbolo(SERIE_TD, Calendario.HABIL, corte=res.get("corte", ""))
+                                     limitador=lim, outputsize=outputsize,
+                                     simbolo=serie.simbolo, timeframe=serie.timeframe)
+    rep = ReporteSimbolo(serie.serie, serie.calendario, corte=res.get("corte", ""))
     res["creditos_usados"] = lim.creditos
     if not res["completo"]:
         rep.recibidas = len(crudas)
@@ -251,7 +288,7 @@ async def ingerir_td(adapter: TwelveDataAdapter, *, write: bool,
                              "escribirla dejaría un hueco. No se escribió nada.")
         return rep, res
     ahora = res["hora_servidor"] or 0
-    _ingerir_simbolo(rep, crudas, ahora_servidor=ahora, granularidad=GRANULARIDAD_M5,
+    _ingerir_simbolo(rep, crudas, ahora_servidor=ahora, granularidad=serie.granularidad,
                      write=write, fecha_servidor=_dia(ahora).isoformat() if ahora else "")
     return rep, res
 
@@ -275,8 +312,14 @@ def horario_de(datos: dict, simbolo: str = SIMBOLO_DERIV) -> Optional[dict]:
 
 
 async def ingerir_deriv(abrir: Callable[[str], Any], *, write: bool,
-                        pausa_s: float = PAUSA_DERIV_S) -> tuple[ReporteSimbolo, dict]:
-    rep = ReporteSimbolo(SIMBOLO_DERIV, Calendario.HABIL)
+                        pausa_s: float = PAUSA_DERIV_S, simbolo: str = SIMBOLO_DERIV,
+                        granularidad: int = GRANULARIDAD_M5,
+                        calendario: str = Calendario.HABIL, con_horario: bool = True,
+                        detalle_paginas: bool = False) -> tuple[ReporteSimbolo, dict]:
+    """Baja `simbolo` en `granularidad` por /ws/public y escribe solo una
+    descarga contigua. `con_horario` guarda el `trading_times` del oro;
+    `detalle_paginas` deja en el resultado cada página con su sha256."""
+    rep = ReporteSimbolo(simbolo, calendario)
     res: dict[str, Any] = {"endpoint": ENDPOINT_PUBLICO}
     velas: dict[int, dict] = {}
     async with abrir(ENDPOINT_PUBLICO) as ws:
@@ -288,23 +331,27 @@ async def ingerir_deriv(abrir: Callable[[str], Any], *, write: bool,
         ahora = int(d["time"])
         fecha = _dia(ahora).isoformat()
         res["hora_servidor"] = ahora
-        e, d = await canal.pedir({"trading_times": fecha})
-        cal: dict[str, Any] = {"fecha": fecha, "sha256": e.get("sha256"), "error": e.get("error")}
-        if d is not None:
-            cal["horario"] = horario_de(d)
-            if write:
-                _append(ruta_calendario(), [{"fecha_servidor": fecha, "sha256": e["sha256"],
-                                             "horario": cal["horario"],
-                                             "crudo": canal.ultimo_crudo}])
-        res["calendario"] = cal
-        prof = await profundidad(canal, SIMBOLO_DERIV, GRANULARIDAD_M5,
+        if con_horario:
+            e, d = await canal.pedir({"trading_times": fecha})
+            cal: dict[str, Any] = {"fecha": fecha, "sha256": e.get("sha256"),
+                                   "error": e.get("error")}
+            if d is not None:
+                cal["horario"] = horario_de(d)
+                if write:
+                    _append(ruta_calendario(), [{"fecha_servidor": fecha, "sha256": e["sha256"],
+                                                 "horario": cal["horario"],
+                                                 "crudo": canal.ultimo_crudo}])
+            res["calendario"] = cal
+        prof = await profundidad(canal, simbolo, granularidad,
                                  max_paginas=MAX_PAGINAS_DERIV, guardar_velas=velas)
     rep.corte = prof["corte"]
     res["paginas"] = len(prof["paginas"])
+    if detalle_paginas:
+        res["detalle_paginas"] = prof["paginas"]
     res["primera_epoch"], res["ultima_epoch"] = prof["primera_epoch"], prof["ultima_epoch"]
-    ultima = _ultima_guardada(SIMBOLO_DERIV)
+    ultima = _ultima_guardada(simbolo, granularidad)
     contigua = (prof["corte"] in CORTES_DE_FONDO if ultima is None
-                else bool(velas) and min(velas) <= ultima + GRANULARIDAD_M5)
+                else bool(velas) and min(velas) <= ultima + granularidad)
     res["contigua"] = contigua
     crudas = [{"epoch": int(c["epoch"]), **{k: c.get(k) for k in ("open", "high", "low", "close")}}
               for c in velas.values()]
@@ -313,17 +360,18 @@ async def ingerir_deriv(abrir: Callable[[str], Any], *, write: bool,
         res["no_escrito"] = (f"la descarga cortó por {prof['corte']!r} sin llegar a lo ya "
                              f"guardado ni al fondo: escribirla dejaría un hueco. No se escribió.")
         return rep, res
-    _ingerir_simbolo(rep, crudas, ahora_servidor=ahora, granularidad=GRANULARIDAD_M5,
+    _ingerir_simbolo(rep, crudas, ahora_servidor=ahora, granularidad=granularidad,
                      write=write, fecha_servidor=fecha)
     return rep, res
 
 
 # ═══ Informe y CLI ════════════════════════════════════════════════════════
 
-def bloque_datos(fuente: str, rep: ReporteSimbolo, res: dict) -> dict:
+def bloque_datos(fuente: str, rep: ReporteSimbolo, res: dict,
+                 granularidad: int = GRANULARIDAD_M5) -> dict:
     """Un bloque del informe: conteos, rango de fechas y sha256 del archivo."""
     p = rep.profundidad
-    ruta = ruta_serie(rep.simbolo, GRANULARIDAD_M5)
+    ruta = ruta_serie(rep.simbolo, granularidad)
     return {"fuente": fuente, "serie": rep.simbolo, "archivo": str(ruta),
             "sha256": sha256_de_archivo(ruta), "corte": rep.corte, "recibidas": rep.recibidas,
             "nuevas": rep.nuevas, "abiertas_descartadas": rep.abiertas_descartadas,
