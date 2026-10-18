@@ -13,6 +13,8 @@
 #
 # Deriv va por el canal PÚBLICO (/ws/public): sin cuenta, ni token, ni App
 # ID. El único secreto es la key de TwelveData, y solo lo ve el paso que baja.
+# Ese paso también pone al día el M5 del oro de las dos fuentes, después de
+# las diarias, con velas_intradia (brief del Admin 15, punto 6).
 # La concordancia lee lo que quedó en data-store después del commit: si el
 # paso 1 se detiene, lo dice el informe, sin calcular la compuerta.
 
@@ -54,7 +56,8 @@ jobs:
         run: pip install -r requirements.txt
 
       # La key entra por `env:` de ESTE paso y nunca como argumento. Publica
-      # los créditos estimados antes del primer pedido. `continue-on-error`:
+      # los créditos estimados, los de D1 y los del M5 del oro, antes del
+      # primer pedido. `continue-on-error`:
       # una descarga incompleta o una vela inválida sale 1 DESPUÉS de escribir
       # lo válido; se commitea y el job se pone rojo al final.
       - name: Velas diarias de D1 (escribe en data-store)
