@@ -3858,3 +3858,66 @@ sí incluye los de H1.
 Ningún test viejo cambió de criterio.
 
 **Mutantes:** 9, cada uno atrapado por su propio test y no solo por el sha256.
+
+## 2026-10-18 — Brief 14a: el registro de ensayos cuenta ensayos, no líneas
+
+**Fuente:** brief del Admin 14, tarea 14a. Rama `claude/brief-14a-ensayos-por-id`, desde `main` en
+`08d4b05` (el merge del #45).
+
+**El criterio que cambia.** Antes, un ensayo que cambiaba de estado sumaba una línea nueva con
+**otro** id que citaba al anterior, y `que_cuentan()` contaba líneas: el primer cambio de estado
+habría contado ese ensayo dos veces en el N (entrada "Brief 11–13-B en H3", para el Admin). Ahora:
+- una línea con un id que ya existe es un **cambio de estado del mismo ensayo**, y no suma;
+- `vigentes()` es la última línea de cada id, en el orden en que apareció cada id.
+  `que_cuentan`, `que_cuentan_en_el_dsr` y `previos_fallidos` salen de ahí, y `leer()` sigue
+  devolviendo la historia completa;
+- un id repetido con otra hipótesis, otro activo u otro sha256 de pre-registro es un error, al
+  leer y al agregar;
+- lo sembrado no se reescribe: el cambio de estado de un ensayo sembrado va al final, y el
+  prefijo conserva su sha256.
+
+**[INTERPRETACIÓN] `cuenta_en_n` también queda fijo.** El brief nombra la hipótesis, el activo y
+el sha256. Si `cuenta_en_n` pudiera cambiar con el estado, un cambio de estado cambiaría el N, y el
+brief pide que no lo cambie. `CAMPOS_FIJOS_POR_ID` tiene los cuatro.
+
+**Para el Admin: lo que esto deja como está.**
+- Un ensayo pre-registrado que nunca corre (por ejemplo, el de un activo que el brief 14 dé rojo)
+  sigue contando: no puede pasar a `cuenta_en_n: false`. Es el error conservador. Si alguna vez
+  hay que sacarlo, es una decisión, no un cambio de estado.
+- Las transiciones no se validan: nada impide pasar de `fallido` a `pre-registrado`. El brief no
+  lo pide.
+
+**Contra el código y los documentos, antes de cambiarlo.** Nada lo contradice:
+- `research/preregistro_h2.md` §10 dice que, cuando H2 corra, "cada ensayo suma una línea nueva
+  con su estado". Con el mismo id, es exactamente esto.
+- `research/preregistro_h1_v2.md` §12 dice que los lookbacks y el ensemble "se cuentan al correr
+  … y cada uno suma su línea". Son ensayos nuevos, con ids propios, y `h1-v2` cambia de estado con
+  el suyo.
+- Los documentos sellados no se tocaron.
+
+**Tests.** Los que ya existían pasan sin tocarlos. Los dos de ids repetidos
+(`test_un_id_repetido_no_entra` y `test_un_id_repetido_en_el_archivo_no_se_lee`) usan un id con
+otra hipótesis, así que siguen verificando algo que vale: un id con otro ensayo no entra. Sus
+nombres hablan del criterio viejo, y no los cambié. Los nuevos, 13 casos:
+- un cambio de estado de cada ensayo que cuenta no cambia el N, ni el del DSR, ni los previos;
+- el estado vigente es el último, y un ensayo con tres líneas cuenta una vez;
+- los previos se cuentan por su último estado;
+- `vigentes` tiene un ensayo por id, en el orden de aparición;
+- un id con otro campo fijo no entra (4 casos) ni se lee (4 casos);
+- el cambio de estado de un ensayo sembrado va al final, sin tocar el prefijo.
+
+**Mutantes:** 11 nuevos, todos atrapados:
+- la vigente es la primera línea;
+- el orden es el de la última aparición;
+- `que_cuentan` y los previos cuentan líneas;
+- cada uno de los cuatro campos fijos puede cambiar;
+- `leer` o `agregar` no verifican el ensayo;
+- `agregar` rechaza todo id repetido, que es el criterio viejo.
+
+Los 32 anteriores del registro y de P3 se volvieron a correr, adaptados al código nuevo, y quedan
+atrapados.
+
+**BLUEPRINT.** La tabla de la Serie H dice el documento, el PR y el estado de cada hipótesis:
+- H1 v1, sellado y nunca corrido;
+- H1 v2, H2 y H3, pre-registradas, y ninguna corrida;
+- H3, además, bloqueada por P2.

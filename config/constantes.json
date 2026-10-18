@@ -3107,6 +3107,26 @@
       "notas": ""
     },
     {
+      "nombre": "CAMPOS_FIJOS_POR_ID",
+      "modulo": "governance.ensayos",
+      "categoria": "etiqueta",
+      "valor": [
+        "hipotesis",
+        "activo",
+        "preregistro_sha256",
+        "cuenta_en_n"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14, 14a (18-oct-2026): un id repetido con otra hipótesis, otro activo u otro sha256 de pre-registro es un error. cuenta_en_n se suma para que un cambio de estado no cambie el N, que es lo que pide el mismo brief. Decision-log 2026-10-18.",
+      "usado_en": [
+        "governance.ensayos._mismo_ensayo",
+        "governance.ensayos.leer",
+        "governance.ensayos.agregar"
+      ],
+      "notas": "[INTERPRETACIÓN] cuenta_en_n entre los fijos: si pudiera cambiar con el estado, un cambio de estado cambiaría el N."
+    },
+    {
       "nombre": "ESTADOS_ENSAYO",
       "modulo": "governance.ensayos",
       "categoria": "etiqueta",
