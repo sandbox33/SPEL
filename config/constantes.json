@@ -2012,7 +2012,8 @@
       "afecta_resultado": true,
       "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 1: BTC/USD ↔ cryBTCUSD y XAU/USD ↔ frxXAUUSD. La serie intradía de cada uno es la del paso 1: 1h de BTC (muestra) y M5 del oro (ya en data, UTC).",
       "usado_en": [
-        "ingestion.velas_d1.ingerir"
+        "ingestion.velas_d1.ingerir",
+        "tools.concordancia_d1.informe"
       ],
       "notas": ""
     },
@@ -2548,6 +2549,166 @@
         "tools.concordancia_xauusd.franja"
       ],
       "notas": ""
+    },
+    {
+      "nombre": "FACTOR_MEDIANA",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "parametro",
+      "valor": 0.2,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 3 (paso 2, la compuerta): un día coincide si, además, |r_TD − r_Deriv| ≤ 0,2 × mediana(|r_Deriv|) del activo en la ventana común.",
+      "usado_en": [
+        "tools.concordancia_d1.paso_2"
+      ],
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado. [INTERPRETACIÓN] La mediana es la de los pares (días comunes con r en las dos fuentes)."
+    },
+    {
+      "nombre": "HORA_CORTE_EXIGIDA",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "parametro",
+      "valor": 0,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 2 (paso 1, la hora de corte): si para algún activo la h ganadora no es 00:00 UTC, la herramienta se detiene sin calcular la compuerta.",
+      "usado_en": [
+        "tools.concordancia_d1.decidir_corte"
+      ],
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado."
+    },
+    {
+      "nombre": "HORA_MEDIA",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "parametro",
+      "valor": 12,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "[INTERPRETACIÓN] Desde esta hora, el instante de corte de la fecha D es D h:00; antes, D+1 h:00: la ventana de 24 h que más se superpone con D. Con h = 0, la barra D de TwelveData cubre el mismo día UTC que la de Deriv (sonda §0.A-2). El brief 14 no fija con qué fecha se etiqueta un corte.",
+      "usado_en": [
+        "tools.concordancia_d1.instante_de_corte",
+        "tools.concordancia_d1.paso_1"
+      ],
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado."
+    },
+    {
+      "nombre": "HORAS_DE_CORTE",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "parametro",
+      "valor": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 2 (paso 1, la hora de corte): \"cada hora de corte h de 00:00 a 23:00 UTC\".",
+      "usado_en": [
+        "tools.concordancia_d1.paso_1"
+      ],
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado."
+    },
+    {
+      "nombre": "MIN_DIAS_COMUNES",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "parametro",
+      "valor": 250,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 3 (paso 2, la compuerta): VERDE si además hay al menos 250 días comunes (los que tienen barra cerrada en las dos fuentes).",
+      "usado_en": [
+        "tools.concordancia_d1.paso_2"
+      ],
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado."
+    },
+    {
+      "nombre": "PERCENTILES",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "parametro",
+      "valor": [
+        50,
+        90
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 3 (paso 2, la compuerta): informativo, sin efecto en la compuerta: la mediana y el p90 de |r_TD − r_Deriv|.",
+      "usado_en": [
+        "tools.concordancia_d1.paso_2",
+        "tools.concordancia_d1.revisiones_en"
+      ],
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado."
+    },
+    {
+      "nombre": "TOLERANCIA_CIERRE_USD",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "parametro",
+      "valor": 0.01,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 2 (paso 1, la hora de corte): el cierre con corte h coincide con el close de la barra 1day de TwelveData \"a ±0,01 USD\" (inclusive).",
+      "usado_en": [
+        "tools.concordancia_d1._coincide_el_cierre"
+      ],
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado."
+    },
+    {
+      "nombre": "UMBRAL_COMPUERTA",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "parametro",
+      "valor": 0.9,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 3 (paso 2, la compuerta): VERDE si coinciden ≥ 90 % de los días comunes (D1: \"una coincidencia de al menos el 90 %\", decision-log 2026-10-17).",
+      "usado_en": [
+        "tools.concordancia_d1.paso_2"
+      ],
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado. [INTERPRETACIÓN] El 90 % se cuenta sobre los pares: un par que sale por un hueco no cuenta ni a favor ni en contra. Se informa también la fracción sobre los días comunes."
+    },
+    {
+      "nombre": "UMBRAL_CORTE",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "parametro",
+      "valor": 0.95,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 2 (paso 1, la hora de corte): si la h ganadora no llega al 95 % de los días, la herramienta se detiene sin calcular la compuerta.",
+      "usado_en": [
+        "tools.concordancia_d1.decidir_corte"
+      ],
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado."
+    },
+    {
+      "nombre": "UMBRAL_PLANO",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "parametro",
+      "valor": 0.0001,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 3 (paso 2, la compuerta): (i) mismo signo, o los dos valen menos de 1 pb en valor absoluto (estricto).",
+      "usado_en": [
+        "tools.concordancia_d1.coincide"
+      ],
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado."
     },
     {
       "nombre": "DEFAULT_SEED",
