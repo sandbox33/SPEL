@@ -1975,6 +1975,179 @@
       "notas": ""
     },
     {
+      "nombre": "ACTIVOS_D1",
+      "modulo": "ingestion.velas_d1",
+      "categoria": "etiqueta",
+      "valor": [
+        {
+          "activo": "BTC",
+          "td": {
+            "simbolo": "BTCUSD",
+            "timeframe": "1d",
+            "serie": "td_BTCUSD",
+            "granularidad": 86400,
+            "calendario": "continuo",
+            "inicio": "2017-08-28 00:00:00"
+          },
+          "deriv": "cryBTCUSD",
+          "intradia": "td_BTCUSD",
+          "granularidad_intradia": 3600
+        },
+        {
+          "activo": "XAU",
+          "td": {
+            "simbolo": "XAUUSD",
+            "timeframe": "1d",
+            "serie": "td_XAUUSD",
+            "granularidad": 86400,
+            "calendario": "habil",
+            "inicio": "1979-12-26 00:00:00"
+          },
+          "deriv": "frxXAUUSD",
+          "intradia": "td_XAUUSD",
+          "granularidad_intradia": 300
+        }
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 1: BTC/USD ↔ cryBTCUSD y XAU/USD ↔ frxXAUUSD. La serie intradía de cada uno es la del paso 1: 1h de BTC (muestra) y M5 del oro (ya en data, UTC).",
+      "usado_en": [
+        "ingestion.velas_d1.ingerir"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "BTC_D1",
+      "modulo": "ingestion.velas_d1",
+      "categoria": "parametro",
+      "valor": {
+        "simbolo": "BTCUSD",
+        "timeframe": "1d",
+        "serie": "td_BTCUSD",
+        "granularidad": 86400,
+        "calendario": "continuo",
+        "inicio": "2017-08-28 00:00:00"
+      },
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 1: TwelveData 1day, toda la historia. El inicio es el earliest_timestamp diario de BTC/USD medido el 2026-10-05 (sonda §0.A-3 v2, f: 3.326 filas, sha256 ab43cf45…; D1-p en el decision-log del 2026-10-17).",
+      "usado_en": [
+        "ingestion.velas_d1.series_td"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "GRANULARIDAD_H1",
+      "modulo": "ingestion.velas_d1",
+      "categoria": "derivada",
+      "expresion": "_TWELVEDATA_GRANULARITY_SECONDS[TIMEFRAME_H1]",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "El mapa de segundos del adapter de TwelveData, para '1h'. Se lee del mapa para no duplicar el 3600.",
+      "usado_en": [
+        "ingestion.velas_d1.muestra_h1"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "MUESTRA_H1_DIAS",
+      "modulo": "ingestion.velas_d1",
+      "categoria": "parametro",
+      "valor": 60,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 2: \"una muestra de 1h de TwelveData con timezone=UTC (60 días...)\".",
+      "usado_en": [
+        "ingestion.velas_d1.muestra_h1"
+      ],
+      "notas": "Solo fija la primera descarga: las corridas siguientes siguen desde la última vela guardada."
+    },
+    {
+      "nombre": "ORO_D1",
+      "modulo": "ingestion.velas_d1",
+      "categoria": "parametro",
+      "valor": {
+        "simbolo": "XAUUSD",
+        "timeframe": "1d",
+        "serie": "td_XAUUSD",
+        "granularidad": 86400,
+        "calendario": "habil",
+        "inicio": "1979-12-26 00:00:00"
+      },
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 1: TwelveData 1day, toda la historia. El inicio es el earliest_timestamp diario de XAU/USD medido el 2026-10-05 (sonda §0.A-3 v2, f: 12.288 filas, sha256 a756fdc4…; D1-p en el decision-log del 2026-10-17).",
+      "usado_en": [
+        "ingestion.velas_d1.series_td"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "SERIE_TD_BTC",
+      "modulo": "ingestion.velas_d1",
+      "categoria": "etiqueta",
+      "valor": "td_BTCUSD",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 1: la carpeta de TwelveData de BTC en metrics/velas, con el patrón de SERIE_TD (td_ y el símbolo del proyecto).",
+      "usado_en": [
+        "ingestion.velas_d1.muestra_h1"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "SIMBOLO_DERIV_BTC",
+      "modulo": "ingestion.velas_d1",
+      "categoria": "etiqueta",
+      "valor": "cryBTCUSD",
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Símbolo de BTC/USD en Deriv según active_symbols (sondas §0.A-2 y §0.A-3, decision-log 2026-10-05). Brief del Admin 14 (18-oct-2026), 14b, punto 1: BTC/USD ↔ cryBTCUSD.",
+      "usado_en": [
+        "ingestion.velas_d1.ingerir"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "SIMBOLO_TD_BTC",
+      "modulo": "ingestion.velas_d1",
+      "categoria": "etiqueta",
+      "valor": "BTCUSD",
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Símbolo del proyecto para BTC/USD en TwelveDataAdapter; BTC/USD 1day medido en el plan Basic el 2026-10-05 (sonda §0.A-3 v2, f).",
+      "usado_en": [
+        "ingestion.velas_d1.muestra_h1"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "TIMEFRAME_D1",
+      "modulo": "ingestion.velas_d1",
+      "categoria": "etiqueta",
+      "valor": "1d",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 1: TwelveData 1day (clave '1d' del proyecto en _TWELVEDATA_INTERVALS). Va sin timezone=UTC (decisión del Admin del 06-oct).",
+      "usado_en": [
+        "ingestion.velas_d1.series_td"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "TIMEFRAME_H1",
+      "modulo": "ingestion.velas_d1",
+      "categoria": "etiqueta",
+      "valor": "1h",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 2: la muestra de 1h de BTC, con timezone=UTC (el adapter la manda en todo intervalo intradía).",
+      "usado_en": [
+        "ingestion.velas_d1.muestra_h1"
+      ],
+      "notas": ""
+    },
+    {
       "nombre": "CORTES_DE_FONDO",
       "modulo": "ingestion.velas_intradia",
       "categoria": "etiqueta",
