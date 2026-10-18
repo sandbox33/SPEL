@@ -311,6 +311,30 @@
       "valor": 20
     },
     {
+      "nombre": "SHARPE_RECHAZO",
+      "modulo": "core.preregistro_h1_v2",
+      "categoria": "derivada",
+      "expresion": "core.preregistro_h1.SHARPE_UMBRAL_ALTERNATIVA (0,3): el umbral de v1, que ya no lleva a ninguna alternativa",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h1_v2.md, sección 10: D12 (decisión del Admin del 17-oct-2026), Sharpe de la serie base < 0,3 → se rechaza y se detiene.",
+      "usado_en": [
+        "core.preregistro_h1_v2.veredicto"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "ALTERNATIVAS_DECLARADAS",
+      "modulo": "core.preregistro_h1_v2",
+      "categoria": "etiqueta",
+      "valor": [],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h1_v2.md, sección 10: D12, la alternativa declarada de H1 es ninguna.",
+      "usado_en": [],
+      "notas": "Vacía a propósito: si hubiera una, se declara acá y suma al N (brief 11–13, tarea 13)."
+    },
+    {
       "nombre": "ALFA_DIEBOLD_MARIANO",
       "modulo": "core.preregistro_h2",
       "categoria": "parametro",

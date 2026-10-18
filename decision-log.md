@@ -3763,3 +3763,98 @@ Tests nuevos:
   `cuenta_en_n`. Los 6 de las clases, también sin el test que compara los conjuntos.
 - 16 sobre el documento, el módulo y el registro de H3, cada uno atrapado por su propio test y no
   solo por el sha256.
+
+## 2026-10-17 — Tarea 13: H1 v2, con D5 y D12, y v1 sellado
+
+**Fuente:** brief del Admin 11–13, tarea 13. Rama `feature/preregistro-h1-v2`, apilada sobre la
+tarea 12 (`8e098d4`). `research/preregistro_h1.md` no se tocó: su sha256 sigue siendo el que fija
+su test, y un test de v2 lo vuelve a exigir.
+
+**Las dos cláusulas de v1, cerradas:**
+- **La alternativa (D12): ninguna.** Con un Sharpe de la serie base (BTC) debajo de 0,3, la
+  estrategia se rechaza, el proceso se detiene y no suma ensayos de optimización correctiva.
+  Como no hay alternativa, no hay nada que declarar ni que sumar al N.
+- **Lo intermedio (D5): no concluyente.** Es el caso de 0,3 ≤ Sharpe < 0,5, o de Sharpe ≥ 0,5
+  con PSR o DSR debajo de 0,90, y no pasa a demo. `veredicto()` implementa la tabla.
+
+**La estadística (D5).** Sale de `core/estadistica_sharpe.py`, con la σ en SR₀ = 0, con `T` y con
+el ρ de la serie. Los estimadores quedan fijados antes de mirar: momentos con `T` en el
+denominador, y ρ la autocorrelación de orden 1. El documento declara el cambio respecto de v1,
+que evaluaba la σ en el Sharpe observado y con `T−1`, y da la razón: el PSR prueba la nula, así
+que su desvío es el de la nula, y ρ es la solidez frente a retornos no normales.
+
+**Para el Admin: el cambio no es más estricto en todos los casos.** Con el vector del brief 10,
+v1 da PSR(0) = 0,913 y v2 da 0,987, o 0,9658 con ρ = 0,2. Queda escrito en el documento.
+
+**Lo que no cambia** se importa de `core/preregistro_h1.py`: la rejilla, el walk-forward, el
+sizing, el multiplicador, los umbrales y los previos. Un test exige que sean los mismos objetos
+y que v2 no reescriba ninguno.
+
+**Cambios por datos, no por criterio:**
+- **La comisión.** v1 sumaba "las siete mediciones diarias de la sonda", y no existen (D8). v2
+  usa κ medido en la cuenta real (0,0003 en `cryBTCUSD`), y sigue el máximo con el 0,1 % y el
+  mínimo de 0,10 USD. La unidad de `commission` ya está fijada (05-oct).
+- **El stop-out** ya está verificado (05-oct, d). [INTERPRETACIÓN] Si al correr la sonda de
+  instrumentos sigue sin datos, se usan las mediciones de §0.A-3.
+- **El paso a real** es DG-3 con D2 y DB-3, que v1 no decía.
+- **El Sharpe de las compuertas es el anualizado.** [INTERPRETACIÓN] Las compuertas de v1 no lo
+  dicen.
+
+**CONTRADICCIÓN, sin resolver: la fuente de precios.** Es la misma de H2 y H3. v1 usaba las velas
+de Deriv, que dan 365 días, y la condición de parada pide 1.058 barras con la rejilla mínima y
+2.608 con la completa. v1 mismo lo preveía ("se decide primero de dónde sale la historia"), y D1
+da TwelveData para BTC y el oro. Queda [PENDIENTE DEL ADMIN], con esa propuesta.
+
+**H1 v2 en el registro de ensayos:** `h1-v2`, una línea, pre-registrada, que cuenta en el N. Sus
+ensayos se cuentan al correr, porque dependen de la rejilla que la historia soporte. v1 no se
+registra: no se corrió nunca.
+
+**Mutantes:** 19, todos atrapados. En la primera pasada sobrevivió uno, el signo de la asimetría,
+porque las series calculadas a mano eran simétricas. Se sumó una serie sesgada calculada a mano.
+
+## 2026-10-17 — Brief 11–13-B en H1 v2 (#45): P1 y P6
+
+**Fuente:** brief del Admin 11–13-B. Rama `feature/preregistro-h1-v2`, rebasada sobre el #33 nuevo.
+La entrada de la tarea 13, más arriba, describe el documento antes de P1 y P6.
+
+**El rebase.** Chocaron tres archivos:
+- el registro de ensayos: `h1-v2` va después de `h3-cartera`;
+- el decision-log: la entrada de la tarea 13 va al final;
+- `ESTADO.md`.
+
+`config/README.md` no chocó, pero quedó mal: los dos lados pasaban el conteo de 209 a 211, uno por
+las dos constantes de P3 y otro por las dos de H1 v2, y git se quedó con 211. Son 213. Se corrigió en
+el commit de H1 v2 con el conteo medido, que es lo que exige su test.
+
+**Lo aplicado** (`research/preregistro_h1_v2.md`):
+- la sección 1 dice la fuente de P1, y la propuesta de la tarea 13 deja de serlo;
+- la réplica en oro usa la serie del oro de D1, con la misma compuerta (sección 11);
+- el Sharpe anualizado de las compuertas dice **[INTERPRETACIÓN aprobada (P6)]** (sección 10);
+- la sección 9 dice que el auditor aceptó que v2 no sea más estricto en todos los casos;
+- las dos cláusulas de v1 se nombran sin la marca, y el documento no tiene ninguna.
+
+**P6, tal cual** (entrada de las resoluciones): "H1 v2 es menos estricto que v1 en el vector del
+brief 10 (PSR(0) 0,913 → 0,987). Se acepta: es una corrección de método, declarada antes de los
+datos." Un test verifica que este decision-log lo diga así.
+
+**Una interpretación nueva**, que el Admin aprueba al fusionar: si el brief 14 sale rojo para BTC,
+no hay veredicto, porque las compuertas son de la serie base (D12) y el oro es una réplica. Si sale
+rojo para el oro, no hay réplica.
+
+**El N de H1 v2 no cambia con P3.** Sigue siendo el de su sección 9: sus ensayos, agrupados por
+correlación, más los previos. No incluye la cartera de H3, que no corrió. P3 fija el N de H3, y ese
+sí incluye los de H1.
+
+**El registro de ensayos.** `h1-v2` apunta al sha256 nuevo. Es una línea de este PR, que no está en
+`main`.
+
+**Tests.**
+
+| línea vieja | línea nueva |
+|---|---|
+| `SHA256_PREREGISTRO = "7ffc6150…"` | `SHA256_PREREGISTRO = "95588ea6…"` |
+| — | 4 tests nuevos: ninguna marca de pendiente; la fuente de P1; P6 aprueba solo el anualizado; P6 acepta el cambio, en el documento y tal cual en el decision-log |
+
+Ningún test viejo cambió de criterio.
+
+**Mutantes:** 9, cada uno atrapado por su propio test y no solo por el sha256.
