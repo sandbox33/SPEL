@@ -311,6 +311,173 @@
       "valor": 20
     },
     {
+      "nombre": "ALFA_DIEBOLD_MARIANO",
+      "modulo": "core.preregistro_h2",
+      "categoria": "parametro",
+      "valor": 0.05,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h2.md, sección 7: alfa fijado antes, test unilateral, para la familia de cada activo ajustada por Holm.",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta el PR de evaluación de H2."
+    },
+    {
+      "nombre": "HAR_VENTANAS_CONTINUO",
+      "modulo": "core.preregistro_h2",
+      "categoria": "parametro",
+      "valor": [
+        1,
+        7,
+        30
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h2.md, sección 4: componentes diario, semanal y mensual del HAR en calendario continuo; D6 fija 1, 7 y 30 días porque BTC opera 24/7.",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta el PR de evaluación de H2."
+    },
+    {
+      "nombre": "HAR_VENTANAS_HABIL",
+      "modulo": "core.preregistro_h2",
+      "categoria": "parametro",
+      "valor": [
+        1,
+        5,
+        22
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h2.md, sección 4: componentes diario, semanal y mensual del HAR en calendario hábil.",
+      "usado_en": [],
+      "notas": "D6 no nombra a XAU: las mismas tres ventanas —un día, una semana, un mes— en barras hábiles. Interpretación aprobada por el auditor el 17-oct-2026 (P6, decision-log). Sin consumidor hasta el PR de evaluación de H2."
+    },
+    {
+      "nombre": "REZAGO_ENTROPIA_DIAS_CALENDARIO",
+      "modulo": "core.preregistro_h2",
+      "categoria": "parametro",
+      "valor": 2,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h2.md, sección 3: la primaria (decisión del Admin del 29-sep-2026, que D6 mantiene).",
+      "usado_en": [
+        "core.preregistro_h2.fecha_de_entropia"
+      ],
+      "notas": "Decisión del Admin del 29-sep-2026: la entropía con fecha d se usa solo para retornos de días ≥ d+2, en días de calendario (as-of sobre fecha − 2 días, no corrimiento de barras). Reemplaza a REZAGO_ENTROPIA_BARRAS = 1."
+    },
+    {
+      "nombre": "TOLERANCIA_ASOF_DIAS",
+      "modulo": "core.preregistro_h2",
+      "categoria": "parametro",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h2.md, sección 3 (decisión del Admin del 29-sep-2026).",
+      "usado_en": [
+        "core.preregistro_h2.fecha_de_entropia"
+      ],
+      "notas": "[INTERPRETACIÓN] del documento, sección 3: sin entropía en t − 2, el retorno se excluye. Un as-of sin tolerancia arrastraría la entropía a través de los huecos, contra la sección 2 ('no se rellena nada').",
+      "valor": 0
+    },
+    {
+      "nombre": "VENTANA_INICIAL_BARRAS",
+      "modulo": "core.preregistro_h2",
+      "categoria": "parametro",
+      "valor": 504,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "research/preregistro_h2.md, sección 4: la ventana expansiva arranca con 504 barras.",
+      "usado_en": [],
+      "notas": "Sin consumidor hasta el PR de evaluación de H2."
+    },
+    {
+      "nombre": "REZAGO_SECUNDARIO_DIAS_CALENDARIO",
+      "modulo": "core.preregistro_h2",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "usado_en": [
+        "core.preregistro_h2.fecha_de_entropia"
+      ],
+      "notas": "No operativa: al abrir t la entropía de t−1 no está publicada. Nunca decide la conclusión y cuenta en el N (D3).",
+      "categoria": "parametro",
+      "valor": 1,
+      "fuente": "research/preregistro_h2.md, sección 3: la lectura secundaria (D6, decisión del Admin del 14-oct-2026, brief 11)."
+    },
+    {
+      "nombre": "REZAGOS_DIAS_CALENDARIO",
+      "modulo": "core.preregistro_h2",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "usado_en": [
+        "core.preregistro_h2.fecha_de_entropia",
+        "core.preregistro_h2.PRUEBAS_POR_ACTIVO"
+      ],
+      "notas": "",
+      "categoria": "derivada",
+      "expresion": "(REZAGO_ENTROPIA_DIAS_CALENDARIO, REZAGO_SECUNDARIO_DIAS_CALENDARIO): la primaria primero",
+      "fuente": "research/preregistro_h2.md, sección 3: los únicos rezagos válidos."
+    },
+    {
+      "nombre": "HORIZONTES",
+      "modulo": "core.preregistro_h2",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "usado_en": [
+        "core.preregistro_h2.rezagos_hac",
+        "core.preregistro_h2.PRUEBAS_POR_ACTIVO"
+      ],
+      "notas": "D6 da los números y no la unidad: son barras, días de calendario en BTC y hábiles en XAU. Interpretación aprobada por el auditor el 17-oct-2026 (P6, decision-log).",
+      "categoria": "parametro",
+      "valor": [
+        1,
+        5,
+        22
+      ],
+      "fuente": "research/preregistro_h2.md, sección 4: horizontes en barras del calendario del activo (D6)."
+    },
+    {
+      "nombre": "PRUEBAS_POR_ACTIVO",
+      "modulo": "core.preregistro_h2",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "usado_en": [],
+      "notas": "Vale 6. La secundaria cuenta en el N (D6, D3), así que entra en la familia.",
+      "categoria": "derivada",
+      "expresion": "len(REZAGOS_DIAS_CALENDARIO) * len(HORIZONTES)",
+      "fuente": "research/preregistro_h2.md, sección 7: la familia de Diebold–Mariano que ajusta Holm, por activo."
+    },
+    {
+      "nombre": "NIVEL_MCS",
+      "modulo": "core.preregistro_h2",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "usado_en": [],
+      "notas": "D6 pide el MCS y no fija sus parámetros: se fijan en el documento, antes de mirar. Interpretación aprobada por el auditor el 17-oct-2026 (P6, decision-log). Sin consumidor hasta el PR de evaluación de H2.",
+      "categoria": "parametro",
+      "valor": 0.9,
+      "fuente": "research/preregistro_h2.md, sección 7: nivel del Model Confidence Set (α del MCS = 0,10)."
+    },
+    {
+      "nombre": "REPLICAS_MCS",
+      "modulo": "core.preregistro_h2",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "usado_en": [],
+      "notas": "Interpretación aprobada por el auditor el 17-oct-2026 (P6), como NIVEL_MCS. Sin consumidor hasta el PR de evaluación de H2.",
+      "categoria": "parametro",
+      "valor": 10000,
+      "fuente": "research/preregistro_h2.md, sección 7: réplicas del bootstrap de bloques móviles del MCS."
+    },
+    {
+      "nombre": "SEMILLA_MCS",
+      "modulo": "core.preregistro_h2",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "usado_en": [],
+      "notas": "Interpretación aprobada por el auditor el 17-oct-2026 (P6), como NIVEL_MCS. Sin consumidor hasta el PR de evaluación de H2.",
+      "categoria": "parametro",
+      "valor": 20261017,
+      "fuente": "research/preregistro_h2.md, sección 7: semilla del bootstrap del MCS, fijada antes de mirar."
+    },
+    {
       "nombre": "CORE_COUNTRY_FILTERS",
       "modulo": "core.scoring",
       "categoria": "etiqueta",
@@ -2672,7 +2839,7 @@
       "usado_en": [
         "governance.ensayos.h_orb_oro_se_puede_reabrir"
       ],
-      "notas": "[INTERPRETACIÓN] 756 = 3 × 252 días hábiles. Al 14-oct-2026 Deriv tiene 263 días comunes con TwelveData en la concordancia (data@bc2597a)."
+      "notas": "756 = 3 × 252 días hábiles, confirmado por el auditor el 17-oct-2026 (decision-log). Al 14-oct-2026 Deriv tiene 263 días comunes con TwelveData en la concordancia (data@bc2597a)."
     }
   ]
 }
