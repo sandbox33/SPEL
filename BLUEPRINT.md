@@ -231,11 +231,15 @@ La investigación sigue por hipótesis pre-registradas: el criterio de aceptaci�
 y se fusiona antes de ver un resultado, y cada variante probada cuenta en el N del
 Deflated Sharpe.
 
-| | Hipótesis | Pre-registro |
-|---|---|---|
-| **H1** | BTC | `research/preregistro_h1.md` (PR #31) |
-| **H2** | Entropía como predictor de volatilidad | — |
-| **H3** | Tendencia multiactivo | — |
+| | Hipótesis | Pre-registro | Estado |
+|---|---|---|---|
+| **H1** (v1) | BTC | `research/preregistro_h1.md` (PR #31) | sellado y nunca corrido; lo reemplaza H1 v2 |
+| **H1 v2** | BTC, con D5 y D12 | `research/preregistro_h1_v2.md` (PR #45) | pre-registrada, no corrida |
+| **H2** | Entropía como predictor de volatilidad | `research/preregistro_h2.md` (PR #34) | pre-registrada, no corrida |
+| **H3** | Tendencia multiactivo | `research/preregistro_h3.md` (PR #33) | pre-registrada, no corrida, y **bloqueada** por P2 hasta que haya historia validada para su universo |
+
+Ninguna corrió. H1 v2 y H2 corren con las velas diarias de D1 cuando el brief 14 las valide
+(P1); H3 espera además la extensión de D1 a su universo, que es un brief propio (P2).
 
 **La compuerta de la Fase 4** es un modelo de Fase 2 o una hipótesis H que apruebe sus
 compuertas pre-registradas, más DG-3: PSR y DSR ≥ 0,90 solo sobre el backtest histórico,
