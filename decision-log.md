@@ -3607,3 +3607,159 @@ Ningún test viejo cambió de criterio.
 - Holm y el MCS, sin aprobar;
 - tres interpretaciones que P6 no nombra, marcadas como aprobadas;
 - el registro, con el sha viejo.
+
+## 2026-10-17 — Tarea 12: H3 según D7 y D2, con tres pendientes del Admin
+
+**Fuente:** brief del Admin 11–13, tarea 12. Rama `feature/preregistro-h3` (PR #33), rebasada
+sobre la tarea 11 (`716bb8c`).
+
+**El rebase.** Los dos commits de H3 chocaban con la tarea 11 en `config/constantes.json` y
+`config/README.md`. Se resolvieron con lo de la tarea 11 más las 24 constantes de H3, y el
+README con los conteos medidos, que su test nuevo exige.
+
+**D7, verificado contra `data` antes de escribirlo.** El brief dice "Deriv desde el 08-oct,
+TwelveData desde el 14-oct, commit bc2597a", y coincide:
+- el M5 de Deriv entró el 08-oct en tres commits (`852e5ce`, `54f63fc` y `db491b4`), y siguió
+  el 14-oct;
+- el de TwelveData entró recién el 14-oct, en `bc2597a`, con las revisiones de Deriv.
+
+La sección 2 lo declara con lo medido: 70.718 y 499.252 velas, con sus rangos. Lo único que se
+calculó con esas velas es la concordancia del rango de apertura, y ninguna regla de H3. Se
+declara además el cruce EMA 20/63 del acta del 06-sep, una regla de tendencia previa sobre el
+data lake legacy que ya está en el registro.
+
+**D2 en la sección 12:**
+- a) va solo sobre el backtest histórico;
+- d) suma los no_verificables y los trades sin reconciliar (DB-3);
+- la latencia queda sin umbral;
+- cae la interpretación que pedía aprobar la compuerta de avanzar sobre histórico + demo.
+
+Queda escrita una consecuencia: una zona gris no tiene camino a real, porque a) no cambia con
+el forward. **Para el Admin:** el forward de una zona gris solo valida infraestructura, y al
+vencer pasa a H2. D5 trata lo intermedio de H1 v2 como no concluyente y sin demo, y H3 todavía
+lo manda a demo.
+
+**El sizing.** La sección 6 justifica el escalado por volatilidad frente al nocional igual por
+activo, con tres razones:
+- el riesgo lo pondría el activo más volátil;
+- el Sharpe mediría la composición, no la regla;
+- el sizing no mira el futuro.
+
+La versión sin escalar no se corre: sería otra variante.
+
+**Tres contradicciones, sin resolver.** Quedan como [PENDIENTE DEL ADMIN] en el documento, cada
+una con su propuesta:
+1. **La historia del universo** (sección 2). Deriv da 365 días y la rejilla mínima pide 766
+   barras; la sonda nunca escribió el universo (D8); y D1 cubre solo BTC y el oro. Hay tres
+   salidas: limitar H3 a K = 2, extender D1 a todo el universo o acumular velas de Deriv.
+2. **El N** (sección 11). D3 hace del registro la única fuente del N, y el registro ya tiene a
+   H2. La propuesta es contar los ensayos que cuentan y son estrategias, sin los de H2.
+3. **La estadística del Sharpe** (sección 11). El documento usa la de H1 v1: σ en el SR
+   observado y `T−1`. D5 pasa H1 v2 al módulo único, y con la de v1 H3 necesitaría una segunda
+   implementación. La propuesta es la de H1 v2.
+
+**Dos observaciones, sin cambio en la sección 8:**
+- dice que la unidad de `commission` se fija con las respuestas crudas, y ya se fijó: es un
+  monto (decision-log 2026-10-05, d);
+- su piso de 0,10 USD por contrato es una cota pesimista, porque la comisión medida no tiene
+  mínimo fijo (2026-10-05, c).
+
+**H3 en el registro de ensayos:** `h3-cartera`, pre-registrada, que cuenta en el N y apunta al
+sha256 del documento.
+
+**Tests.** El brief autoriza actualizar el de H3:
+
+| línea vieja | línea nueva |
+|---|---|
+| `SHA256_PREREGISTRO = "71826ed2…"` | `SHA256_PREREGISTRO = "40a05d96…"` |
+| — | 5 tests nuevos: D7; D2 y DB-3 en la sección 12; las cifras de DG-3 iguales a las de `governance/paso_a_real.py`; el sizing; el registro |
+
+**Mutantes:** 13, cada uno atrapado por su propio test y no solo por el sha256.
+
+## 2026-10-17 — Brief 11–13-B en H3 (#33): P1 a P5
+
+**Fuente:** brief del Admin 11–13-B. Rama `feature/preregistro-h3`, rebasada sobre el #34 nuevo
+(`50f4c11`). La entrada de la tarea 12, más arriba, describe el documento antes de P1 a P5.
+
+**El rebase.** Chocaron tres archivos:
+- el registro de ensayos: `h3-cartera` va después de las dos líneas de H2, que cambiaron de
+  sha256;
+- el decision-log: la entrada de la tarea 12 va al final;
+- `ESTADO.md`.
+
+Se resolvieron a mano, sin perder nada de ninguno de los dos lados.
+
+**P3 en `governance/ensayos.py`:**
+- `HIPOTESIS_DE_ESTRATEGIA` = {previa a la Serie H, H1, H3} y `HIPOTESIS_QUE_NO_SON_ESTRATEGIA` =
+  {H2}, disjuntas;
+- `es_estrategia(e)` da la clase por la hipótesis;
+- `que_cuentan_en_el_dsr()` devuelve los que cuentan y son estrategias: los únicos que pueden sumar
+  al N de un DSR.
+
+Cuáles suman lo dice cada pre-registro. El de H3 los suma todos, que es lo que fija P3. El de H1,
+en v1 sellado y en v2, suma los suyos y los previos (sección 9), y P3 no lo cambia: no incluye la
+cartera de H3, que no corrió.
+
+Es un criterio y no un campo, porque un campo nuevo obligaría a reescribir las líneas sembradas,
+fijadas por sha256. `cuenta_en_n` no cambia en ninguna línea; cambia lo que dice el docstring.
+[INTERPRETACIÓN] Una hipótesis que cuenta sin estar clasificada hace fallar el conteo, en vez de
+sumar o restar en silencio. H-ORB-oro queda sin clasificar: su única línea no cuenta, y se
+clasifica cuando se reabra.
+
+**Para el Admin: el registro cuenta líneas, no ensayos.** `que_cuentan_en_el_dsr()`, como
+`que_cuentan()`, devuelve líneas. El registro dice que un ensayo que cambia de estado suma una línea
+nueva con otro id, y no tiene un campo que diga cuál reemplaza a cuál. El primer cambio de estado
+—`h1-v2` cuando H1 v2 corra, por ejemplo— dejaría dos líneas del mismo ensayo, y contarlas daría
+un N de más. Hoy no pasa: ninguno cambió de estado. Queda escrito en el docstring, sin código, y lo
+resuelve el PR que registre el primer cambio de estado.
+
+**En el documento** (`research/preregistro_h3.md`):
+- **P1 y P2, sección 2.**
+  - Los precios son las velas diarias de D1 que valide el brief 14, y un activo en rojo no corre.
+  - La regla de universo no cambia, y H3 queda bloqueada.
+  - Ya no hay tres salidas: no se reduce a K = 2.
+  - Está escrita la ruta de P2.
+  - El encabezado dice las dos cosas: H3 es la ruta principal (DG-5) y está bloqueada (P2).
+- **P3, sección 11.** El N son los ensayos de `que_cuentan_en_el_dsr()`, y los de H2 no suman.
+- **P4, sección 11.**
+  - La estadística es la de H1 v2, escrita completa: los momentos con `T`, el ρ de la serie y las
+    llamadas a `psr` y `dsr`.
+  - El cambio respecto de 2012 queda declarado con sus tres razones.
+  - Queda escrito que no es más estricto en todos los casos (0,913 → 0,987 con ρ = 0).
+- **P5, sección 12.** La zona gris es no concluyente y no va a demo. La zona gris de DG-3, el
+  forward de 6 meses como máximo de lo que avanzó, no cambia.
+
+**Una interpretación nueva en el documento**, que el Admin aprueba al fusionar: dejar afuera un
+activo en rojo en el brief 14 no es elegir por precios. La compuerta compara dos fuentes del mismo
+precio (D1) y no mira ninguna regla de H3.
+
+**En el módulo** (`core/preregistro_h3.py`): `ENSAYOS_PREVIOS_FALLIDOS` sale de
+`previos_fallidos()`, como el de H1 desde el brief 10. Era un 3 escrito a mano, justo lo que D3 vino
+a quitar. Sigue valiendo 3, y `N_INGENUO` sigue en 11. En `config/constantes.json` pasa a
+`derivada`.
+
+**El registro de ensayos.** `h3-cartera` apunta al sha256 nuevo. Su activo deja de decir
+"pendiente del Admin", y su nota dice que está bloqueada (P2). Es una línea de este PR, que no está
+en `main`.
+
+**Tests.** Cambian dos del #33, de este mismo PR, porque codificaban lo que P3 y P5 cambian:
+
+| test | línea vieja | línea nueva |
+|---|---|---|
+| — | `SHA256_PREREGISTRO = "40a05d96…"` | `SHA256_PREREGISTRO = "53a1d5a0…"` |
+| `test_el_paso_a_real_es_el_de_d2_y_db3` | `assert "**Con D2 no tiene camino a real:**" in s12` | se quita: P5 saca la zona gris de la demo, y la frase cae con ella |
+| `test_el_modulo_no_importa_nada_que_haga_un_backtest` | `assert importados <= {"__future__", "math"}` | `assert importados <= {"__future__", "math", "governance.ensayos"}` |
+
+Tests nuevos:
+- 8 en el de H3: ninguna marca de pendiente, P1, P2, P3, los previos desde el registro, P4, P5 y la
+  línea del registro;
+- 6 en `tests/test_ensayos.py`, con 9 casos, que separan el criterio viejo (todo lo que cuenta
+  suma al DSR) del de P3. De ese archivo, que está en `main`, solo se agregaron tests y un párrafo
+  del docstring: ninguno de los que había cambió.
+
+**Mutantes:** 28, todos atrapados.
+- 12 sobre la regla de P3: cada clase, H2 como estrategia, H-ORB-oro clasificada sin decirlo, una
+  hipótesis sin clasificar tomada como estrategia o como no, y el conteo sin el filtro o sin
+  `cuenta_en_n`. Los 6 de las clases, también sin el test que compara los conjuntos.
+- 16 sobre el documento, el módulo y el registro de H3, cada uno atrapado por su propio test y no
+  solo por el sha256.

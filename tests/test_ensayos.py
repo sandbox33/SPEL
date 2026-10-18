@@ -7,6 +7,10 @@ governance/ensayos.py y governance/ensayos.jsonl.
 El criterio viejo, que estos tests separan del nuevo: ENSAYOS_PREVIOS_FALLIDOS
 era un 3 escrito a mano en core/preregistro_h1.py. Ahora se deriva del
 registro, y el registro es la única fuente del N.
+
+Y desde P3 (brief del Admin 11–13-B): todo lo que contaba sumaba al N del
+DSR. Ahora suma solo lo que además es una estrategia; los ensayos de H2
+cuentan en el N de su familia.
 """
 
 from __future__ import annotations
@@ -113,6 +117,52 @@ def test_que_cuentan_es_la_unica_fuente_del_n(registro):
     en.agregar(_entrada(id="h1-lookback-10", hipotesis="H1"), registro)
     assert [e["id"] for e in en.que_cuentan(registro)][-1] == "h1-lookback-10"
     assert len(en.que_cuentan(registro)) == antes + 1
+
+
+# ═══ P3: qué es estrategia (brief del Admin 11–13-B) ═══════════════════════
+
+def test_p3_las_estrategias_son_los_previos_h1_y_h3_y_h2_no():
+    assert en.HIPOTESIS_DE_ESTRATEGIA == {en.HIPOTESIS_PREVIA_A_LA_SERIE_H, "H1", "H3"}
+    assert en.HIPOTESIS_QUE_NO_SON_ESTRATEGIA == {"H2"}
+    assert not en.HIPOTESIS_DE_ESTRATEGIA & en.HIPOTESIS_QUE_NO_SON_ESTRATEGIA
+
+
+@pytest.mark.parametrize("hipotesis, suma", [
+    (en.HIPOTESIS_PREVIA_A_LA_SERIE_H, True), ("H1", True), ("H3", True), ("H2", False)])
+def test_al_n_del_dsr_suman_solo_las_estrategias(registro, hipotesis, suma):
+    """El criterio viejo: todo lo que contaba sumaba al N del DSR, y un
+    ensayo de H2 también. Con P3, H2 cuenta y no suma al DSR."""
+    en.agregar(_entrada(id="ensayo-nuevo", hipotesis=hipotesis), registro)
+    assert "ensayo-nuevo" in {e["id"] for e in en.que_cuentan(registro)}
+    assert ("ensayo-nuevo" in {e["id"] for e in en.que_cuentan_en_el_dsr(registro)}) is suma
+
+
+def test_una_estrategia_que_no_cuenta_no_suma(registro):
+    en.agregar(_entrada(id="h1-que-no-cuenta", cuenta_en_n=False), registro)
+    assert "h1-que-no-cuenta" not in {e["id"] for e in en.que_cuentan_en_el_dsr(registro)}
+
+
+def test_una_hipotesis_sin_clasificar_que_cuenta_hace_fallar_el_conteo(registro):
+    """Nadie entra ni sale del N por olvido: H4 tiene que declararse antes."""
+    en.agregar(_entrada(id="h4-algo", hipotesis="H4"), registro)
+    with pytest.raises(ValueError, match="sin clasificar"):
+        en.que_cuentan_en_el_dsr(registro)
+
+
+def test_una_sin_clasificar_que_no_cuenta_no_se_mira(registro):
+    """Como la concordancia del oro: H-ORB-oro no está clasificada, y su
+    línea no cuenta."""
+    en.agregar(_entrada(id="h4-sin-contar", hipotesis="H4", cuenta_en_n=False), registro)
+    assert en.que_cuentan_en_el_dsr(registro)
+    with pytest.raises(ValueError, match="sin clasificar"):
+        en.es_estrategia({"hipotesis": "H-ORB-oro"})
+
+
+def test_en_el_registro_lo_que_cuenta_suma_al_dsr_salvo_h2():
+    del_dsr = {e["id"] for e in en.que_cuentan_en_el_dsr()}
+    assert {"previo-mascara-godel", "previo-proxy-transfer-entropy", "previo-ema-20-63"} <= del_dsr
+    for e in en.que_cuentan():
+        assert (e["id"] in del_dsr) is (e["hipotesis"] != "H2"), e["id"]
 
 
 # ═══ Append-only ═══════════════════════════════════════════════════════════
