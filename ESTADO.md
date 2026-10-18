@@ -10,18 +10,23 @@
 > Este archivo se lee primero en cada chat nuevo. Frente a un chat que lo contradiga sin
 > evidencia, gana el archivo; frente al código, gana el código.
 
-**Última actualización:** 18 oct 2026 — brief del Admin 14, tarea 14a, en la rama `claude/brief-14a-ensayos-por-id`: el registro de ensayos cuenta ensayos y no líneas. Un cambio de estado repite el id y no suma, y todo conteo sale del último estado de cada id. La tabla de la Serie H de `BLUEPRINT.md` dice el estado real. La tanda 11–13 (#34, #33 y #45) ya está en `main`. La 14b (concordancia diaria de D1) va apilada encima.
+**Última actualización:** 18 oct 2026 — brief del Admin 14, tarea 14b, en la rama `claude/brief-14b-concordancia-diaria`, apilada sobre la 14a. Quedan la ingesta diaria de D1 y la concordancia diaria contra Deriv:
+- `ingestion/velas_d1.py` baja TwelveData 1day de BTC y del oro, Deriv 86400 por `/ws/public` y la muestra 1h de BTC;
+- `tools/concordancia_d1.py` corre el paso 1 (la hora de corte) y la compuerta;
+- `.github/workflows/concordancia_d1.yml` es el workflow manual que las corre.
+
+**La compuerta quedó fijada en `41cf853` antes de bajar ningún precio diario.** Las velas diarias las baja el workflow cuando lo dispare el Admin. La 14a (el registro de ensayos cuenta ensayos y no líneas) va debajo, y la tanda 11–13 (#34, #33 y #45) ya está en `main`.
 
 **Commit de referencia:** `08d4b05` (merge del PR #45, el último de la tanda 11–13).
 
-**Tests:** **2172** recolectados en `tests/`, en 63 archivos, medido con
+**Tests:** **2280** recolectados en `tests/`, en 67 archivos, medido con
 `pytest --collect-only -q tests/` el 18-oct-2026 sobre esta rama. Más 74 en `research/tests/`,
 que no bloquean.
 
-Desfase: **ninguno**. El commit de referencia es el merge del PR #45, el último de `main`, y esta
-actualización entra con el PR de la 14a. El de la 14b va apilado encima, y se fusionan en ese
-orden. `tests/test_estado_al_dia.py` falla si hay **más de 3 PRs fusionados** desde el commit de
-referencia de arriba (DG-6).
+Desfase: **ninguno**. El commit de referencia es el merge del PR #45, el último de `main`. La 14a y
+la 14b lo actualizan cada una en su PR, y se fusionan en ese orden: después de las dos quedan 2 PRs
+desde la referencia. `tests/test_estado_al_dia.py` falla si hay **más de 3 PRs fusionados** desde
+el commit de referencia de arriba (DG-6).
 
 
 **Ver también:** `FASE2_NOTAS_ARQUITECTURA_MODELO.md` (raíz del repo) — glosario y
@@ -39,7 +44,7 @@ FASE 3 — visualization/ (grafo)            ❄️ CONGELADA (D9) — no inicia
 FASE 4 — execution/ + Deriv real           🟡 Actuator confirmado; gate: modelo F2 o hipótesis H + DG-3
 FASE 5 — Escala (Supabase, Flet)           ❄️ CONGELADA (D9) — no iniciada
 FASE 6 — Motor streaming multi-timeframe   ❄️ CONGELADA (D9) — infraestructura lista, señal sin construir
-SERIE H                                    🟡 H1 v2 (#45) y H2 (#34) pre-registradas, esperan las velas de D1 que valide el brief 14 (P1); H3 (#33) pre-registrada y ⏸ BLOQUEADA hasta tener historia validada para su universo (P2); H1 v1 sellada; H-ORB-oro ⏸ PAUSADA (D11)
+SERIE H                                    🟡 H1 v2 (#45) y H2 (#34) pre-registradas, esperan las velas de D1 que valide el brief 14 (P1; compuerta fijada en la 14b, sin datos todavía); H3 (#33) pre-registrada y ⏸ BLOQUEADA hasta tener historia validada para su universo (P2); H1 v1 sellada; H-ORB-oro ⏸ PAUSADA (D11)
 ```
 
 ⏸ **H-ORB-oro, pausada (D11).** Su compuerta de datos dio roja: TwelveData y Deriv coinciden
@@ -96,8 +101,10 @@ corridas seguidas sin intermitencia.
 | `tools/verificar_siembra.py` | Compara BTC/XAU sembrados contra la serie medida | 14 | ✅ verde contra la siembra real (corrido el 29-sep, ver decision-log) |
 | `ingestion/deriv_ws.py` | Sesión de solo lectura con Deriv: `entorno` obligatorio, `real` con permiso aparte, lista blanca de siete mensajes | 29 | 🟡 habla con el endpoint legacy, muerto desde el 01-oct (HTTP 520): falta migrar al WS público |
 | `ingestion/sonda_instrumentos.py` + `.github/workflows/sonda.yml` | Contratos, multiplicadores, stake y comisión de BTC y oro, desde la API, siete días | 19 + 6 | 🟡 usa `deriv_ws.py`, así que depende de la misma migración; 🔴 cron apagado en GitHub por el Admin el 14-oct (D8), tras 7 corridas en rojo. El YAML y `test_son_diarios` no se tocan: lo reactiva el brief de migración de `deriv_ws.py` (D8-r) |
-| `ingestion/velas_intradia.py` + `.github/workflows/velas_intradia.yml` | Velas M5 del oro en `data`: TwelveData XAU/USD 5min desde 2020-03-16 y Deriv frxXAUUSD M5 por `/ws/public`, con el patrón de `velas.py`; horario de `trading_times` crudo con sha256; una página vacía de TwelveData es el fondo solo tras una página corta (brief 07-oct (6)) | 43 + 6 | ✅ segundo run el 14-oct (38610611624, rama `data` en `bc2597a`): TwelveData 499.252 velas M5 desde 2020-03-16 y Deriv 70.718 desde 2025-10-08; el primero (08-oct) se había cortado en el 400 del fondo |
+| `ingestion/velas_intradia.py` + `.github/workflows/velas_intradia.yml` | Velas M5 del oro en `data`: TwelveData XAU/USD 5min desde 2020-03-16 y Deriv frxXAUUSD M5 por `/ws/public`, con el patrón de `velas.py`; horario de `trading_times` crudo con sha256; una página vacía de TwelveData es el fondo solo tras una página corta (brief 07-oct (6)). Desde la 14b, la descarga y la escritura reciben la serie; sin parámetros, todo sigue siendo el M5 | 43 + 6 | ✅ segundo run el 14-oct (38610611624, rama `data` en `bc2597a`): TwelveData 499.252 velas M5 desde 2020-03-16 y Deriv 70.718 desde 2025-10-08; el primero (08-oct) se había cortado en el 400 del fondo |
 | `ingestion/deriv_publico.py` + `ingestion/limitador.py` | Canal público de Deriv y paginación de velas, y el limitador de TwelveData, portados de las sondas | (en los de arriba) | ✅ |
+| `ingestion/velas_d1.py` + `.github/workflows/concordancia_d1.yml` | Velas diarias de D1 en `data`, con la descarga y la escritura de `velas_intradia.py` parametrizadas por serie: TwelveData 1day de BTC/USD y XAU/USD, toda la historia (D1-p); Deriv 86400 de cryBTCUSD y frxXAUUSD por `/ws/public`; la muestra 1h de BTC, 60 días. Guarda el sha256 de cada página. Publica los créditos estimados (≤ 9) antes del primer pedido. Workflow solo manual, sin inputs (D8) | 27 + 6 | 🟡 sin correr: lo dispara el Admin. Ningún precio diario bajado |
+| `tools/concordancia_d1.py` | Paso 1: la hora de corte de TwelveData; se detiene sin compuerta si en algún activo la ganadora no llega al 95 % o no es 00:00 UTC. Paso 2, la compuerta por activo: r de cierre a cierre, signo (o los dos < 1 pb) y \|Δr\| ≤ 0,2 × mediana(\|r_Deriv\|), verde con ≥ 90 % y ≥ 250 días comunes. Ningún desenlace (guarda AST portada) | 53 + 19 | 🟡 compuerta fijada en `41cf853`, antes de los datos; sin datos todavía |
 | `tools/concordancia_xauusd.py` | Rango de apertura 08:00 Londres y primera ruptura hasta las 12:00 por fuente, filtro de calendario, métricas y compuerta del 90 %; ningún desenlace (guarda AST + serie espía) | 38 + 24 | 🔴 compuerta roja con datos reales: 62,74 % contra 90 % (data@bc2597a, 14-oct) |
 | `ingestion/adapters.py::TwelveDataAdapter.fetch_pagina` | XAU/USD en el mapa (evidencia 3b, autorización del 06-oct (4)); página con `start/end_date` y cierre por la hora del servidor; vacías: el 404 "data not found" y el 400 "No data is available on the specified dates" (prefijo exacto) | 30 | ✅ offline |
 | `ingestion/reintentos.py` | Reintentos de `fetch_pagina` (issue #39): 429, 500/502/503/504 y cortes de red; espera del `Retry-After` o, si no viene, 60 s para un 429 y backoff 2·2ⁿ (tope 30 s); a lo sumo 3 reintentos y 180 s de espera; cada reintento consume un turno del `Limitador`; sin limitador no reintenta | 63 | ✅ offline; 🟡 ningún 429 ni 5xx real visto todavía; que TwelveData mande `Retry-After` no está verificado |
@@ -532,10 +539,14 @@ salvedad que hay que resolver **antes** de revertir.
 
 ## ▶️ PRÓXIMO PASO CONCRETO
 
-**Brief 14.** La 14a (este PR) hace que el registro de ensayos cuente ensayos y no líneas. La
-14b, apilada encima, fija la compuerta de la concordancia diaria de D1 (BTC y oro) antes de bajar
-un precio diario, y trae el workflow manual que baja las dos fuentes y la corre. Lo dispara el
-Admin.
+**Brief 14: fusionar la 14a y después la 14b (este PR), y disparar "SPEL concordancia diaria
+D1".** Es `.github/workflows/concordancia_d1.yml`, sin inputs. Baja las diarias, las escribe en
+`data` y corre los dos pasos. El informe queda en el log del paso "Concordancia diaria D1".
+
+La compuerta quedó fijada en `41cf853` antes de bajar un precio diario. Si el paso 1 se detiene,
+el auditor rediseña la comparación con ese dato. El decision-log del 18-oct deja una
+interpretación para el Admin: el 250 se cuenta sobre los días comunes, y el oro queda a lo sumo
+unos 7 días por encima de ese mínimo.
 
 La tanda 11–13 ya está en `main`. H1 v2, H2 y H3 están pre-registradas y ninguna corrió. H1 v2 y
 H2 corren con las velas de D1 cuando la 14b las valide (P1). H3 queda bloqueada hasta que haya
@@ -543,7 +554,7 @@ historia validada para su universo (P2).
 
 La cola, en orden:
 
-1. Brief 14: la 14a y la 14b. Después, el Admin dispara el workflow de la concordancia diaria.
+1. Brief 14: fusionar la 14a y la 14b, y disparar "SPEL concordancia diaria D1".
 2. Con la compuerta en verde: H1 v2 y H2, sobre las velas de D1 del activo que pase.
 3. La migración de `ingestion/deriv_ws.py` al WS público nuevo. La legacy está muerta desde el
    01-oct, y su 520 dejó en rojo a `velas.yml`; esa migración reactiva los dos crons (D8-r).

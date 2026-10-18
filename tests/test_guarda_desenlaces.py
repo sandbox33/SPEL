@@ -92,13 +92,13 @@ def _funcion_de(arbol: ast.AST) -> dict[int, str]:
     return out
 
 
-def campos_fuera_de_los_lectores(fuente: str) -> list[str]:
+def campos_fuera_de_los_lectores(fuente: str, lectores: frozenset[str] = LECTORES) -> list[str]:
     arbol = ast.parse(fuente)
     docs, donde = _docstrings(arbol), _funcion_de(arbol)
     return [f"línea {n.lineno}: {n.value!r} en {donde.get(id(n), '<módulo>')}"
             for n in ast.walk(arbol)
             if isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docs
-            and n.value in CAMPOS_DE_PRECIO and donde.get(id(n)) not in LECTORES]
+            and n.value in CAMPOS_DE_PRECIO and donde.get(id(n)) not in lectores]
 
 
 def bucles_sin_salida(fuente: str, funcion: str) -> list[int]:

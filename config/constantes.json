@@ -1975,6 +1975,180 @@
       "notas": ""
     },
     {
+      "nombre": "ACTIVOS_D1",
+      "modulo": "ingestion.velas_d1",
+      "categoria": "etiqueta",
+      "valor": [
+        {
+          "activo": "BTC",
+          "td": {
+            "simbolo": "BTCUSD",
+            "timeframe": "1d",
+            "serie": "td_BTCUSD",
+            "granularidad": 86400,
+            "calendario": "continuo",
+            "inicio": "2017-08-28 00:00:00"
+          },
+          "deriv": "cryBTCUSD",
+          "intradia": "td_BTCUSD",
+          "granularidad_intradia": 3600
+        },
+        {
+          "activo": "XAU",
+          "td": {
+            "simbolo": "XAUUSD",
+            "timeframe": "1d",
+            "serie": "td_XAUUSD",
+            "granularidad": 86400,
+            "calendario": "habil",
+            "inicio": "1979-12-26 00:00:00"
+          },
+          "deriv": "frxXAUUSD",
+          "intradia": "td_XAUUSD",
+          "granularidad_intradia": 300
+        }
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 1: BTC/USD ↔ cryBTCUSD y XAU/USD ↔ frxXAUUSD. La serie intradía de cada uno es la del paso 1: 1h de BTC (muestra) y M5 del oro (ya en data, UTC).",
+      "usado_en": [
+        "ingestion.velas_d1.ingerir",
+        "tools.concordancia_d1.informe"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "BTC_D1",
+      "modulo": "ingestion.velas_d1",
+      "categoria": "parametro",
+      "valor": {
+        "simbolo": "BTCUSD",
+        "timeframe": "1d",
+        "serie": "td_BTCUSD",
+        "granularidad": 86400,
+        "calendario": "continuo",
+        "inicio": "2017-08-28 00:00:00"
+      },
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 1: TwelveData 1day, toda la historia. El inicio es el earliest_timestamp diario de BTC/USD medido el 2026-10-05 (sonda §0.A-3 v2, f: 3.326 filas, sha256 ab43cf45…; D1-p en el decision-log del 2026-10-17).",
+      "usado_en": [
+        "ingestion.velas_d1.series_td"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "GRANULARIDAD_H1",
+      "modulo": "ingestion.velas_d1",
+      "categoria": "derivada",
+      "expresion": "_TWELVEDATA_GRANULARITY_SECONDS[TIMEFRAME_H1]",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "El mapa de segundos del adapter de TwelveData, para '1h'. Se lee del mapa para no duplicar el 3600.",
+      "usado_en": [
+        "ingestion.velas_d1.muestra_h1"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "MUESTRA_H1_DIAS",
+      "modulo": "ingestion.velas_d1",
+      "categoria": "parametro",
+      "valor": 60,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 2: \"una muestra de 1h de TwelveData con timezone=UTC (60 días...)\".",
+      "usado_en": [
+        "ingestion.velas_d1.muestra_h1"
+      ],
+      "notas": "Solo fija la primera descarga: las corridas siguientes siguen desde la última vela guardada."
+    },
+    {
+      "nombre": "ORO_D1",
+      "modulo": "ingestion.velas_d1",
+      "categoria": "parametro",
+      "valor": {
+        "simbolo": "XAUUSD",
+        "timeframe": "1d",
+        "serie": "td_XAUUSD",
+        "granularidad": 86400,
+        "calendario": "habil",
+        "inicio": "1979-12-26 00:00:00"
+      },
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 1: TwelveData 1day, toda la historia. El inicio es el earliest_timestamp diario de XAU/USD medido el 2026-10-05 (sonda §0.A-3 v2, f: 12.288 filas, sha256 a756fdc4…; D1-p en el decision-log del 2026-10-17).",
+      "usado_en": [
+        "ingestion.velas_d1.series_td"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "SERIE_TD_BTC",
+      "modulo": "ingestion.velas_d1",
+      "categoria": "etiqueta",
+      "valor": "td_BTCUSD",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 1: la carpeta de TwelveData de BTC en metrics/velas, con el patrón de SERIE_TD (td_ y el símbolo del proyecto).",
+      "usado_en": [
+        "ingestion.velas_d1.muestra_h1"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "SIMBOLO_DERIV_BTC",
+      "modulo": "ingestion.velas_d1",
+      "categoria": "etiqueta",
+      "valor": "cryBTCUSD",
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Símbolo de BTC/USD en Deriv según active_symbols (sondas §0.A-2 y §0.A-3, decision-log 2026-10-05). Brief del Admin 14 (18-oct-2026), 14b, punto 1: BTC/USD ↔ cryBTCUSD.",
+      "usado_en": [
+        "ingestion.velas_d1.ingerir"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "SIMBOLO_TD_BTC",
+      "modulo": "ingestion.velas_d1",
+      "categoria": "etiqueta",
+      "valor": "BTCUSD",
+      "evidencia": "medido",
+      "afecta_resultado": true,
+      "fuente": "Símbolo del proyecto para BTC/USD en TwelveDataAdapter; BTC/USD 1day medido en el plan Basic el 2026-10-05 (sonda §0.A-3 v2, f).",
+      "usado_en": [
+        "ingestion.velas_d1.muestra_h1"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "TIMEFRAME_D1",
+      "modulo": "ingestion.velas_d1",
+      "categoria": "etiqueta",
+      "valor": "1d",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 1: TwelveData 1day (clave '1d' del proyecto en _TWELVEDATA_INTERVALS). Va sin timezone=UTC (decisión del Admin del 06-oct).",
+      "usado_en": [
+        "ingestion.velas_d1.series_td"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "TIMEFRAME_H1",
+      "modulo": "ingestion.velas_d1",
+      "categoria": "etiqueta",
+      "valor": "1h",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 2: la muestra de 1h de BTC, con timezone=UTC (el adapter la manda en todo intervalo intradía).",
+      "usado_en": [
+        "ingestion.velas_d1.muestra_h1"
+      ],
+      "notas": ""
+    },
+    {
       "nombre": "CORTES_DE_FONDO",
       "modulo": "ingestion.velas_intradia",
       "categoria": "etiqueta",
@@ -2041,6 +2215,19 @@
       "fuente": "El tope de páginas M5 de la sonda §0.A-3 (MAX_PAGINAS_INTRADIA): 300 páginas de 5000 velas M5 son más de 14 años.",
       "usado_en": [
         "ingestion.velas_intradia.ingerir_deriv"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "ORO_M5",
+      "modulo": "ingestion.velas_intradia",
+      "categoria": "derivada",
+      "expresion": "SerieTD(SIMBOLO_TD, TIMEFRAME_TD, SERIE_TD, GRANULARIDAD_M5, Calendario.HABIL, INICIO_TD)",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Las constantes del M5 del oro, agrupadas para que ingerir_td reciba la serie como parámetro y las velas diarias de D1 reusen la misma escritura (brief del Admin 14, 14b). No tiene valor propio: cada campo es el de su constante registrada.",
+      "usado_en": [
+        "ingestion.velas_intradia.ingerir_td"
       ],
       "notas": ""
     },
@@ -2362,6 +2549,166 @@
         "tools.concordancia_xauusd.franja"
       ],
       "notas": ""
+    },
+    {
+      "nombre": "FACTOR_MEDIANA",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "parametro",
+      "valor": 0.2,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 3 (paso 2, la compuerta): un día coincide si, además, |r_TD − r_Deriv| ≤ 0,2 × mediana(|r_Deriv|) del activo en la ventana común.",
+      "usado_en": [
+        "tools.concordancia_d1.paso_2"
+      ],
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado. [INTERPRETACIÓN] La mediana es la de los pares (días comunes con r en las dos fuentes)."
+    },
+    {
+      "nombre": "HORA_CORTE_EXIGIDA",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "parametro",
+      "valor": 0,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 2 (paso 1, la hora de corte): si para algún activo la h ganadora no es 00:00 UTC, la herramienta se detiene sin calcular la compuerta.",
+      "usado_en": [
+        "tools.concordancia_d1.decidir_corte"
+      ],
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado."
+    },
+    {
+      "nombre": "HORA_MEDIA",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "parametro",
+      "valor": 12,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "[INTERPRETACIÓN] Desde esta hora, el instante de corte de la fecha D es D h:00; antes, D+1 h:00: la ventana de 24 h que más se superpone con D. Con h = 0, la barra D de TwelveData cubre el mismo día UTC que la de Deriv (sonda §0.A-2). El brief 14 no fija con qué fecha se etiqueta un corte.",
+      "usado_en": [
+        "tools.concordancia_d1.instante_de_corte",
+        "tools.concordancia_d1.paso_1"
+      ],
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado."
+    },
+    {
+      "nombre": "HORAS_DE_CORTE",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "parametro",
+      "valor": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 2 (paso 1, la hora de corte): \"cada hora de corte h de 00:00 a 23:00 UTC\".",
+      "usado_en": [
+        "tools.concordancia_d1.paso_1"
+      ],
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado."
+    },
+    {
+      "nombre": "MIN_DIAS_COMUNES",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "parametro",
+      "valor": 250,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 3 (paso 2, la compuerta): VERDE si además hay al menos 250 días comunes (los que tienen barra cerrada en las dos fuentes).",
+      "usado_en": [
+        "tools.concordancia_d1.paso_2"
+      ],
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado."
+    },
+    {
+      "nombre": "PERCENTILES",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "parametro",
+      "valor": [
+        50,
+        90
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 3 (paso 2, la compuerta): informativo, sin efecto en la compuerta: la mediana y el p90 de |r_TD − r_Deriv|.",
+      "usado_en": [
+        "tools.concordancia_d1.paso_2",
+        "tools.concordancia_d1.revisiones_en"
+      ],
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado."
+    },
+    {
+      "nombre": "TOLERANCIA_CIERRE_USD",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "parametro",
+      "valor": 0.01,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 2 (paso 1, la hora de corte): el cierre con corte h coincide con el close de la barra 1day de TwelveData \"a ±0,01 USD\" (inclusive).",
+      "usado_en": [
+        "tools.concordancia_d1._coincide_el_cierre"
+      ],
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado."
+    },
+    {
+      "nombre": "UMBRAL_COMPUERTA",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "parametro",
+      "valor": 0.9,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 3 (paso 2, la compuerta): VERDE si coinciden ≥ 90 % de los días comunes (D1: \"una coincidencia de al menos el 90 %\", decision-log 2026-10-17).",
+      "usado_en": [
+        "tools.concordancia_d1.paso_2"
+      ],
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado. [INTERPRETACIÓN] El 90 % se cuenta sobre los pares: un par que sale por un hueco no cuenta ni a favor ni en contra. Se informa también la fracción sobre los días comunes."
+    },
+    {
+      "nombre": "UMBRAL_CORTE",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "parametro",
+      "valor": 0.95,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 2 (paso 1, la hora de corte): si la h ganadora no llega al 95 % de los días, la herramienta se detiene sin calcular la compuerta.",
+      "usado_en": [
+        "tools.concordancia_d1.decidir_corte"
+      ],
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado."
+    },
+    {
+      "nombre": "UMBRAL_PLANO",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "parametro",
+      "valor": 0.0001,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 3 (paso 2, la compuerta): (i) mismo signo, o los dos valen menos de 1 pb en valor absoluto (estricto).",
+      "usado_en": [
+        "tools.concordancia_d1.coincide"
+      ],
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado."
     },
     {
       "nombre": "DEFAULT_SEED",
