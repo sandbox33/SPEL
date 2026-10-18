@@ -10,18 +10,18 @@
 > Este archivo se lee primero en cada chat nuevo. Frente a un chat que lo contradiga sin
 > evidencia, gana el archivo; frente al código, gana el código.
 
-**Última actualización:** 17 oct 2026 — brief del Admin 11–13-B, en la rama `feature/preregistro-h1-v2` (PR #45), apilada sobre el #33 y el #34: H1 v2 con la fuente de precios de P1 y lo que aprobó el auditor en P6. Con esto la tanda 11–13 queda sin pendientes del Admin: el #34 trae H2 con P1 y P6, y el #33 trae H3 con P1 a P5, bloqueada por P2. Antes, la tarea 13: H1 v2 con D5 y D12, y v1 sellado. Se fusionan en orden: #34, #33 y #45.
+**Última actualización:** 18 oct 2026 — brief del Admin 14, tarea 14a, en la rama `claude/brief-14a-ensayos-por-id`: el registro de ensayos cuenta ensayos y no líneas. Un cambio de estado repite el id y no suma, y todo conteo sale del último estado de cada id. La tabla de la Serie H de `BLUEPRINT.md` dice el estado real. La tanda 11–13 (#34, #33 y #45) ya está en `main`. La 14b (concordancia diaria de D1) va apilada encima.
 
-**Commit de referencia:** `2ae82df` (merge del PR #44, el del brief 10).
+**Commit de referencia:** `08d4b05` (merge del PR #45, el último de la tanda 11–13).
 
-**Tests:** **2159** recolectados en `tests/`, en 63 archivos, medido con
-`pytest --collect-only -q tests/` el 17-oct-2026 sobre esta rama. Más 74 en `research/tests/`,
+**Tests:** **2172** recolectados en `tests/`, en 63 archivos, medido con
+`pytest --collect-only -q tests/` el 18-oct-2026 sobre esta rama. Más 74 en `research/tests/`,
 que no bloquean.
 
-Desfase: **ninguno**. El commit de referencia es el merge del PR #44, el último de `main`, y esta
-actualización entra con el #45 (tarea 13), apilado sobre el #33 (tarea 12) y el #34 (tarea 11).
-Se fusionan en orden: #34, #33 y #45. `tests/test_estado_al_dia.py` falla si hay **más
-de 3 PRs fusionados** desde el commit de referencia de arriba (DG-6).
+Desfase: **ninguno**. El commit de referencia es el merge del PR #45, el último de `main`, y esta
+actualización entra con el PR de la 14a. El de la 14b va apilado encima, y se fusionan en ese
+orden. `tests/test_estado_al_dia.py` falla si hay **más de 3 PRs fusionados** desde el commit de
+referencia de arriba (DG-6).
 
 
 **Ver también:** `FASE2_NOTAS_ARQUITECTURA_MODELO.md` (raíz del repo) — glosario y
@@ -123,7 +123,7 @@ corridas seguidas sin intermitencia.
 | `tests/test_guarda_integracion_demo.py` | `buy`/`sell`/`contract_update` solo en `integracion_demo/`; el paquete no nombra el canal real ni importa `execution/` ni lo congelado de `core/` | 34 | ✅ |
 | `tests/test_reglas_ordenes_demo.py` | La regla de órdenes demo de CLAUDE.md (OTP para una cuenta demo según `GET /accounts`, solo `/ws/demo`) y DG-7/DG-8 en el decision-log | 3 | ✅ |
 | `governance/paso_a_real.py` | DG-3 con D2 y DB-3: a) PSR y DSR solo sobre el histórico; d) sin discrepancias, no_verificables ni trades terminados sin reconciliar, contados desde el registro demo (`reconciliar.conteo_de_marcas`), y `incumplidas_d` dice cuál falta; la latencia, sin umbral (`sin_evaluar`); zona gris de 6 meses | 43 | ✅; 🟡 la latencia de D2 sin umbral medido |
-| `governance/ensayos.py` + `ensayos.jsonl` | Registro único de ensayos (D3), append-only: los 3 previos fallidos, la concordancia del oro (no cuenta en el N), los dos rezagos de H2, la cartera de H3 y H1 v2, pre-registrados; `ENSAYOS_PREVIOS_FALLIDOS` de H1 y de H3 se deriva de acá. Qué ensayos son estrategias y suman al N del DSR (P3): los de H2 no | 44 | ✅ |
+| `governance/ensayos.py` + `ensayos.jsonl` | Registro único de ensayos (D3), append-only: los 3 previos fallidos, la concordancia del oro (no cuenta en el N), los dos rezagos de H2, la cartera de H3 y H1 v2, pre-registrados; `ENSAYOS_PREVIOS_FALLIDOS` de H1 y de H3 se deriva de acá. Qué ensayos son estrategias y suman al N del DSR (P3): los de H2 no. Un ensayo por id: un cambio de estado repite el id y no suma, y todo conteo sale de `vigentes()`, el último estado de cada id (14a) | 57 | ✅ |
 | `config/constantes.json` | Registro de las 138 constantes de módulo, verificado contra el código en las dos direcciones | 30 | ✅ |
 | `tests/test_registro_linguistico*.py` | Español neutro: sin voseo en `.py` y en `.md` | 84 + 5 | ✅ |
 | `tools/heartbeat.py` + `.github/workflows/heartbeat.yml` | Trigger `schedule:` real — **desactivado a propósito**, ver Fase 6 | 19 | ✅ código, 🔴 apagado |
@@ -532,30 +532,21 @@ salvedad que hay que resolver **antes** de revertir.
 
 ## ▶️ PRÓXIMO PASO CONCRETO
 
-**Tanda 11–13: H2, H3 y H1 v2.** Los pre-registros nuevos calculan PSR, MinTRL y DSR con
-`core/estadistica_sharpe.py`, y su N con el registro de ensayos (`governance/ensayos.py`).
-H1 v1 queda sellada con su fórmula de 2012.
+**Brief 14.** La 14a (este PR) hace que el registro de ensayos cuente ensayos y no líneas. La
+14b, apilada encima, fija la compuerta de la concordancia diaria de D1 (BTC y oro) antes de bajar
+un precio diario, y trae el workflow manual que baja las dos fuentes y la corre. Lo dispara el
+Admin.
 
-La 11 (H2 según D6) está en el #34. Su fuente de precios la fijó el auditor el 17-oct (P1, brief
-11–13-B): las velas diarias de D1, solo después de que el brief 14 las valide, y sin fuente de
-reemplazo para un activo en rojo. La 12 (H3: D7, DG-3 según D2) está en el #33, con P1 a P5: queda
-bloqueada hasta que haya historia validada para su universo, y la extensión de D1 que la desbloquea
-es un brief propio, que se decide si H1 v2 o H2 muestran algo (P2). La 13 (#45, H1 v2: D5 y D12)
-va apilada encima, con la fuente de P1. Se fusionan en orden: #34, #33 y #45. Ninguno tiene
-pendientes del Admin. Quedan las interpretaciones nuevas, que el Admin aprueba al fusionar
-(decision-log).
-
-Lo que el #44 dejó para el Admin lo resolvió el auditor el 17-oct: D4-c, D2-n, D8-r y D1-p
-(decision-log). Los pendientes de la tanda, también: P1 a P6 (decision-log).
+La tanda 11–13 ya está en `main`. H1 v2, H2 y H3 están pre-registradas y ninguna corrió. H1 v2 y
+H2 corren con las velas de D1 cuando la 14b las valide (P1). H3 queda bloqueada hasta que haya
+historia validada para su universo (P2).
 
 La cola, en orden:
 
-1. Tanda 11–13: H2, H3 y H1 v2.
-2. Brief 14: la métrica de coincidencia y la hora de corte de D1, antes de bajar precios. La
-   sonda de profundidad del brief 8 se canceló: TwelveData ya está medida (D1-p).
-3. Después, la concordancia diaria (D1: coincidencia ≥ 90 % con el año de Deriv) y la migración
-   de `ingestion/deriv_ws.py` al WS público nuevo. La legacy está muerta desde el 01-oct, y su
-   520 dejó en rojo a `velas.yml`; esa migración reactiva los dos crons (D8-r).
+1. Brief 14: la 14a y la 14b. Después, el Admin dispara el workflow de la concordancia diaria.
+2. Con la compuerta en verde: H1 v2 y H2, sobre las velas de D1 del activo que pase.
+3. La migración de `ingestion/deriv_ws.py` al WS público nuevo. La legacy está muerta desde el
+   01-oct, y su 520 dejó en rojo a `velas.yml`; esa migración reactiva los dos crons (D8-r).
 4. Si H1 v2 o H2 muestran algo: el brief que extiende D1 al universo de H3, activo por activo,
    con la compuerta del brief 14 (P2).
 
