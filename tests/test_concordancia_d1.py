@@ -9,9 +9,12 @@ mutante no puede mover a la vez el fixture y lo que se mide.
 
 from __future__ import annotations
 
+import ast
 import json
 import math
+import subprocess
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
@@ -19,6 +22,7 @@ from ingestion.velas import _append, ruta_revisiones, ruta_serie
 from tools import concordancia_d1 as cd
 
 D, H, M5 = 86400, 3600, 300
+RAIZ = Path(__file__).resolve().parent.parent
 _UTC = timezone.utc
 #: Lunes 2-jun-2025.
 INI = date(2025, 6, 2)
@@ -374,3 +378,139 @@ def test_main_publica_cada_bloque_y_sale_0(capsys):
     titulos = [l for l in salida if l.startswith("=== ")]
     assert titulos[-1] == "=== COMPUERTA ==="
     assert json.loads(salida[-1]) == {"BTC": "verde", "XAU": "verde"}
+
+
+# ═══ Brief 15: la diaria desde el M5 (D1-o) y el paso 1 del oro ═══════════
+
+def _semana_m5() -> dict[int, float]:
+    """Una semana de M5 del oro desde el lunes E0. Lunes y martes enteros,
+    miércoles sin velas, jueves hasta las 13:55, viernes hasta las 20:55, y
+    velas el sábado entero y el domingo a la noche, como cotiza TwelveData."""
+    m5 = {}
+
+    def dia(k: int, hasta: int):
+        for e in range(E0 + k * D, E0 + k * D + hasta + 1, M5):
+            m5[e] = precio(e + M5)
+    dia(0, 23 * H + 55 * 60)
+    dia(1, 23 * H + 55 * 60)
+    dia(3, 13 * H + 55 * 60)
+    dia(4, 20 * H + 55 * 60)
+    dia(5, 23 * H + 55 * 60)
+    for e in range(E0 + 6 * D + 22 * H, E0 + 7 * D, M5):
+        m5[e] = precio(e + M5)
+    return m5
+
+
+def test_la_diaria_desde_m5_es_la_ultima_vela_de_cada_dia_habil():
+    d = cd.diarias_desde_m5(_semana_m5())
+    assert list(d) == [E0, E0 + D, E0 + 3 * D, E0 + 4 * D], \
+        "sin el miércoles, que no tiene velas, ni el sábado y el domingo"
+    assert d[E0] == precio(E0 + D), "la de las 23:55 cierra a las 24:00"
+    assert d[E0 + 3 * D] == precio(E0 + 3 * D + 14 * H), "no exige la de las 23:55"
+    assert d[E0 + 4 * D] == precio(E0 + 4 * D + 21 * H), "el viernes, la de las 20:55"
+
+
+def test_la_vela_de_las_00_00_es_del_dia_que_empieza():
+    m5 = {E0 + D - M5: 1.0, E0 + D: 2.0}
+    assert cd.diarias_desde_m5(m5) == {E0: 1.0, E0 + D: 2.0}
+
+
+def test_la_diaria_desde_m5_no_escribe_nada(tmp_path):
+    cd.diarias_desde_m5(_semana_m5())
+    assert list(tmp_path.rglob("*")) == []
+
+
+def _deriv_igual_a_su_m5(m5: dict[int, float]) -> dict[int, float]:
+    """Las barras 86400 de Deriv que cierran con su última vela M5,
+    calculadas acá: una mutante no mueve a la vez esto y lo que se mide."""
+    ultima = {}
+    for e in m5:
+        d = e - e % D
+        if datetime.fromtimestamp(d, _UTC).weekday() < 5 and e > ultima.get(d, -1):
+            ultima[d] = e
+    return {d: m5[e] for d, e in ultima.items()}
+
+
+def _semanas_m5(n: int) -> dict[int, float]:
+    m5 = {}
+    for s in range(n):
+        for e, c in _semana_m5().items():
+            m5[e + s * 7 * D] = c + s
+    return m5
+
+
+def test_paso_1_del_oro_con_el_cierre_de_deriv_igual_a_su_m5_sigue():
+    m5 = _semanas_m5(5)
+    p = cd.paso_1_deriv(_deriv_igual_a_su_m5(m5), m5)
+    assert (p["dias"], p["coinciden"], p["decision"], p["motivos"]) == (20, 20, "sigue", [])
+
+
+@pytest.mark.parametrize("malos, decision", [(0, "sigue"), (1, "sigue"), (2, "detenido")])
+def test_paso_1_del_oro_el_95_por_ciento(malos, decision):
+    """20 días con las dos: 19 son el 95 % justo."""
+    m5 = _semanas_m5(5)
+    diarias = _deriv_igual_a_su_m5(m5)
+    for d in sorted(diarias)[:malos]:
+        diarias[d] += 0.5
+    p = cd.paso_1_deriv(diarias, m5)
+    assert (p["dias"], p["coinciden"], p["decision"]) == (20, 20 - malos, decision)
+
+
+@pytest.mark.parametrize("cierre, coincide", [(0.01, True), (-0.01, True), (0.02, False)])
+def test_paso_1_del_oro_la_tolerancia_incluye_el_centavo_justo(cierre, coincide):
+    """0,01 − 0 es 0,01 exacto en binario."""
+    p = cd.paso_1_deriv({E0: cierre}, {E0 + D - M5: 0.0})
+    assert p["coinciden"] == int(coincide)
+
+
+def test_paso_1_del_oro_solo_cuenta_los_dias_con_las_dos():
+    m5 = _semana_m5()
+    diarias = _deriv_igual_a_su_m5(m5)
+    diarias[E0 + 2 * D] = 1.0                 # el miércoles no tiene M5
+    del diarias[E0 + D]                       # el martes no tiene barra diaria
+    p = cd.paso_1_deriv(diarias, m5)
+    assert (p["dias"], p["coinciden"]) == (3, 3)
+    assert (p["primer_dia"], p["ultimo_dia"]) == ("2025-06-02", "2025-06-06")
+
+
+def test_paso_1_del_oro_sin_dias_se_detiene():
+    p = cd.paso_1_deriv({E0: 1.0}, {E0 + 2 * D: 1.0})
+    assert p["decision"] == "detenido" and p["fraccion"] is None
+    assert p["motivos"] == ["no hay días con barra diaria y velas M5 de Deriv"]
+
+
+# ═══ Brief 15: la regla del paso 2 es la de 41cf853 ═══════════════════════
+
+#: El commit que fijó la compuerta antes de bajar un precio (decision-log
+#: del 18-oct, brief 14b). El brief 15 la deja sin tocar.
+COMMIT_DE_LA_COMPUERTA = "41cf853"
+REGLA_DEL_PASO_2 = ("coincide", "paso_2", "r_por_dia", "dia_anterior", "del_calendario")
+CONSTANTES_DE_LA_COMPUERTA = ("TOLERANCIA_CIERRE_USD", "UMBRAL_CORTE", "UMBRAL_PLANO",
+                              "FACTOR_MEDIANA", "UMBRAL_COMPUERTA", "MIN_DIAS_COMUNES")
+
+
+def _definiciones(fuente: str) -> dict[str, str]:
+    """nombre -> texto de cada función y asignación de nivel superior."""
+    out = {}
+    for n in ast.parse(fuente).body:
+        if isinstance(n, ast.FunctionDef):
+            out[n.name] = ast.get_source_segment(fuente, n)
+        elif isinstance(n, (ast.Assign, ast.AnnAssign)):
+            objetivo = n.targets[0] if isinstance(n, ast.Assign) else n.target
+            out[objetivo.id] = ast.get_source_segment(fuente, n)
+    return out
+
+
+def test_la_regla_del_paso_2_es_la_de_41cf853():
+    r = subprocess.run(["git", "show", f"{COMMIT_DE_LA_COMPUERTA}:tools/concordancia_d1.py"],
+                       cwd=RAIZ, capture_output=True, text=True)
+    assert r.returncode == 0, f"sin {COMMIT_DE_LA_COMPUERTA} en la historia: {r.stderr.strip()}"
+    vieja = _definiciones(r.stdout)
+    nueva = _definiciones((RAIZ / "tools" / "concordancia_d1.py").read_text(encoding="utf-8"))
+    for nombre in REGLA_DEL_PASO_2 + CONSTANTES_DE_LA_COMPUERTA:
+        assert nueva[nombre] == vieja[nombre], f"{nombre} cambió desde {COMMIT_DE_LA_COMPUERTA}"
+
+
+def test_las_constantes_de_la_compuerta_valen_lo_que_fijo_41cf853():
+    assert (cd.TOLERANCIA_CIERRE_USD, cd.UMBRAL_CORTE, cd.UMBRAL_PLANO, cd.FACTOR_MEDIANA,
+            cd.UMBRAL_COMPUERTA, cd.MIN_DIAS_COMUNES) == (0.01, 0.95, 1e-4, 0.2, 0.90, 250)

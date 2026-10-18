@@ -7,6 +7,14 @@ Brief del Admin 14, 14b, puntos 2 y 3. Patrón: tools/concordancia_xauusd.py.
 Todo lo de este módulo quedó fijado antes de bajar un precio diario, y no se
 ajusta después de ver un resultado (brief 14b).
 
+Brief del Admin 15: `diarias_desde_m5` (la diaria del oro desde el M5, D1-o)
+y `paso_1_deriv` (el paso 1 del oro: el corte de Deriv) están listas y
+testeadas, pero el informe todavía no las usa, ni evalúa por activo (D1-i).
+Conectarlas cambia lo que fijan tests de main que el brief no autoriza a
+editar, y el M5 de TwelveData cotiza los viernes después del cierre de Deriv
+(decision-log del 18-oct). La regla del paso 2 es la de 41cf853, y un test
+lo verifica contra ese commit.
+
 ══ LO QUE ESTE MÓDULO NO HACE ══
 
 No calcula ningún desenlace de trading: ni P&L, ni posiciones, ni nada que
@@ -94,6 +102,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from ingestion.velas import (  # noqa: E402
     GRANULARIDAD_DIARIA,
+    Calendario,
     _dia,
     _esperado,
     _leer_filas,
@@ -102,7 +111,7 @@ from ingestion.velas import (  # noqa: E402
     ruta_serie,
 )
 from ingestion.velas_d1 import ACTIVOS_D1  # noqa: E402
-from ingestion.velas_intradia import publicar, sha256_de_archivo  # noqa: E402
+from ingestion.velas_intradia import GRANULARIDAD_M5, publicar, sha256_de_archivo  # noqa: E402
 
 #: Fijados antes de bajar un precio diario (brief del Admin 14, 14b).
 TOLERANCIA_CIERRE_USD = 0.01
@@ -217,6 +226,48 @@ def paso_1(diarias_td: dict[int, float], intradia: dict[int, float], granularida
             "ultimo_dia": dias[-1].isoformat() if dias else None,
             "tolerancia_usd": TOLERANCIA_CIERRE_USD, "umbral_pct": 100 * UMBRAL_CORTE,
             **decidir_corte(por_hora), "por_hora": por_hora}
+
+
+# ═══ Brief 15: la diaria desde el M5 (D1-o) y el paso 1 del oro ══════════
+#
+# Listas y testeadas, SIN CONECTAR al informe: conectarlas cambia lo que
+# fijan tests que ya están en main y que el brief no autoriza a editar, y el
+# M5 de TwelveData del oro cotiza después del cierre de Deriv los viernes,
+# contra lo que el brief da por medido (decision-log del 18-oct, brief 15).
+
+def diarias_desde_m5(m5: dict[int, float],
+                     granularidad: int = GRANULARIDAD_M5) -> dict[int, float]:
+    """D1-o: el cierre del día UTC d es el de la ÚLTIMA vela que abre dentro
+    de d, de 00:00 a 23:55: lo que cierra una barra de 00:00 a 00:00 UTC. Es
+    el cierre al corte de las 00:00 de d+1. No exige la de las 23:55, un día
+    sin velas no tiene cierre (no se interpola), y solo cuenta de lunes a
+    viernes. {época de d a las 00:00: cierre}. No escribe nada."""
+    return {d: cierre_al_corte(m5, granularidad, d + GRANULARIDAD_DIARIA)
+            for d in sorted({e - e % GRANULARIDAD_DIARIA for e in m5})
+            if _esperado(_dia(d), Calendario.HABIL)}
+
+
+def paso_1_deriv(diarias_deriv: dict[int, float], m5_deriv: dict[int, float]) -> dict:
+    """Paso 1 del oro (brief 15, punto 3): verifica el corte de Deriv. Para
+    cada día con las dos, el close de la barra 86400 contra el de la última
+    vela M5 de Deriv del mismo día UTC (la regla de D1-o), a
+    TOLERANCIA_CIERRE_USD. Sigue si coincide en UMBRAL_CORTE de los días."""
+    m5 = diarias_desde_m5(m5_deriv)
+    dias = sorted(set(diarias_deriv) & set(m5))
+    coinciden = sum(1 for d in dias if abs(diarias_deriv[d] - m5[d]) <= TOLERANCIA_CIERRE_USD)
+    fraccion = coinciden / len(dias) if dias else None
+    if not dias:
+        motivos = ["no hay días con barra diaria y velas M5 de Deriv"]
+    elif fraccion < UMBRAL_CORTE:
+        motivos = [f"el cierre diario de Deriv coincide con su M5 en {fraccion:.2%} de los "
+                   f"días, menos que {UMBRAL_CORTE:.0%}"]
+    else:
+        motivos = []
+    return {"dias": len(dias), "primer_dia": _fecha(dias[0]) if dias else None,
+            "ultimo_dia": _fecha(dias[-1]) if dias else None, "coinciden": coinciden,
+            "fraccion": fraccion, "tolerancia_usd": TOLERANCIA_CIERRE_USD,
+            "umbral_pct": 100 * UMBRAL_CORTE,
+            "decision": "detenido" if motivos else "sigue", "motivos": motivos}
 
 
 # ═══ Paso 2: la compuerta ═════════════════════════════════════════════════
