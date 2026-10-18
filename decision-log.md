@@ -3921,3 +3921,125 @@ atrapados.
 - H1 v1, sellado y nunca corrido;
 - H1 v2, H2 y H3, pre-registradas, y ninguna corrida;
 - H3, además, bloqueada por P2.
+
+## 2026-10-18 — Brief 14b: la concordancia diaria de D1, con la compuerta fijada antes de los datos
+
+**Fuente:** brief del Admin 14, tarea 14b. Rama `claude/brief-14b-concordancia-diaria`, apilada
+sobre la de 14a (desde `main` en `08d4b05`).
+
+**La compuerta queda fijada en el commit `41cf853`** (`tools/concordancia_d1.py`), antes de bajar
+ningún precio diario. Para este PR no se bajó ninguna vela diaria, ni de TwelveData ni de Deriv:
+las baja el workflow cuando lo dispare el Admin. Nada de lo que sigue se ajusta después de ver un
+resultado.
+
+**Paso 1, la hora de corte de TwelveData.** No es la compuerta:
+- Para cada hora h de 00:00 a 23:00 UTC se arma el cierre diario con corte h. Para el oro sale del
+  M5 de TwelveData que ya está en `data`; para BTC, de una muestra de 60 días de 1h con
+  `timezone=UTC`.
+- Ese cierre se compara con el close de la barra 1day de TwelveData. Coincide si la diferencia es
+  de a lo sumo **0,01 USD**, inclusive.
+- Gana la h con más días coincidentes.
+- Si en algún activo la ganadora no llega al **95 %** de los días, o no es **00:00 UTC**, la
+  herramienta se detiene. No calcula la compuerta de ninguno de los dos activos.
+
+**Paso 2, la compuerta,** por activo e independiente:
+- Los días comunes son los que tienen barra cerrada en las dos fuentes.
+- r es el logaritmo del cociente de cierres de dos barras consecutivas de la misma fuente. Un
+  hueco en cualquiera de las dos saca ese par.
+- Un día coincide si r_TD y r_Deriv tienen el mismo signo, o los dos valen menos de **1 pb**, y
+  además |r_TD − r_Deriv| ≤ **0,2** × mediana(|r_Deriv|).
+- **VERDE** si coinciden ≥ **90 %** y hay al menos **250** días comunes. Si no, ROJO.
+- Son informativos, sin efecto en la compuerta:
+  - la correlación de r;
+  - la mediana y el p90 de |r_TD − r_Deriv|;
+  - los días de signo opuesto;
+  - el tamaño de las revisiones de Deriv en la ventana.
+
+Las seis constantes del brief están en `config/constantes.json` con este brief como fuente:
+0,2; 1 pb; 90 %; 250; 95 %; ±0,01 USD.
+
+**[INTERPRETACIÓN] Lo que el brief no fija.** Quedó escrito en el docstring de la herramienta antes
+de los datos:
+- **Con qué fecha va cada corte.** El instante de corte de la fecha D es el final de la ventana de
+  24 h que más se superpone con D:
+  - desde las 12:00, D h:00;
+  - antes de las 12:00, D+1 h:00.
+
+  Con h = 0, la barra D de TwelveData cubre el mismo día UTC que la de Deriv, que empieza en
+  D 00:00 (sonda §0.A-2). Esa es la condición para que el paso 2 compare lo mismo.
+- **La otra fecha, solo informativa.** Qué ventana cubre la barra 1day de TwelveData no está medido
+  (entrada D1 del 2026-10-17). Por eso se informa, para cada h, la fracción tomando la fecha del
+  otro lado (T ∓ 24 h). Si TwelveData fechara la barra por el día en que cierra, se vería ahí. No
+  decide nada: en ese caso ninguna h llega con la fecha propia, y la herramienta se detiene.
+- **Los días del paso 1** son las barras 1day cuyo día anterior y posterior caen enteros en el
+  tramo de la serie intradía. Son los mismos para las 24 horas. Un día sin vela intradía en la
+  ventana cuenta como no coincidente.
+- **Un empate en el máximo** no tiene ganadora y detiene.
+- **El calendario.** Cada fuente se filtra al calendario del activo antes de calcular r: BTC todos
+  los días, el oro de lunes a viernes, como `ingestion/velas.py`. Primero se filtran las filas y
+  después se recalcula r. Un hueco es el día esperado anterior que falta en esa fuente. Así, una
+  barra de domingo que tuviera una sola fuente no cambia el r del lunes de esa fuente.
+- **El 90 % se cuenta sobre los pares, y el 250 sobre los días comunes.** El brief dice "≥ 90 % de
+  los días comunes" y también "un hueco saca ese par". Un par que salió no cuenta ni a favor ni en
+  contra. El mínimo de 250 usa la definición de días comunes del propio brief. El informe da los
+  dos conteos y también la fracción sobre los días comunes.
+- La mediana de |r_Deriv| es la de los pares.
+- "Mismo signo" quiere decir signo igual: un 0 solo es del signo de otro 0. "Menos de 1 pb" es
+  estricto.
+- **Se comparan los cierres guardados**, es decir, lo que se bajó primero. La serie es append-only
+  y las revisiones de Deriv quedan aparte, solo como información.
+
+**Para el Admin: el oro queda cerca del mínimo de días, por construcción.** La sonda §0.A-2
+(entrada del 2026-10-05) midió 258 velas diarias alineadas del oro en el año que da Deriv. Sin la
+del día, que no cerró, quedan unos 257 días de Deriv, y los días comunes no pueden ser más: a lo
+sumo 7 por encima del mínimo, y cada día que falte en TwelveData los baja. Los pares serán algunos
+menos: el primer día no tiene par, y cada feriado de Deriv saca el par del día siguiente. Si el
+250 se contara sobre los pares, el oro quedaría en el borde. Por eso esta interpretación puede
+decidir el resultado del oro, y la decide el Admin al fusionar. BTC tiene a lo sumo unos 364 días
+comunes.
+
+**La ingesta** (`ingestion/velas_d1.py`, punto 1):
+- **TwelveData 1day** de BTC/USD y XAU/USD, toda la historia, desde los `earliest_timestamp`
+  medidos (D1-p): 2017-08-28 y 1979-12-26.
+- **Deriv 86400** de `cryBTCUSD` y `frxXAUUSD` por `ingestion/deriv_publico.py` (`/ws/public`),
+  no por `deriv_ws.py`.
+- **La muestra 1h de BTC**, 60 días desde las 00:00 UTC.
+- No hay descarga nueva: es la de `velas_intradia.py`, con la serie como parámetro. Usa
+  `fetch_pagina`, el `Limitador`, los reintentos, la regla de fondo, `profundidad` y la escritura
+  de `velas.py`: append puro, solo velas cerradas por la hora del servidor, revisiones aparte.
+- El sha256 de cada página queda en `paginas_<gran>.jsonl`, al lado de la serie.
+
+**Los créditos, antes de pedir.** El primer pedido va después de publicar la cota de cada serie.
+En la primera corrida son a lo sumo **9 créditos de TwelveData**: 2 de BTC 1day, 5 del oro 1day
+y 2 de la muestra 1h. La cota cuenta una página por cada 5.000 velas posibles del rango y la
+página vacía que puede cerrar la descarga. Los reintentos también gastan, y el tope por corrida es
+el de `TOPE_CREDITOS_TD` (300). La cuota diaria del plan no está documentada en el repo.
+
+**Las diarias de Deriv van a la ruta de `velas.py`** (`metrics/velas/<símbolo>/86400.jsonl`): es
+la misma serie. `velas.yml`, que la escribe por la API legacy, tiene el cron apagado (D8-r). Si
+vuelve a correr, agrega lo que falte con la misma validación, y lo distinto queda como revisión.
+
+**El workflow** (punto 4) es `.github/workflows/concordancia_d1.yml`, "SPEL concordancia diaria
+D1":
+- se dispara solo a mano, sin inputs ni cron (D8);
+- baja, escribe en `data` y después corre los dos pasos;
+- el informe queda en el log del paso "Concordancia diaria D1".
+
+**Tests y mutantes** (punto 5), offline con fixtures:
+- **La ingesta:** 27 tests y 17 mutantes.
+- **La herramienta:** 53 tests. Sus 51 mutantes cubren la regla de coincidencia, el mínimo de
+  días, la detención del paso 1, el calendario, los huecos y la guarda.
+- **La guarda AST de `concordancia_xauusd.py`, portada:** `tests/test_guarda_concordancia_d1.py`,
+  con 19 tests, importa sus funciones. Los precios solo se leen en dos lectores, y solo el
+  cierre. En D1 no hay vela de ruptura: lo que le corresponde es que nada acumule el movimiento
+  de un día con el del siguiente.
+- **El workflow:** 6 tests y 9 mutantes.
+
+Todas las mutantes quedan atrapadas.
+
+**Un helper de test, generalizado.** `campos_fuera_de_los_lectores` de
+`tests/test_guarda_desenlaces.py` recibe ahora los lectores, con el mismo valor por defecto.
+Ninguna aserción de ese archivo cambió.
+
+**Observación:** el `README.md` de la rama `data` no lista las rutas intradía del M5 ni las de D1.
+Lo escribe solo CI, así que no se tocó.
