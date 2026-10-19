@@ -1,2 +1,4 @@
 {"fecha_servidor": "2026-10-18", "fuente": "deriv", "pagina": 0, "end": "latest", "start": null, "n_velas": 256, "sha256": "d92ba3f8edc8a07ee70256d1941ea352732d203f86083439cb9e1ff4bd2d63c4", "primera_epoch": 1760918400, "ultima_epoch": 1792022400, "respeta_end": null, "desalineadas": 0}
 {"fecha_servidor": "2026-10-18", "fuente": "deriv", "pagina": 1, "end": "1760918399", "start": 1328918399, "n_velas": 0, "sha256": "61b05c390c8cea6bb8881e735d88943cd7e1ff44bf169bef8b0db4ac1f34c9c7"}
+{"fecha_servidor": "2026-10-19", "fuente": "deriv", "pagina": 0, "end": "latest", "start": null, "n_velas": 258, "sha256": "02242a662944867ecc6bb199d84e68d936d6912f4a29fc878edfcbb57e5e706e", "primera_epoch": 1760918400, "ultima_epoch": 1792368000, "respeta_end": null, "desalineadas": 0}
+{"fecha_servidor": "2026-10-19", "fuente": "deriv", "pagina": 1, "end": "1760918399", "start": 1328918399, "n_velas": 0, "sha256": "61b05c390c8cea6bb8881e735d88943cd7e1ff44bf169bef8b0db4ac1f34c9c7"}

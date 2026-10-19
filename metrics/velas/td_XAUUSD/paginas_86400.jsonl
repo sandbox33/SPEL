@@ -1,3 +1,4 @@
 {"fecha_servidor": "2026-10-18", "fuente": "twelvedata", "pagina": 0, "end_date": "2026-10-18 12:56:58", "sha256": "90dd0e8bd9e4e9db4d639967f3a237b3c6b8113d5747c01f6467e76f8b9e151a", "filas": 4999, "devueltas": 5000}
 {"fecha_servidor": "2026-10-18", "fuente": "twelvedata", "pagina": 1, "end_date": "2007-08-07 23:59:00", "sha256": "b147bd6546ebfba103ccdecd427a44c0140eb2a7376022ff899b359685f1d53a", "filas": 5000, "devueltas": 5000}
 {"fecha_servidor": "2026-10-18", "fuente": "twelvedata", "pagina": 2, "end_date": "1988-05-16 23:59:00", "sha256": "f866f7772967d1641a69c1a2300f15a9d7075dbe111e75503c434ecde316e889", "filas": 2140, "devueltas": 2140}
+{"fecha_servidor": "2026-10-19", "fuente": "twelvedata", "pagina": 0, "end_date": "2026-10-19 06:19:01", "sha256": "5b358cdbbeda2358fab2c57e4731572a7d5b10b8290c62ad8dbe63e28a9b9c0e", "filas": 1, "devueltas": 1}
