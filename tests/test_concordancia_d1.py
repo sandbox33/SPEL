@@ -60,6 +60,13 @@ def _escribir(serie: str, g: int, cierres: dict[int, float]) -> None:
                                    for e, c in sorted(cierres.items())])
 
 
+#: El horario de Deriv como lo guarda velas_intradia (trading_times del
+#: 14-oct-2026). `franja` no lee el evento.
+HORARIO_DERIV = {"trading_days": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+                 "aperturas": ["00:00:00", "22:00:00"], "cierres": ["21:00:00", "23:59:59"],
+                 "events": [{"dates": "Fridays", "descrip": "Closes early (at 20:55)"}]}
+
+
 def _mundo(*, corte_oro: int = 0, corte_btc: int = 0) -> None:
     """Las seis series de D1. TwelveData cierra cada fecha D en D+1 00:00 con
     corte 0, o en D hh:00 con corte hh (hh ≥ 12); Deriv cierra en D+1 00:00,
@@ -382,10 +389,11 @@ def test_main_publica_cada_bloque_y_sale_0(capsys):
 
 # ═══ Brief 15: la diaria desde el M5 (D1-o) y el paso 1 del oro ═══════════
 
-def _semana_m5() -> dict[int, float]:
+def _semana_m5(viernes_hasta: int = 20 * H + 55 * 60) -> dict[int, float]:
     """Una semana de M5 del oro desde el lunes E0. Lunes y martes enteros,
-    miércoles sin velas, jueves hasta las 13:55, viernes hasta las 20:55, y
-    velas el sábado entero y el domingo a la noche, como cotiza TwelveData."""
+    miércoles sin velas, jueves hasta las 13:55, viernes hasta las 20:55 (o
+    `viernes_hasta`), y velas el sábado entero y el domingo a la noche, como
+    cotiza TwelveData."""
     m5 = {}
 
     def dia(k: int, hasta: int):
@@ -394,7 +402,7 @@ def _semana_m5() -> dict[int, float]:
     dia(0, 23 * H + 55 * 60)
     dia(1, 23 * H + 55 * 60)
     dia(3, 13 * H + 55 * 60)
-    dia(4, 20 * H + 55 * 60)
+    dia(4, viernes_hasta)
     dia(5, 23 * H + 55 * 60)
     for e in range(E0 + 6 * D + 22 * H, E0 + 7 * D, M5):
         m5[e] = precio(e + M5)
@@ -411,8 +419,42 @@ def test_la_diaria_desde_m5_es_la_ultima_vela_de_cada_dia_habil():
 
 
 def test_la_vela_de_las_00_00_es_del_dia_que_empieza():
-    m5 = {E0 + D - M5: 1.0, E0 + D: 2.0}
+    m5 = {E0 + D - M5: 1.0, E0 + D: 2.0, E0 + 2 * D: 3.0}
     assert cd.diarias_desde_m5(m5) == {E0: 1.0, E0 + D: 2.0}
+
+
+def test_el_ultimo_dia_de_la_serie_no_tiene_cierre():
+    """La serie puede terminar a mitad del día: su diaria todavía no cerró.
+    Una vela del día siguiente la cierra."""
+    m5 = {E0 + 23 * H + 55 * 60: 1.0, E0 + D + 18 * H: 2.0}
+    assert cd.diarias_desde_m5(m5) == {E0: 1.0}
+    assert cd.diarias_desde_m5({**m5, E0 + 2 * D: 3.0}) == {E0: 1.0, E0 + D: 2.0}
+    assert cd.diarias_desde_m5({}) == {}
+
+
+def test_con_el_horario_el_viernes_cierra_con_deriv_y_no_con_la_noche():
+    """TwelveData sigue el viernes hasta las 23:55 y cotiza el sábado. Con el
+    horario de Deriv, el viernes cierra con la vela que termina a las 21:00
+    (desde el primer cierre del día es fin de semana) y el sábado no cuenta
+    ni para cerrar el viernes: la serie sigue después. De lunes a jueves, la
+    pausa de las 21:00 queda fuera y la última es la de las 23:55, la misma
+    que sin el horario."""
+    m5 = _semana_m5(viernes_hasta=23 * H + 55 * 60)
+    viernes = E0 + 4 * D
+    con, sin = cd.diarias_desde_m5(m5, horario=HORARIO_DERIV), cd.diarias_desde_m5(m5)
+    assert list(con) == list(sin) == [E0, E0 + D, E0 + 3 * D, viernes]
+    assert con[viernes] == precio(viernes + 21 * H)
+    assert sin[viernes] == precio(viernes + D)
+    assert con[E0] == sin[E0] == precio(E0 + D)
+    assert con[E0 + 3 * D] == sin[E0 + 3 * D] == precio(E0 + 3 * D + 14 * H)
+
+
+def test_con_el_horario_un_dia_sin_velas_dentro_no_tiene_cierre():
+    """Un lunes con velas solo en la pausa de Deriv: sin el horario cierra con
+    la de las 21:55; con el horario no tiene cierre."""
+    m5 = {E0 + 21 * H + k * M5: float(k) for k in range(12)} | {E0 + D: 99.0}
+    assert cd.diarias_desde_m5(m5) == {E0: 11.0}
+    assert cd.diarias_desde_m5(m5, horario=HORARIO_DERIV) == {}
 
 
 def test_la_diaria_desde_m5_no_escribe_nada(tmp_path):
@@ -459,7 +501,7 @@ def test_paso_1_del_oro_el_95_por_ciento(malos, decision):
 @pytest.mark.parametrize("cierre, coincide", [(0.01, True), (-0.01, True), (0.02, False)])
 def test_paso_1_del_oro_la_tolerancia_incluye_el_centavo_justo(cierre, coincide):
     """0,01 − 0 es 0,01 exacto en binario."""
-    p = cd.paso_1_deriv({E0: cierre}, {E0 + D - M5: 0.0})
+    p = cd.paso_1_deriv({E0: cierre}, {E0 + D - M5: 0.0, E0 + D: 9.0})
     assert p["coinciden"] == int(coincide)
 
 

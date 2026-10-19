@@ -112,6 +112,7 @@ from ingestion.velas import (  # noqa: E402
 )
 from ingestion.velas_d1 import ACTIVOS_D1  # noqa: E402
 from ingestion.velas_intradia import GRANULARIDAD_M5, publicar, sha256_de_archivo  # noqa: E402
+from tools.concordancia_xauusd import franja  # noqa: E402
 
 #: Fijados antes de bajar un precio diario (brief del Admin 14, 14b).
 TOLERANCIA_CIERRE_USD = 0.01
@@ -235,16 +236,24 @@ def paso_1(diarias_td: dict[int, float], intradia: dict[int, float], granularida
 # M5 de TwelveData del oro cotiza después del cierre de Deriv los viernes,
 # contra lo que el brief da por medido (decision-log del 18-oct, brief 15).
 
-def diarias_desde_m5(m5: dict[int, float],
-                     granularidad: int = GRANULARIDAD_M5) -> dict[int, float]:
+def diarias_desde_m5(m5: dict[int, float], granularidad: int = GRANULARIDAD_M5,
+                     horario: Optional[dict] = None) -> dict[int, float]:
     """D1-o: el cierre del día UTC d es el de la ÚLTIMA vela que abre dentro
     de d, de 00:00 a 23:55: lo que cierra una barra de 00:00 a 00:00 UTC. Es
     el cierre al corte de las 00:00 de d+1. No exige la de las 23:55, un día
     sin velas no tiene cierre (no se interpola), y solo cuenta de lunes a
-    viernes. {época de d a las 00:00: cierre}. No escribe nada."""
-    return {d: cierre_al_corte(m5, granularidad, d + GRANULARIDAD_DIARIA)
-            for d in sorted({e - e % GRANULARIDAD_DIARIA for e in m5})
-            if _esperado(_dia(d), Calendario.HABIL)}
+    viernes. Con `horario`, solo cuentan las velas en que Deriv cotiza según
+    él (`franja`): el viernes del oro cierra con Deriv (opción 2 del Admin).
+    El día de la última vela de la serie no tiene cierre: la serie puede
+    terminar a mitad de ese día. {época de d a las 00:00: cierre}. No
+    escribe nada."""
+    if not m5:
+        return {}
+    abierto = max(m5) - max(m5) % GRANULARIDAD_DIARIA
+    velas = m5 if horario is None else {e: c for e, c in m5.items() if franja(e, horario) is None}
+    return {d: cierre_al_corte(velas, granularidad, d + GRANULARIDAD_DIARIA)
+            for d in sorted({e - e % GRANULARIDAD_DIARIA for e in velas})
+            if d < abierto and _esperado(_dia(d), Calendario.HABIL)}
 
 
 def paso_1_deriv(diarias_deriv: dict[int, float], m5_deriv: dict[int, float]) -> dict:
