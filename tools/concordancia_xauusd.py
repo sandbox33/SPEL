@@ -255,6 +255,22 @@ def franja(epoch: int, horario: dict) -> Optional[str]:
     return "pausa_diaria"
 
 
+def horario_vigente() -> Optional[dict]:
+    """La última línea de metrics/calendario, o None: su horario se aplica
+    a todos los días."""
+    filas = _leer_filas(ruta_calendario())
+    return filas[-1] if filas else None
+
+
+def datos_del_horario(fila: Optional[dict]) -> dict:
+    """De dónde sale el horario: el archivo y su sha256, la fecha en que se
+    pidió, el sha256 de la respuesta y el horario."""
+    return {"archivo": str(ruta_calendario()), "sha256_archivo": sha256_de_archivo(ruta_calendario()),
+            "fecha_del_horario": (fila or {}).get("fecha_servidor"),
+            "sha256_trading_times": (fila or {}).get("sha256"),
+            "horario": (fila or {}).get("horario")}
+
+
 def filtrar_por_calendario(epocas_td: Sequence[int], horario: Optional[dict],
                            epocas_deriv: Sequence[int]) -> dict:
     """Las épocas de TwelveData en que Deriv cotiza, y las de fuera por
@@ -381,8 +397,7 @@ def _serie(simbolo: str) -> dict[int, dict]:
 
 def informe() -> list[tuple[str, dict]]:
     td, deriv = _serie(SERIE_TD), _serie(SIMBOLO_DERIV)
-    calendario = _leer_filas(ruta_calendario())
-    ultimo = calendario[-1] if calendario else None
+    ultimo = horario_vigente()
     filtro = filtrar_por_calendario(sorted(td), (ultimo or {}).get("horario"), sorted(deriv))
     dentro = set(filtro.pop("epocas_dentro", []))
     td_filtrado = {e: v for e, v in td.items() if e in dentro} if filtro.get("aplica") else td
@@ -393,10 +408,7 @@ def informe() -> list[tuple[str, dict]]:
                  "sha256": sha256_de_archivo(ruta_serie(s, GRANULARIDAD_M5)),
                  "primera": _fecha(min(v) if v else None), "ultima": _fecha(max(v) if v else None)}
              for s, v in ((SERIE_TD, td), (SIMBOLO_DERIV, deriv))}
-    cal = {"archivo": str(ruta_calendario()), "sha256_archivo": sha256_de_archivo(ruta_calendario()),
-           "fecha_del_horario": (ultimo or {}).get("fecha_servidor"),
-           "sha256_trading_times": (ultimo or {}).get("sha256"),
-           "horario": (ultimo or {}).get("horario"), **filtro}
+    cal = {**datos_del_horario(ultimo), **filtro}
     conc = concordancia(td_filtrado, deriv)
     peores = conc.pop("peores_dias", None)
     compuerta = {"compuerta": conc["compuerta"], "umbral_pct": conc["umbral_compuerta_pct"],
