@@ -328,6 +328,28 @@ def test_franja(cuando, esperado):
     assert franja(_utc(*cuando), horario) == esperado
 
 
+@pytest.mark.parametrize("hora, minuto, esperado", [
+    (20, 55, None),                               # termina en el primer cierre
+    (21, 0, "fin_de_semana"),
+    (22, 0, "fin_de_semana"),                     # antes: None, por el segundo tramo
+    (23, 55, "fin_de_semana"),
+])
+def test_el_viernes_desde_el_primer_cierre_es_fin_de_semana_aunque_haya_otro_tramo(
+        hora, minuto, esperado):
+    """Brief del Admin 15: el horario es el de otra fecha, y su segundo
+    tramo (22:00–24:00) dejaba dentro las velas del viernes a la noche. El
+    jueves, el mismo tramo sigue dentro."""
+    assert franja(_utc(2026, 10, 9, hora, minuto), HORARIO) == esperado
+    assert franja(_utc(2026, 10, 8, hora, minuto), HORARIO) == (
+        "pausa_diaria" if hora == 21 else None)
+
+
+def test_un_viernes_sin_pausa_cotiza_hasta_las_24():
+    """Con un solo tramo hasta las 23:59:59 no hay un cierre antes de las 24."""
+    corrido = {**HORARIO, "aperturas": ["00:00:00"], "cierres": ["23:59:59"]}
+    assert franja(_utc(2026, 10, 9, 23, 55), corrido) is None
+
+
 def test_un_sabado_en_trading_days_cotiza():
     con_sabado = {**HORARIO, "trading_days": HORARIO["trading_days"] + ["Sat"]}
     assert franja(_utc(2026, 10, 10, 12, 0), con_sabado) is None

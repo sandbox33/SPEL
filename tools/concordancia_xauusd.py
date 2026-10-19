@@ -243,11 +243,13 @@ def franja(epoch: int, horario: dict) -> Optional[str]:
     habiles = horario.get("trading_days") or list(_DIAS_SEMANA[:5])
     if dia not in habiles:
         return "fin_de_semana"
-    if any(a <= seg and seg + GRANULARIDAD_M5 <= c for a, c in tr):
-        return None
+    # El viernes, antes que los tramos: son los de otra fecha, y el segundo
+    # (22:00–24:00) dejaba dentro la noche del viernes (brief del Admin 15).
     cierres_del_dia = [c for _, c in tr if c < 86400]
     if dia == "Fri" and cierres_del_dia and seg >= min(cierres_del_dia):
         return "fin_de_semana"
+    if any(a <= seg and seg + GRANULARIDAD_M5 <= c for a, c in tr):
+        return None
     if dia == "Sun" and tr and seg < min(a for a, _ in tr):
         return "fin_de_semana"
     return "pausa_diaria"
