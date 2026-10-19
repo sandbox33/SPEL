@@ -346,3 +346,115 @@ def test_la_key_no_llega_al_informe(monkeypatch):
     monkeypatch.setattr(vd, "ingerir", ingerir)
     with pytest.raises(AssertionError, match="la key"):
         vd.main([])
+
+
+# ═══ Brief 15, punto 6: el M5 del oro al día, en la misma corrida ═════════
+
+M5 = 300
+
+
+def _deriv_por_gran(por_simbolo_gran: dict, *, ahora=AHORA):
+    """ticks_history por (símbolo, granularidad), siempre la ventana más
+    reciente, como la API."""
+    def th(p):
+        sel = [e for e in por_simbolo_gran.get((p["ticks_history"], p["granularity"]), [])
+               if e <= ahora][-p["count"]:]
+        return {"candles": [_vela(e, 300.0) for e in sel]}
+    return DerivFalso({"time": lambda p: {"time": ahora}, "ticks_history": th})
+
+
+def _m5(desde: int, n: int) -> list[int]:
+    return [desde + k * M5 for k in range(n)]
+
+
+def _con_m5_guardado():
+    """Un M5 del oro ya guardado de las dos fuentes, que termina 2 h antes
+    de AHORA, y lo que trae cada fuente: lo guardado y lo que sigue."""
+    viejo = _m5(AHORA - 4 * H, 24)                 # hasta AHORA − 2 h
+    nuevo = _m5(AHORA - 2 * H, 24)                 # la última cierra justo a AHORA
+    for serie in ("td_XAUUSD", "frxXAUUSD"):
+        vi._append(ruta_serie(serie, M5), [
+            {"epoch": e, "open": 1.0, "high": 2.0, "low": 0.5, "close": 1.5} for e in viejo])
+    return viejo, nuevo
+
+
+async def test_con_m5_el_oro_se_actualiza_despues_de_las_diarias_y_desde_lo_guardado():
+    viejo, nuevo = _con_m5_guardado()
+    td = _TDFalso({**_historia(), ("XAUUSD", "5m"): viejo + nuevo})
+    dv = _diarias_deriv()
+    d = _deriv_por_gran({("cryBTCUSD", D): dv["cryBTCUSD"], ("frxXAUUSD", D): dv["frxXAUUSD"],
+                         ("frxXAUUSD", M5): viejo + nuevo})
+    bloques = await vd.ingerir(key="K", write=True, abrir=d.connector, adapter=td,
+                               limitador=_lim(), ahora=AHORA, pausa_s=0, con_m5=True)
+    assert [(b["fuente"], b["serie"], b["granularidad"]) for b in bloques[-2:]] == [
+        ("twelvedata", "td_XAUUSD", M5), ("deriv", "frxXAUUSD", M5)]
+    assert (td.pedidos[-1]["tf"], td.pedidos[-1]["start_date"]) == ("5m", vi._fmt(viejo[-1] + M5))
+    th = d.de_tipo("ticks_history")
+    assert [p["granularity"] for p in th][-1] == M5 and th[0]["granularity"] == D, \
+        "el M5 de Deriv va después de las diarias"
+    assert not d.de_tipo("trading_times")
+    for serie in ("td_XAUUSD", "frxXAUUSD"):
+        assert leer_velas(serie, M5)["epoch"].to_list() == viejo + nuevo, serie
+    assert not any(b.get("no_escrito") or b.get("error") for b in bloques)
+
+
+async def test_sin_con_m5_la_corrida_no_toca_el_m5():
+    _con_m5_guardado()
+    td = _TDFalso(_historia())
+    d = _deriv_por_gran({("cryBTCUSD", D): _diarias_deriv()["cryBTCUSD"],
+                         ("frxXAUUSD", D): _diarias_deriv()["frxXAUUSD"]})
+    bloques = await vd.ingerir(key="K", write=True, abrir=d.connector, adapter=td,
+                               limitador=_lim(), ahora=AHORA, pausa_s=0)
+    assert len(bloques) == 5 and "5m" not in {p["tf"] for p in td.pedidos}
+    assert {p["granularity"] for p in d.de_tipo("ticks_history")} == {D}
+
+
+async def test_un_m5_de_deriv_que_falla_no_borra_lo_demas():
+    viejo, nuevo = _con_m5_guardado()
+    dv = _diarias_deriv()
+    d = _deriv_por_gran({("cryBTCUSD", D): dv["cryBTCUSD"], ("frxXAUUSD", D): dv["frxXAUUSD"]})
+    abiertos = []
+
+    def abrir(u):
+        abiertos.append(u)
+        if len(abiertos) == 3:
+            raise ConnectionError("sin red")
+        return d.connector(u)
+    bloques = await vd.ingerir(key="K", write=True, abrir=abrir,
+                               adapter=_TDFalso({**_historia(), ("XAUUSD", "5m"): viejo + nuevo}),
+                               limitador=_lim(), ahora=AHORA, pausa_s=0, con_m5=True)
+    assert bloques[-1]["error"].startswith("ConnectionError") and bloques[-1]["serie"] == "frxXAUUSD"
+    assert leer_velas("td_XAUUSD", M5).height == len(viejo + nuevo)
+    assert leer_velas("frxXAUUSD", D).height > 0
+
+
+def test_main_activa_el_m5_y_publica_sus_creditos_antes_del_primer_pedido(monkeypatch, capsys):
+    viejo, _ = _con_m5_guardado()
+    monkeypatch.setattr(vd, "load_secret", lambda *a, **k: "K")
+    visto = {}
+
+    async def ingerir(**kw):
+        visto.update(kw, salida=capsys.readouterr().out)
+        return []
+    monkeypatch.setattr(vd, "ingerir", ingerir)
+    monkeypatch.setattr(vd.time, "time", lambda: AHORA)
+    assert vd.main([]) == 0 and visto["con_m5"] is True
+    lineas = visto["salida"].splitlines()
+    i = lineas.index("=== CRÉDITOS ESTIMADOS M5 DEL ORO ===")
+    plan = json.loads(lineas[i + 1])
+    assert [(f["serie"], f["timeframe"], f["desde"]) for f in plan["series"]] == [
+        ("td_XAUUSD", "5m", vi._fmt(viejo[-1] + M5))]
+    assert plan["creditos_a_lo_sumo"] == 2
+
+
+def test_el_titulo_de_cada_descarga_dice_su_granularidad(monkeypatch, capsys):
+    monkeypatch.setattr(vd, "load_secret", lambda *a, **k: "K")
+
+    async def ingerir(**kw):
+        return [{"fuente": "twelvedata", "serie": "td_XAUUSD", "granularidad": 300},
+                {"fuente": "twelvedata", "serie": "td_XAUUSD", "granularidad": 86400}]
+    monkeypatch.setattr(vd, "ingerir", ingerir)
+    vd.main([])
+    titulos = [l for l in capsys.readouterr().out.splitlines() if l.startswith("=== DESCARGA")]
+    assert titulos == ["=== DESCARGA TWELVEDATA td_XAUUSD 300 ===",
+                       "=== DESCARGA TWELVEDATA td_XAUUSD 86400 ==="]

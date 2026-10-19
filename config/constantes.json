@@ -2574,7 +2574,7 @@
       "usado_en": [
         "tools.concordancia_d1.decidir_corte"
       ],
-      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado."
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado. Brief del Admin 15 (D1-i): la detención es por activo; el otro activo sigue con su paso 2."
     },
     {
       "nombre": "HORA_MEDIA",
@@ -2667,9 +2667,10 @@
       "afecta_resultado": true,
       "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 2 (paso 1, la hora de corte): el cierre con corte h coincide con el close de la barra 1day de TwelveData \"a ±0,01 USD\" (inclusive).",
       "usado_en": [
-        "tools.concordancia_d1._coincide_el_cierre"
+        "tools.concordancia_d1._coincide_el_cierre",
+        "tools.concordancia_d1.paso_1_deriv"
       ],
-      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado."
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado. Brief del Admin 15: también en el paso 1 del oro (el corte de Deriv)."
     },
     {
       "nombre": "UMBRAL_COMPUERTA",
@@ -2693,9 +2694,10 @@
       "afecta_resultado": true,
       "fuente": "Brief del Admin 14 (18-oct-2026), 14b, punto 2 (paso 1, la hora de corte): si la h ganadora no llega al 95 % de los días, la herramienta se detiene sin calcular la compuerta.",
       "usado_en": [
-        "tools.concordancia_d1.decidir_corte"
+        "tools.concordancia_d1.decidir_corte",
+        "tools.concordancia_d1.paso_1_deriv"
       ],
-      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado."
+      "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado. Brief del Admin 15 (D1-i): la detención es por activo; el otro activo sigue con su paso 2."
     },
     {
       "nombre": "UMBRAL_PLANO",
@@ -2709,6 +2711,23 @@
         "tools.concordancia_d1.coincide"
       ],
       "notas": "Fijado en el código antes de bajar un precio diario; no se ajusta después de ver un resultado."
+    },
+    {
+      "nombre": "DIARIA_DESDE_M5",
+      "modulo": "tools.concordancia_d1",
+      "categoria": "etiqueta",
+      "valor": [
+        "XAU"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 15 (18-oct-2026), D1-o y D1-x, y decisiones del Admin del 19-oct: la diaria de TwelveData del oro sale de su M5, con las velas dentro del horario de Deriv, y su paso 1 verifica el corte de Deriv. La 1day del oro de TwelveData sigue en data, pero ninguna herramienta la lee.",
+      "usado_en": [
+        "tools.concordancia_d1._series",
+        "tools.concordancia_d1._pasos_2",
+        "tools.concordancia_d1.informe"
+      ],
+      "notas": "Los activos fuera del conjunto (BTC) siguen con la 1day de TwelveData y su paso 1 de 14b."
     },
     {
       "nombre": "DEFAULT_SEED",
@@ -3551,6 +3570,35 @@
         "governance.ensayos.h_orb_oro_se_puede_reabrir"
       ],
       "notas": "756 = 3 × 252 días hábiles, confirmado por el auditor el 17-oct-2026 (decision-log). Al 14-oct-2026 Deriv tiene 263 días comunes con TwelveData en la concordancia (data@bc2597a)."
+    },
+    {
+      "nombre": "ESTADOS_ABIERTOS",
+      "modulo": "governance.ensayos",
+      "categoria": "etiqueta",
+      "valor": [
+        "en_curso",
+        "pre-registrado"
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 15 (18-oct-2026), punto 7: un estado terminal no vuelve a un estado previo. Los previos a un resultado son estos dos.",
+      "usado_en": [
+        "governance.ensayos._transicion"
+      ],
+      "notas": ""
+    },
+    {
+      "nombre": "ESTADOS_TERMINALES",
+      "modulo": "governance.ensayos",
+      "categoria": "derivada",
+      "expresion": "ESTADOS_ENSAYO - ESTADOS_ABIERTOS",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 15 (18-oct-2026), punto 7: fallido, rechazado, compuerta_roja \"y los que ya existan con ese sentido\".",
+      "usado_en": [
+        "governance.ensayos._transicion"
+      ],
+      "notas": "[INTERPRETACIÓN] Todo estado que no es abierto: también aprobado, que termina el ensayo, y cualquiera que se agregue. \"rechazado\" no es un estado del registro y no se agregó."
     }
   ]
 }

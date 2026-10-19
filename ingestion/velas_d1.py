@@ -43,6 +43,16 @@ puede cerrar la descarga. El Limitador cuenta un crédito por pedido; los
 reintentos también gastan, y se cuentan contra el mismo tope por corrida
 (TOPE_CREDITOS_TD).
 
+══ EL M5 DEL ORO, AL DÍA (brief del Admin 15, punto 6) ══
+
+Con `con_m5`, que activa `main`, la corrida actualiza también el M5 del oro
+de TwelveData y de Deriv, con ingerir_td e ingerir_deriv de
+velas_intradia.py y sus series por defecto: incremental, desde la última
+vela guardada, y sin el trading_times. Va después de las diarias: así todo
+día con barra diaria cerrada queda entero en el M5. Sus créditos se publican
+aparte, también antes del primer pedido. Sin `con_m5`, `ingerir` es la de
+siempre.
+
 ══ LA MUESTRA HORARIA ══
 
 La primera corrida baja 60 días de 1h de BTC/USD desde las 00:00 UTC
@@ -86,6 +96,7 @@ from ingestion.velas import (  # noqa: E402
 from ingestion.velas_intradia import (  # noqa: E402
     GRANULARIDAD_M5,
     LLAMADAS_POR_MINUTO_TD,
+    ORO_M5,
     PAUSA_DERIV_S,
     SERIE_TD,
     SIMBOLO_DERIV,
@@ -196,7 +207,7 @@ def bloque(fuente: str, rep: ReporteSimbolo, res: dict, granularidad: int) -> di
     """El bloque del informe del M5, más los huecos según el calendario del
     activo y la historia usable: en la compuerta, un hueco saca un par."""
     p = rep.profundidad
-    return {**bloque_datos(fuente, rep, res, granularidad),
+    return {**bloque_datos(fuente, rep, res, granularidad), "granularidad": granularidad,
             "n_huecos": len(p.huecos) if p else 0, "historia_usable": p.historia_usable if p else 0}
 
 
@@ -205,7 +216,8 @@ async def ingerir(*, key: str, write: bool,
                   adapter: Optional[TwelveDataAdapter] = None,
                   limitador: Optional[Limitador] = None,
                   ahora: Optional[int] = None,
-                  pausa_s: float = PAUSA_DERIV_S) -> list[dict]:
+                  pausa_s: float = PAUSA_DERIV_S,
+                  con_m5: bool = False) -> list[dict]:
     # Un solo limitador para las tres series de TwelveData y sus reintentos.
     lim = limitador or Limitador(LLAMADAS_POR_MINUTO_TD, TOPE_CREDITOS_TD)
     td = adapter or TwelveDataAdapter(api_key=key, timeout_s=30.0, limitador=lim)
@@ -230,6 +242,23 @@ async def ingerir(*, key: str, write: bool,
             "deriv", a.deriv, GRANULARIDAD_DIARIA, res, res.get("detalle_paginas") or [],
             write=write)
         bloques.append(bloque("deriv", rep, res, GRANULARIDAD_DIARIA))
+    if con_m5:
+        bloques += await ingerir_m5_oro(td, abrir, write=write, limitador=lim, pausa_s=pausa_s)
+    return bloques
+
+
+async def ingerir_m5_oro(td: TwelveDataAdapter, abrir: Callable[[str], Any], *, write: bool,
+                         limitador: Limitador, pausa_s: float) -> list[dict]:
+    """El M5 del oro de TwelveData y de Deriv, incremental, con las series
+    por defecto de velas_intradia y sin el trading_times."""
+    rep, res = await ingerir_td(td, write=write, limitador=limitador)
+    bloques = [bloque("twelvedata", rep, res, GRANULARIDAD_M5)]
+    try:
+        rep, res = await ingerir_deriv(abrir, write=write, pausa_s=pausa_s, con_horario=False)
+    except Exception as exc:   # noqa: BLE001 -- se informa; lo demás ya quedó
+        rep, res = ReporteSimbolo(SIMBOLO_DERIV, Calendario.HABIL), {
+            "error": f"{type(exc).__name__}: {exc}"}
+    bloques.append(bloque("deriv", rep, res, GRANULARIDAD_M5))
     return bloques
 
 
@@ -248,11 +277,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 2
     ahora = int(time.time())
     publicar("CRÉDITOS ESTIMADOS", plan_de_creditos(series_td(ahora), ahora))
-    bloques = asyncio.run(ingerir(key=key, write=args.write, ahora=ahora))
+    publicar("CRÉDITOS ESTIMADOS M5 DEL ORO", plan_de_creditos((ORO_M5,), ahora))
+    bloques = asyncio.run(ingerir(key=key, write=args.write, ahora=ahora, con_m5=True))
     for b in bloques:
         texto = json.dumps(b, ensure_ascii=False)
         assert key not in texto, "la key llegó al informe: no se publica"
-        publicar(f"DESCARGA {b['fuente'].upper()} {b['serie']}", b)
+        publicar(f"DESCARGA {b['fuente'].upper()} {b['serie']} {b.get('granularidad', '')}".rstrip(), b)
     malos = [b for b in bloques if b.get("n_invalidas") or b.get("no_escrito") or b.get("error")]
     return 1 if malos else 0
 

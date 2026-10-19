@@ -15,6 +15,10 @@ cuentan en el N de su familia.
 Y desde la 14a (brief del Admin 14): un cambio de estado iba con otro id, y
 contar líneas lo contaba dos veces. Ahora repite el id, y todo conteo sale
 del último estado de cada id.
+
+Y desde el brief del Admin 15 (punto 7): las transiciones no se validaban, y
+un ensayo fallido podía volver a pre-registrado. Ahora un estado terminal no
+vuelve a uno abierto.
 """
 
 from __future__ import annotations
@@ -328,6 +332,70 @@ def test_una_linea_rota_dice_donde(registro):
         f.write("{no es json\n")
     with pytest.raises(ValueError, match=rf"ensayos\.jsonl:{n + 1}\b"):
         en.leer(registro)
+
+
+# ═══ Brief 15: un estado terminal no vuelve a uno abierto ══════════════════
+
+def test_los_terminales_son_los_estados_que_no_estan_abiertos():
+    assert en.ESTADOS_ABIERTOS == {"pre-registrado", "en_curso"}
+    assert en.ESTADOS_TERMINALES == {"fallido", "aprobado", "compuerta_roja"}
+    assert "rechazado" not in en.ESTADOS_ENSAYO, "el brief 15 lo nombra; no es un estado del registro"
+
+
+def _por(registro, id_: str, *estados: str) -> dict:
+    """Un ensayo nuevo que pasa por `estados`, uno por línea, con agregar()."""
+    e = _entrada(id=id_, estado=estados[0])
+    en.agregar(e, registro)
+    for s in estados[1:]:
+        en.agregar(_cambio(e, estado=s), registro)
+    return e
+
+
+@pytest.mark.parametrize("terminal", sorted(en.ESTADOS_TERMINALES))
+@pytest.mark.parametrize("abierto", sorted(en.ESTADOS_ABIERTOS))
+def test_un_terminal_no_vuelve_a_un_estado_abierto(registro, terminal, abierto):
+    e = _por(registro, "h1-lookback-60", "pre-registrado", terminal)
+    antes = registro.read_bytes()
+    with pytest.raises(ValueError, match=rf"'{terminal}' es terminal y no vuelve a '{abierto}'"):
+        en.agregar(_cambio(e, estado=abierto), registro)
+    assert registro.read_bytes() == antes
+
+
+@pytest.mark.parametrize("terminal", sorted(en.ESTADOS_TERMINALES))
+@pytest.mark.parametrize("abierto", sorted(en.ESTADOS_ABIERTOS))
+def test_un_terminal_que_vuelve_en_el_archivo_no_se_lee(registro, terminal, abierto):
+    e = _por(registro, "h1-lookback-80", "pre-registrado", terminal)
+    with registro.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(_cambio(e, estado=abierto)) + "\n")
+    n = _lineas(registro)
+    with pytest.raises(ValueError,
+                       match=rf"ensayos\.jsonl:{n}: id 'h1-lookback-80': '{terminal}' es terminal"):
+        en.leer(registro)
+
+
+def test_se_juzga_contra_el_ultimo_estado_y_no_contra_el_primero(registro):
+    """La primera línea es abierta y la última, terminal: no se vuelve."""
+    e = _por(registro, "h1-lookback-120", "pre-registrado", "en_curso", "fallido")
+    with pytest.raises(ValueError, match="'fallido' es terminal"):
+        en.agregar(_cambio(e, estado="en_curso"), registro)
+    with registro.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(_cambio(e, estado="pre-registrado")) + "\n")
+    with pytest.raises(ValueError, match="'fallido' es terminal"):
+        en.leer(registro)
+
+
+@pytest.mark.parametrize("estados", [
+    ("pre-registrado", "en_curso", "pre-registrado"),    # entre abiertos
+    ("pre-registrado", "fallido", "fallido"),            # el mismo terminal
+    ("pre-registrado", "fallido", "aprobado"),           # de un terminal a otro
+    ("pre-registrado", "compuerta_roja", "fallido"),
+    ("pre-registrado", "aprobado", "fallido"),
+])
+def test_lo_que_no_vuelve_a_un_estado_abierto_entra(registro, estados):
+    _por(registro, "h1-lookback-160", *estados)
+    assert [x["estado"] for x in en.leer(registro) if x["id"] == "h1-lookback-160"] == list(estados)
+    assert [x["estado"] for x in en.vigentes(registro)
+            if x["id"] == "h1-lookback-160"] == [estados[-1]]
 
 
 # ═══ D11-u ═════════════════════════════════════════════════════════════════
