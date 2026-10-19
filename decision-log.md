@@ -4185,3 +4185,160 @@ velas y los precios de TwelveData solamente: sin comparar contra los de Deriv.
   - otra regla.
 - Si `rechazado` entra al registro, y si `aprobado` es terminal.
 - El texto de la sección 6-D.
+
+## 2026-10-19 — Brief 15: lo detenido, con las decisiones del Admin
+
+**Fuente:** las decisiones del Admin del 19-oct, con la recomendación del auditor, sobre "Lo que el
+Admin decide" de la entrada del 18-oct. Misma rama y mismo PR (#48).
+
+### Las decisiones
+
+1. **Los cuatro casos de test se editan, con condiciones.**
+   - Cada uno cambia solo la aserción que el brief reemplaza: la detención global por la
+     detención por activo, y la compuerta del oro por la 1day por la compuerta por el M5.
+   - No se borra ningún test ni se toca ninguna constante, y los diffs van en el PR.
+   - Razón: esos tests codifican el comportamiento que el brief cambia; cambiarlos no es una
+     regresión.
+2. **El cierre del viernes del oro es la opción 2:** la última vela M5 dentro del horario de Deriv,
+   desde `metrics/calendario`.
+   - Razón: TwelveData cotiza los viernes hasta las 23:55 y también el sábado. Con 24:00 o 23:55,
+     una diferencia de hasta 38 pb entra en el r del viernes y del lunes, y no refleja el mercado.
+   - La compuerta del oro se informa con esa regla y con la de 24:00 como sensibilidad. Si el
+     veredicto no cambia, la regla queda.
+3. **`rechazado` queda fuera del registro, y `aprobado` es terminal.**
+   - El test del 14a usa `fallido → aprobado`, una transición entre terminales que sigue
+     permitida.
+   - Si se quiere `rechazado` como estado, es una decisión de diseño aparte, fuera de este brief.
+4. **La sección 6-D no va al repo.**
+   - Es un documento de auditoría y vive en el proyecto.
+   - Las decisiones tomadas quedan en este decision-log: D1-i, D1-o y D1-x (entrada del 18-oct,
+     con las razones que trae el brief), las transiciones del registro (ídem) y las de esta
+     entrada.
+   - Con eso se cierra el [PENDIENTE DEL ADMIN] del 18-oct.
+
+### Un defecto encontrado: el viernes de `franja`
+
+**El defecto.** `tools/concordancia_xauusd.py::franja` miraba los tramos del horario antes que el
+viernes.
+- El horario guardado es el de otra fecha (un miércoles o un jueves), con un segundo tramo de 22:00
+  a 24:00. Las velas del viernes a la noche caían en ese tramo y quedaban **dentro** del horario.
+- Eso contradice su docstring y la interpretación 3 del 06-oct, según la cual el viernes es fin de
+  semana desde el primer cierre.
+- También contradice los datos: Deriv no tiene velas del viernes después de las 20:55. Lo cumplen
+  49 de los 52 viernes de su M5; los otros 3 cierran antes.
+- Sin corregirlo, la opción 2 daba en todos los viernes de la ventana la vela de las 23:55, la
+  misma de la regla de 24:00 que el Admin descartó.
+
+**La corrección.** Ahora el viernes se mira primero (`5960fa4`), y un test separa los dos
+criterios.
+
+**El efecto en el ORB, sobre `data@c2a7b19`:**
+- La compuerta no cambia: sigue roja, con 62,74 % y 263 días comunes.
+- En el bloque CALENDARIO, 1.248 velas del viernes a la noche pasan de dentro a fin de semana, y
+  otras 24 (las del Viernes Santo, 2026-04-03) pasan de feriado a fin de semana.
+- Esos conteos no estaban registrados en ningún lado.
+
+### Cómo se aplicó
+
+- **D1-i.** Cada activo tiene su paso 1 y, si sigue, su paso 2.
+  - Un activo detenido tiene su bloque `DETENIDO <activo>` y no calcula su compuerta. El otro
+    sigue.
+  - `COMPUERTA` dice, por activo, `detenido`, `verde` o `roja`. "roja" es la palabra de
+    `paso_2`, que no cambia; el brief escribe "rojo".
+- **D1-o.**
+  - El paso 1 del oro es `paso_1_deriv`.
+  - Su paso 2 compara, con la regla de `41cf853`, la barra 86400 de Deriv contra la diaria de
+    TwelveData desde el M5. Esa diaria toma solo las velas en que Deriv cotiza según `franja`
+    (opción 2).
+  - El bloque `SENSIBILIDAD XAU` es la misma compuerta con la regla de 24:00, más
+    `el_veredicto_cambia`.
+  - Sin horario en `metrics/calendario`, el oro se detiene.
+- **D1-x.** El oro no lee su 1day de TwelveData. Lo fijan tres tests:
+  - una espía sobre `cierres()`;
+  - un archivo ilegible en el lugar de la 1day, con el que ninguna de las dos herramientas que leen
+    velas (esta y el ORB) cambia una línea;
+  - uno que falla si otra herramienta empieza a leer velas.
+- **Los cuatro casos de test.**
+  - `test_con_los_dos_cortes_a_las_00_utc_hay_compuerta`: cambian el bloque `SENSIBILIDAD XAU` en
+    la lista y el tamaño del M5 del fixture.
+  - `test_un_corte_que_no_es_00_utc_detiene_todo_sin_compuerta`, en sus dos casos, pasa a llamarse
+    `…_detiene_ese_activo_sin_su_compuerta`. Los bloques son por activo, la espía de `paso_2` salta
+    solo con el activo detenido, y la ganadora de BTC sigue fijada.
+  - `test_main_publica_cada_bloque_y_sale_0` no cambia.
+  - El fixture `_mundo()` deja BTC igual. El oro trae el M5 de las dos fuentes y el horario, y
+    `corte_oro` mueve el corte de Deriv, que es lo que verifica el paso 1 nuevo.
+
+  Los diffs están en la descripción del PR.
+
+**[INTERPRETACIÓN]** Lo que las decisiones no fijan:
+- **El horario se aplica a todos los días**, como en el ORB, y no solo al viernes. De lunes a
+  jueves da la misma vela que la regla de 24:00 en los 206 días de la ventana, así que solo cambia
+  el viernes. Medido sobre `data@c2a7b19`, solo con TwelveData.
+- **Solo días terminados.** El día de la última vela de una serie M5 no tiene cierre, porque la
+  serie puede terminar a mitad de ese día.
+  - En `data@c2a7b19`, el M5 de Deriv termina el 2026-10-14 a las 18:00, y su barra 86400 de ese
+    día está cerrada. Era el único día de 255 en que el paso 1 del oro no coincidía.
+  - Una vela de un día posterior cierra el día, porque la descarga es contigua.
+  - El día terminado se mide sobre la serie entera, no sobre la filtrada por el horario. Así, el
+    sábado de TwelveData, que queda fuera del horario, igual cierra el viernes.
+
+**Tests:** 16 nuevos, 11 de la herramienta y 5 del ORB. Además de los cuatro casos autorizados,
+cambiaron dos tests de D1-o de `2eb2340`, que son de este PR y no de `main`: suman una vela del día
+siguiente para cerrar el último día. Su helper `_semana_m5` acepta además la hora del último
+viernes.
+
+**Mutantes:** 23 en total, 18 de la herramienta y 5 de `franja`. Quedan atrapadas 22. La otra
+(`c < 86400` → `c <= 86400` en `franja`) es equivalente: un cierre de 24:00 nunca es el mínimo de un
+día que tiene otro, y `seg` siempre es menor que 86400.
+
+**En datos reales, en local** (`data@c2a7b19`):
+- **BTC.** El paso 1 sigue (58 de 58 a las 00:00). La compuerta da 363 de 363, verde, como el
+  18-oct, ahora con el código por activo.
+- **Oro.**
+  - El paso 1 nuevo coincide en 254 de 254 días (2025-10-20 a 2026-10-13), así que sigue.
+  - Su paso 2 tiene 254 días comunes y 250 pares.
+  - **El veredicto del oro no se miró en local.** Queda abierta la pregunta del viernes (abajo), y
+    su respuesta no debe depender del resultado. El veredicto sale de la corrida del workflow.
+
+### Lo que queda abierto
+
+**El evento del viernes en el horario.**
+- El horario guardado (2026-10-14, sha256 `4fe64afb…`) trae los tramos 00:00–21:00 y
+  22:00–23:59:59. Aparte, trae el evento "Fridays: Closes early (at 20:55)".
+- `franja` lee los tramos y no los eventos. Es la interpretación 3 del 06-oct: el horario de la
+  fecha pedida se aplica a todos los días, y el viernes es fin de semana desde el primer cierre.
+  Con eso, el viernes, la última vela de TwelveData dentro del horario es la que abre a las 20:55 y
+  termina a las 21:00.
+- Los datos dicen que Deriv cierra el viernes a las 20:55:00. Hay 49 viernes cuya última vela de
+  Deriv es la de las 20:55. Esa vela tiene un solo precio (open = high = low = close) en los 49, y
+  ese precio es distinto del cierre de la vela de las 20:50 en 41.
+- Si se leyera el evento, la última vela de TwelveData dentro del horario sería la de las 20:50,
+  que termina a las 20:55.
+- La diferencia entre los cierres de esas dos velas de TwelveData, en los 51 viernes de la ventana,
+  tiene una mediana de 2,73 pb, un p90 de 10,6 pb y un máximo de 23,8 pb. Se midió solo con
+  TwelveData, sin comparar con Deriv.
+- El código aplica la interpretación 3 (el primer cierre, a las 21:00). Leer el evento la cambia, y
+  cambia también el ORB, aunque fuera de su ventana de la mañana.
+- Lo decide el Admin, y conviene que sea antes de la corrida, para que la regla quede fija antes de
+  ver el veredicto.
+
+**Los feriados que el horario no trae.** Es información, no una decisión pendiente.
+- Los eventos del horario son de fechas futuras, desde el 2026-11-26.
+- En la ventana, Deriv cerró antes en 11 días, que tienen barra 86400 y se comparan:
+  - 8 de lunes a jueves: 2025-11-27, 2025-12-24, 2025-12-31, 2026-01-19, 2026-02-16, 2026-04-02,
+    2026-05-25 y 2026-09-07;
+  - 3 viernes: 2025-11-28, 2026-06-19 y 2026-07-03.
+- TwelveData cotiza esos días hasta las 23:55 (el viernes, hasta las 20:55 con el horario). Con
+  cualquiera de las dos reglas, el cierre de TwelveData de esos días no cae a la hora del de Deriv.
+- Los 3 días en que Deriv no abrió (2025-12-25, 2026-01-01 y 2026-04-03) no tienen barra: son
+  huecos y sacan sus pares.
+
+### Qué dispara el Admin
+
+Después de decidir el evento del viernes y de fusionar el #48, "SPEL concordancia diaria D1". La
+corrida hace dos cosas:
+- **Pone al día las diarias y el M5 del oro.** Cuesta a lo sumo 8 créditos de TwelveData en una
+  corrida hasta el 26-oct: 6 de D1 y 2 del M5, calculado con `plan_de_creditos` sobre
+  `data@c2a7b19`.
+- **Calcula la compuerta de cada activo:** la de BTC, y la del oro con su sensibilidad. Es el
+  registro oficial.
