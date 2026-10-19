@@ -7,13 +7,10 @@ Brief del Admin 14, 14b, puntos 2 y 3. Patrón: tools/concordancia_xauusd.py.
 Todo lo de este módulo quedó fijado antes de bajar un precio diario, y no se
 ajusta después de ver un resultado (brief 14b).
 
-Brief del Admin 15: `diarias_desde_m5` (la diaria del oro desde el M5, D1-o)
-y `paso_1_deriv` (el paso 1 del oro: el corte de Deriv) están listas y
-testeadas, pero el informe todavía no las usa, ni evalúa por activo (D1-i).
-Conectarlas cambia lo que fijan tests de main que el brief no autoriza a
-editar, y el M5 de TwelveData cotiza los viernes después del cierre de Deriv
-(decision-log del 18-oct). La regla del paso 2 es la de 41cf853, y un test
-lo verifica contra ese commit.
+Brief del Admin 15, con las decisiones del Admin del 19-oct: cada activo se
+evalúa solo (D1-i). La diaria de TwelveData del oro sale de su M5 (D1-o) y
+su 1day no se lee (D1-x); su paso 1 verifica el corte de Deriv. La regla del
+paso 2 es la de 41cf853, y un test lo verifica contra ese commit.
 
 ══ LO QUE ESTE MÓDULO NO HACE ══
 
@@ -24,23 +21,32 @@ una misma fuente. Los precios solo se leen en `cierres` y
 `cierres_revisados`, y solo el cierre: tests/test_guarda_concordancia_d1.py
 lo verifica por AST con la guarda de concordancia_xauusd.py, portada.
 
-══ PASO 1: LA HORA DE CORTE DE TWELVEDATA (no es la compuerta) ══
+══ PASO 1: EL CORTE (no es la compuerta) ══
 
-Para cada hora h de 00:00 a 23:00 UTC, el cierre diario con corte h de la
-fecha D es el cierre de la última vela intradía que termina a más tardar en
-el instante de corte T(D, h) y empieza a lo sumo 24 h antes. Coincide con
-la barra 1day de TwelveData de fecha D si difieren en a lo sumo
-TOLERANCIA_CIERRE_USD (±0,01 USD). Intradía, en UTC: el M5 de TwelveData del
-oro, que ya está en data, y la muestra 1h de BTC (ingestion/velas_d1.py).
+BTC, la hora de corte de TwelveData: para cada hora h de 00:00 a 23:00 UTC,
+el cierre diario con corte h de la fecha D es el cierre de la última vela
+intradía que termina a más tardar en el instante de corte T(D, h) y empieza
+a lo sumo 24 h antes. Coincide con la barra 1day de TwelveData de fecha D si
+difieren en a lo sumo TOLERANCIA_CIERRE_USD (±0,01 USD). Intradía, en UTC:
+la muestra 1h de BTC (ingestion/velas_d1.py).
 
-La herramienta SE DETIENE, sin calcular la compuerta de ningún activo, si en
-algún activo la h ganadora no llega a UMBRAL_CORTE (95 % de los días) o no es
+El oro, el corte de Deriv (brief 15, punto 3): para cada día con las dos, el
+close de la barra 86400 de frxXAUUSD contra el de su última vela M5 del
+mismo día UTC (`diarias_desde_m5`), a ±0,01 USD.
+
+Un activo SE DETIENE, sin calcular su compuerta, si su paso 1 no llega a
+UMBRAL_CORTE (95 % de los días) o, en BTC, si la h ganadora no es
 HORA_CORTE_EXIGIDA (00:00 UTC): comparar cierres de cortes distintos mediría
-el desfase, no la fuente.
+el desfase, no la fuente. El otro activo sigue (D1-i).
 
-══ PASO 2: LA COMPUERTA (solo si los dos activos cortan a las 00:00 UTC) ══
+══ PASO 2: LA COMPUERTA (la de cada activo cuyo paso 1 sigue) ══
 
-  · Días comunes: los que tienen barra cerrada en las dos fuentes.
+  · Días comunes: los que tienen barra cerrada en las dos fuentes. La de
+    TwelveData del oro es `diarias_desde_m5` con las velas dentro del
+    horario de Deriv (opción 2 del Admin): el viernes cierra con Deriv y no
+    con la noche de TwelveData. Sin el horario, el oro se detiene. La misma
+    compuerta con la regla de 24:00 (sin el horario) se informa como
+    sensibilidad: si el veredicto no cambia, la regla queda.
   · r: el logaritmo del cociente de cierres de barras consecutivas de la misma
     fuente. Un hueco en cualquiera de las dos saca ese par.
   · Un día coincide si (i) r_TD y r_Deriv tienen el mismo signo, o los dos
@@ -81,6 +87,13 @@ el desfase, no la fuente.
   · Los cierres son los guardados: la serie es append-only y una revisión
     queda aparte, así que se compara lo que se bajó primero. Las revisiones
     solo se informan.
+  · El horario de Deriv es la última línea de metrics/calendario y se aplica
+    a todos los días, como en el ORB (`horario_vigente` y `franja`, de
+    concordancia_xauusd.py): el viernes, desde el primer cierre del día, es
+    fin de semana. De lunes a jueves da la misma vela que la regla de 24:00
+    (los 206 días de la ventana de Deriv, decision-log del 19-oct).
+  · El día de la última vela de una serie M5 no tiene cierre: la serie puede
+    terminar a mitad de ese día, y una diaria sale solo de días terminados.
 
 Uso:
     python tools/concordancia_d1.py      # lee metrics/ y publica el informe
@@ -110,9 +123,9 @@ from ingestion.velas import (  # noqa: E402
     ruta_revisiones,
     ruta_serie,
 )
-from ingestion.velas_d1 import ACTIVOS_D1  # noqa: E402
+from ingestion.velas_d1 import ACTIVOS_D1, ActivoD1  # noqa: E402
 from ingestion.velas_intradia import GRANULARIDAD_M5, publicar, sha256_de_archivo  # noqa: E402
-from tools.concordancia_xauusd import franja  # noqa: E402
+from tools.concordancia_xauusd import datos_del_horario, franja, horario_vigente  # noqa: E402
 
 #: Fijados antes de bajar un precio diario (brief del Admin 14, 14b).
 TOLERANCIA_CIERRE_USD = 0.01
@@ -126,6 +139,9 @@ MIN_DIAS_COMUNES = 250
 
 #: [INTERPRETACIÓN] Desde esta hora, el corte de la fecha D cae en D; antes, en D+1.
 HORA_MEDIA = 12
+#: D1-o y D1-x (brief 15): la diaria de TwelveData de estos activos sale de
+#: su M5 y su paso 1 verifica el corte de Deriv. Su 1day sigue en data, sin leerse.
+DIARIA_DESDE_M5: frozenset[str] = frozenset({"XAU"})
 #: Informativo: la mediana y el p90.
 PERCENTILES: tuple[int, ...] = (50, 90)
 
@@ -230,11 +246,6 @@ def paso_1(diarias_td: dict[int, float], intradia: dict[int, float], granularida
 
 
 # ═══ Brief 15: la diaria desde el M5 (D1-o) y el paso 1 del oro ══════════
-#
-# Listas y testeadas, SIN CONECTAR al informe: conectarlas cambia lo que
-# fijan tests que ya están en main y que el brief no autoriza a editar, y el
-# M5 de TwelveData del oro cotiza después del cierre de Deriv los viernes,
-# contra lo que el brief da por medido (decision-log del 18-oct, brief 15).
 
 def diarias_desde_m5(m5: dict[int, float], granularidad: int = GRANULARIDAD_M5,
                      horario: Optional[dict] = None) -> dict[int, float]:
@@ -378,36 +389,66 @@ def _datos(serie: str, granularidad: int, velas: dict[int, float]) -> dict:
             "ultima": _fecha(max(velas) if velas else None)}
 
 
+def _series(a: ActivoD1) -> dict:
+    """Lo que lee cada activo, sus datos y su paso 1. El oro no lee su 1day
+    de TwelveData (D1-x)."""
+    deriv = cierres(a.deriv, GRANULARIDAD_DIARIA)
+    deriv_86400 = {**_datos(a.deriv, GRANULARIDAD_DIARIA, deriv),
+                   "sha256_revisiones": sha256_de_archivo(ruta_revisiones(a.deriv, GRANULARIDAD_DIARIA))}
+    intradia = cierres(a.intradia, a.granularidad_intradia)
+    if a.activo in DIARIA_DESDE_M5:
+        deriv_m5 = cierres(a.deriv, a.granularidad_intradia)
+        fila = horario_vigente()
+        return {"deriv": deriv, "intradia": intradia, "horario": (fila or {}).get("horario"),
+                "datos": {"intradia_twelvedata": _datos(a.intradia, a.granularidad_intradia, intradia),
+                          "deriv_86400": deriv_86400,
+                          "deriv_m5": _datos(a.deriv, a.granularidad_intradia, deriv_m5),
+                          "horario_deriv": datos_del_horario(fila)},
+                "paso_1": paso_1_deriv(deriv, deriv_m5)}
+    td = cierres(a.td.serie, GRANULARIDAD_DIARIA)
+    return {"deriv": deriv, "intradia": intradia, "td": td,
+            "datos": {"twelvedata_1day": _datos(a.td.serie, GRANULARIDAD_DIARIA, td),
+                      "deriv_86400": deriv_86400,
+                      "intradia_twelvedata": _datos(a.intradia, a.granularidad_intradia, intradia)},
+            "paso_1": paso_1(td, intradia, a.granularidad_intradia)}
+
+
+def _pasos_2(a: ActivoD1, s: dict) -> list[tuple[str, dict]]:
+    """La compuerta de un activo cuyo paso 1 sigue. La del oro, con su
+    diaria desde el M5 y el horario de Deriv, y con la regla de 24:00 como
+    sensibilidad."""
+    revisiones = cierres_revisados(a.deriv, GRANULARIDAD_DIARIA)
+    if a.activo not in DIARIA_DESDE_M5:
+        return [(f"PASO 2 {a.activo}", paso_2(s["td"], s["deriv"], a.td.calendario, revisiones))]
+    p = paso_2(diarias_desde_m5(s["intradia"], a.granularidad_intradia, s["horario"]),
+               s["deriv"], a.td.calendario, revisiones)
+    sens = paso_2(diarias_desde_m5(s["intradia"], a.granularidad_intradia),
+                  s["deriv"], a.td.calendario, revisiones)
+    return [(f"PASO 2 {a.activo}",
+             {"diaria_de_twelvedata": "M5: la última vela del día dentro del horario de Deriv", **p}),
+            (f"SENSIBILIDAD {a.activo}",
+             {"diaria_de_twelvedata": "M5: la última vela del día UTC (el viernes, a las 24:00)",
+              "el_veredicto_cambia": sens["compuerta"] != p["compuerta"], **sens})]
+
+
 def informe() -> list[tuple[str, dict]]:
-    series, datos = {}, {}
-    for a in ACTIVOS_D1:
-        s = {"td": cierres(a.td.serie, GRANULARIDAD_DIARIA),
-             "deriv": cierres(a.deriv, GRANULARIDAD_DIARIA),
-             "intradia": cierres(a.intradia, a.granularidad_intradia)}
-        series[a.activo] = s
-        datos[a.activo] = {
-            "twelvedata_1day": _datos(a.td.serie, GRANULARIDAD_DIARIA, s["td"]),
-            "deriv_86400": {**_datos(a.deriv, GRANULARIDAD_DIARIA, s["deriv"]),
-                            "sha256_revisiones": sha256_de_archivo(
-                                ruta_revisiones(a.deriv, GRANULARIDAD_DIARIA))},
-            "intradia_twelvedata": _datos(a.intradia, a.granularidad_intradia, s["intradia"])}
-    bloques: list[tuple[str, dict]] = [("DATOS", datos)]
-    pasos_1 = {a.activo: paso_1(series[a.activo]["td"], series[a.activo]["intradia"],
-                                a.granularidad_intradia) for a in ACTIVOS_D1}
-    bloques += [(f"PASO 1 {activo}", p) for activo, p in pasos_1.items()]
-    detenidos = {activo: p["motivos"] for activo, p in pasos_1.items() if p["decision"] != "sigue"}
-    if detenidos:
-        bloques.append(("DETENIDO", {
-            "motivos": detenidos, "compuerta": "no calculada, para ningún activo",
-            "por_que": "comparar cierres de cortes distintos mediría el desfase, no la fuente; "
-                       "el auditor rediseña la comparación con el paso 1"}))
-        return bloques
+    series = {a.activo: _series(a) for a in ACTIVOS_D1}
+    bloques: list[tuple[str, dict]] = [("DATOS", {k: s["datos"] for k, s in series.items()})]
+    bloques += [(f"PASO 1 {k}", s["paso_1"]) for k, s in series.items()]
     compuerta = {}
     for a in ACTIVOS_D1:
-        p = paso_2(series[a.activo]["td"], series[a.activo]["deriv"], a.td.calendario,
-                   cierres_revisados(a.deriv, GRANULARIDAD_DIARIA))
-        bloques.append((f"PASO 2 {a.activo}", p))
-        compuerta[a.activo] = p["compuerta"]
+        s = series[a.activo]
+        motivos = list(s["paso_1"]["motivos"]) if s["paso_1"]["decision"] != "sigue" else []
+        if a.activo in DIARIA_DESDE_M5 and not s["horario"]:
+            motivos.append("sin horario de Deriv en metrics/calendario: el viernes de TwelveData "
+                           "cierra según ese horario (opción 2 del Admin)")
+        if motivos:
+            bloques.append((f"DETENIDO {a.activo}", {"motivos": motivos, "compuerta": "no calculada"}))
+            compuerta[a.activo] = "detenido"
+            continue
+        pasos = _pasos_2(a, s)
+        bloques += pasos
+        compuerta[a.activo] = pasos[0][1]["compuerta"]
     bloques.append(("COMPUERTA", compuerta))
     return bloques
 

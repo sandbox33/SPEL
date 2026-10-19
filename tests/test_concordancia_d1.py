@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 
 from ingestion.velas import _append, ruta_revisiones, ruta_serie
+from ingestion.velas_intradia import ruta_calendario
 from tools import concordancia_d1 as cd
 
 D, H, M5 = 86400, 3600, 300
@@ -67,20 +68,56 @@ HORARIO_DERIV = {"trading_days": ["Mon", "Tue", "Wed", "Thu", "Fri"],
                  "events": [{"dates": "Fridays", "descrip": "Closes early (at 20:55)"}]}
 
 
-def _mundo(*, corte_oro: int = 0, corte_btc: int = 0) -> None:
-    """Las seis series de D1. TwelveData cierra cada fecha D en D+1 00:00 con
+def _m5_del_oro(dias: list[date], *, deriv: bool, noche_del_viernes: float = 0.0) -> dict[int, float]:
+    """Velas M5 ralas del oro; cierre = precio al terminar. De lunes a jueves:
+    20:55, 22:00 y 23:55, y TwelveData también en la pausa (21:00). El
+    viernes, Deriv hasta las 20:55; TwelveData sigue hasta las 23:55
+    (desplazadas en `noche_del_viernes`, relativo) y cotiza el sábado, como
+    en data desde 2025. Una vela al día siguiente del último cierra ese día."""
+    m5 = {}
+    for d in dias:
+        if d.weekday() < 4:
+            horas = [20 * H + 55 * 60, 22 * H, 23 * H + 55 * 60] + ([] if deriv else [21 * H])
+        else:
+            horas = [20 * H + 50 * 60, 20 * H + 55 * 60] + (
+                [] if deriv else [21 * H, 22 * H, 23 * H + 55 * 60, D + 10 * H])
+        noche = noche_del_viernes if d.weekday() == 4 else 0.0
+        for s in horas:
+            e = _ep(d) + s
+            m5[e] = precio(e + M5) * (1 + (noche if 21 * H <= s < D else 0.0))
+    m5[_ep(dias[-1]) + D] = precio(_ep(dias[-1]) + D + M5)
+    return m5
+
+
+def _mundo(*, corte_oro: int = 0, corte_btc: int = 0, noche_del_viernes: float = 0.0,
+           horario: bool = True) -> None:
+    """Las series de D1. BTC: TwelveData cierra cada fecha D en D+1 00:00 con
     corte 0, o en D hh:00 con corte hh (hh ≥ 12); Deriv cierra en D+1 00:00,
-    con un ruido de 1e-7."""
+    con un ruido de 1e-7. El oro (brief 15): el M5 de las dos fuentes y el
+    horario de Deriv. Deriv cierra con su última vela M5 con corte 0, o en
+    D hh:00 con corte hh, con el mismo ruido. Su 1day de TwelveData sigue
+    escrita (D1-x)."""
     def cierre_td(d: date, corte: int) -> float:
         return precio(_ep(d) + D if corte == 0 else _ep(d) + corte * H)
-    for serie, deriv, habiles, corte, intradia, g in (
-            ("td_BTCUSD", "cryBTCUSD", False, corte_btc, "td_BTCUSD", H),
-            ("td_XAUUSD", "frxXAUUSD", True, corte_oro, "td_XAUUSD", M5)):
-        dias = _dias(habiles=habiles)
-        _escribir(serie, D, {_ep(d): cierre_td(d, corte) for d in dias})
-        _escribir(deriv, D, {_ep(d): precio(_ep(d) + D) * (1 + 1e-7 * (-1) ** k)
-                             for k, d in enumerate(dias)})
-        _escribir(intradia, g, _intradia(dias[-20:] if not habiles else dias[-10:], g))
+    dias = _dias()
+    _escribir("td_BTCUSD", D, {_ep(d): cierre_td(d, corte_btc) for d in dias})
+    _escribir("cryBTCUSD", D, {_ep(d): precio(_ep(d) + D) * (1 + 1e-7 * (-1) ** k)
+                               for k, d in enumerate(dias)})
+    _escribir("td_BTCUSD", H, _intradia(dias[-20:], H))
+    oro = _dias(habiles=True)
+    _escribir("td_XAUUSD", D, {_ep(d): cierre_td(d, 0) for d in oro})
+    _escribir("td_XAUUSD", M5, _m5_del_oro(oro, deriv=False, noche_del_viernes=noche_del_viernes))
+    _escribir("frxXAUUSD", M5, _m5_del_oro(oro, deriv=True))
+
+    def cierre_deriv(d: date) -> float:
+        if corte_oro:
+            return precio(_ep(d) + corte_oro * H)
+        return precio(_ep(d) + (21 * H if d.weekday() == 4 else D))
+    _escribir("frxXAUUSD", D, {_ep(d): cierre_deriv(d) * (1 + 1e-7 * (-1) ** k)
+                               for k, d in enumerate(oro)})
+    if horario:
+        _append(ruta_calendario(), [{"fecha_servidor": "2026-10-14", "sha256": "ab" * 32,
+                                     "horario": HORARIO_DERIV, "crudo": "{}"}])
 
 
 # ═══ Paso 1 ═══════════════════════════════════════════════════════════════
@@ -341,28 +378,38 @@ def test_con_los_dos_cortes_a_las_00_utc_hay_compuerta():
     _mundo()
     bloques = dict(cd.informe())
     assert list(bloques) == ["DATOS", "PASO 1 BTC", "PASO 1 XAU", "PASO 2 BTC", "PASO 2 XAU",
-                             "COMPUERTA"]
+                             "SENSIBILIDAD XAU", "COMPUERTA"]
     assert bloques["PASO 1 BTC"]["decision"] == bloques["PASO 1 XAU"]["decision"] == "sigue"
     assert bloques["COMPUERTA"] == {"BTC": "verde", "XAU": "verde"}
     assert bloques["PASO 2 BTC"]["dias_comunes"] == N_DIAS
     assert bloques["PASO 2 XAU"]["dias_comunes"] == len(_dias(habiles=True))
     datos = bloques["DATOS"]["XAU"]
-    assert datos["intradia_twelvedata"]["velas"] == 10 * 288
+    assert datos["intradia_twelvedata"]["velas"] == len(_m5_del_oro(_dias(habiles=True), deriv=False))
     assert len(datos["deriv_86400"]["sha256"]) == 64 and datos["deriv_86400"]["sha256_revisiones"] is None
 
 
-@pytest.mark.parametrize("corte_oro, corte_btc, detenidos", [(22, 0, ["XAU"]), (0, 22, ["BTC"])])
-def test_un_corte_que_no_es_00_utc_detiene_todo_sin_compuerta(monkeypatch, corte_oro, corte_btc,
-                                                              detenidos):
+@pytest.mark.parametrize("corte_oro, corte_btc, detenidos, bloques_esperados", [
+    (22, 0, ["XAU"], ["DATOS", "PASO 1 BTC", "PASO 1 XAU", "PASO 2 BTC", "DETENIDO XAU",
+                      "COMPUERTA"]),
+    (0, 22, ["BTC"], ["DATOS", "PASO 1 BTC", "PASO 1 XAU", "DETENIDO BTC", "PASO 2 XAU",
+                      "SENSIBILIDAD XAU", "COMPUERTA"]),
+])
+def test_un_corte_que_no_es_00_utc_detiene_ese_activo_sin_su_compuerta(
+        monkeypatch, corte_oro, corte_btc, detenidos, bloques_esperados):
     _mundo(corte_oro=corte_oro, corte_btc=corte_btc)
+    paso_2 = cd.paso_2
+    calendario_detenido = {"BTC": "continuo", "XAU": "habil"}[detenidos[0]]
 
-    def espia(*a, **k):
-        raise AssertionError("se calculó la compuerta con el paso 1 detenido")
+    def espia(td, deriv, calendario, *a, **k):
+        if calendario == calendario_detenido:
+            raise AssertionError("se calculó la compuerta con el paso 1 detenido")
+        return paso_2(td, deriv, calendario, *a, **k)
     monkeypatch.setattr(cd, "paso_2", espia)
     bloques = dict(cd.informe())
-    assert list(bloques) == ["DATOS", "PASO 1 BTC", "PASO 1 XAU", "DETENIDO"]
-    assert list(bloques["DETENIDO"]["motivos"]) == detenidos
-    assert bloques[f"PASO 1 {detenidos[0]}"]["ganadora"] == 22
+    assert list(bloques) == bloques_esperados
+    assert bloques[f"DETENIDO {detenidos[0]}"]["motivos"] == bloques[f"PASO 1 {detenidos[0]}"]["motivos"]
+    assert bloques["COMPUERTA"] == {"BTC": "verde", "XAU": "verde", detenidos[0]: "detenido"}
+    assert bloques["PASO 1 BTC"]["ganadora"] == corte_btc
 
 
 def test_las_revisiones_de_deriv_entran_al_informe():
@@ -519,6 +566,116 @@ def test_paso_1_del_oro_sin_dias_se_detiene():
     p = cd.paso_1_deriv({E0: 1.0}, {E0 + 2 * D: 1.0})
     assert p["decision"] == "detenido" and p["fraccion"] is None
     assert p["motivos"] == ["no hay días con barra diaria y velas M5 de Deriv"]
+
+
+# ═══ Brief 15: el informe por activo (D1-i), el oro desde el M5 (D1-o) ════
+
+def test_con_los_dos_detenidos_no_hay_ninguna_compuerta(monkeypatch):
+    _mundo(corte_oro=22, corte_btc=22)
+
+    def espia(*a, **k):
+        raise AssertionError("se calculó una compuerta con el paso 1 detenido")
+    monkeypatch.setattr(cd, "paso_2", espia)
+    bloques = dict(cd.informe())
+    assert list(bloques) == ["DATOS", "PASO 1 BTC", "PASO 1 XAU", "DETENIDO BTC", "DETENIDO XAU",
+                             "COMPUERTA"]
+    assert bloques["COMPUERTA"] == {"BTC": "detenido", "XAU": "detenido"}
+
+
+def test_el_veredicto_de_cada_activo_es_el_suyo(monkeypatch):
+    """Un oro rojo no toca el verde de BTC, ni al revés."""
+    _mundo()
+    paso_2 = cd.paso_2
+
+    def oro_rojo(td, deriv, calendario, *a, **k):
+        p = paso_2(td, deriv, calendario, *a, **k)
+        return {**p, "compuerta": "roja"} if calendario == "habil" else p
+    monkeypatch.setattr(cd, "paso_2", oro_rojo)
+    assert dict(cd.informe())["COMPUERTA"] == {"BTC": "verde", "XAU": "roja"}
+
+
+def test_sin_horario_el_oro_se_detiene_y_btc_sigue(monkeypatch):
+    _mundo(horario=False)
+    paso_2 = cd.paso_2
+
+    def espia(td, deriv, calendario, *a, **k):
+        assert calendario != "habil", "la compuerta del oro, sin horario"
+        return paso_2(td, deriv, calendario, *a, **k)
+    monkeypatch.setattr(cd, "paso_2", espia)
+    bloques = dict(cd.informe())
+    assert bloques["PASO 1 XAU"]["decision"] == "sigue"
+    assert bloques["DETENIDO XAU"]["motivos"][0].startswith("sin horario de Deriv")
+    assert bloques["COMPUERTA"] == {"BTC": "verde", "XAU": "detenido"}
+    assert bloques["DATOS"]["XAU"]["horario_deriv"]["horario"] is None
+
+
+def test_la_compuerta_del_oro_usa_el_horario_y_la_sensibilidad_las_24(monkeypatch):
+    """Las diarias de TwelveData que llegan a cada compuerta del oro, leídas
+    en el viernes: con el horario, la vela que termina a las 21:00; en la
+    sensibilidad, la de las 24:00."""
+    _mundo()
+    paso_2, vistas = cd.paso_2, []
+
+    def espia(td, deriv, calendario, *a, **k):
+        if calendario == "habil":
+            vistas.append(td)
+        return paso_2(td, deriv, calendario, *a, **k)
+    monkeypatch.setattr(cd, "paso_2", espia)
+    bloques = dict(cd.informe())
+    viernes = next(d for d in _dias(habiles=True) if d.weekday() == 4)
+    con, sin = vistas
+    assert con[_ep(viernes)] == precio(_ep(viernes) + 21 * H)
+    assert sin[_ep(viernes)] == precio(_ep(viernes) + D)
+    assert bloques["PASO 2 XAU"]["diaria_de_twelvedata"].endswith("dentro del horario de Deriv")
+    assert bloques["SENSIBILIDAD XAU"]["el_veredicto_cambia"] is False
+
+
+def test_si_la_noche_del_viernes_cambia_el_veredicto_lo_dice_y_manda_el_horario():
+    """La noche del viernes de TwelveData, un 5 % arriba: con la regla de
+    24:00 el r del viernes y el del lunes no coinciden (40 % de los pares);
+    con el horario no entra. La compuerta del oro es la del horario."""
+    _mundo(noche_del_viernes=0.05)
+    bloques = dict(cd.informe())
+    assert bloques["PASO 2 XAU"]["compuerta"] == "verde"
+    s = bloques["SENSIBILIDAD XAU"]
+    assert s["compuerta"] == "roja" and s["el_veredicto_cambia"] is True
+    assert s["fraccion"] == pytest.approx(0.6, abs=0.01)
+    assert bloques["COMPUERTA"] == {"BTC": "verde", "XAU": "verde"}
+
+
+# ═══ Brief 15, D1-x: la 1day del oro de TwelveData sigue en data, sin leerse ═
+
+def test_el_oro_no_lee_su_1day_de_twelvedata(monkeypatch):
+    _mundo()
+    cierres, leidas = cd.cierres, []
+
+    def espia(serie, granularidad):
+        leidas.append((serie, granularidad))
+        return cierres(serie, granularidad)
+    monkeypatch.setattr(cd, "cierres", espia)
+    bloques = dict(cd.informe())
+    assert ("td_BTCUSD", D) in leidas, "la espía ve lo que se lee"
+    assert ("td_XAUUSD", D) not in leidas
+    assert sorted(bloques["DATOS"]["XAU"]) == ["deriv_86400", "deriv_m5", "horario_deriv",
+                                               "intradia_twelvedata"]
+
+
+def test_con_la_1day_del_oro_ilegible_ninguna_herramienta_cambia():
+    """La 1day sigue en data: se reemplaza por algo que no es JSON, y ni la
+    concordancia diaria ni la del ORB (las dos herramientas que leen velas)
+    cambian una línea."""
+    from tools import concordancia_xauusd as cx
+    _mundo()
+    antes = (cd.informe(), cx.informe())
+    ruta_serie("td_XAUUSD", D).write_text("esto no es una vela\n", encoding="utf-8")
+    assert (cd.informe(), cx.informe()) == antes
+
+
+def test_solo_esas_dos_herramientas_leen_velas():
+    """Si una herramienta nueva lee velas, entra en el test de arriba."""
+    leen = sorted(p.name for p in (RAIZ / "tools").glob("*.py")
+                  if any(t in p.read_text(encoding="utf-8") for t in ("leer_velas", "ruta_serie")))
+    assert leen == ["concordancia_d1.py", "concordancia_xauusd.py"]
 
 
 # ═══ Brief 15: la regla del paso 2 es la de 41cf853 ═══════════════════════
