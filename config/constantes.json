@@ -2730,6 +2730,75 @@
       "notas": "Los activos fuera del conjunto (BTC) siguen con la 1day de TwelveData y su paso 1 de 14b."
     },
     {
+      "nombre": "TOL_RANGO",
+      "modulo": "tools.concordancia_d1_paso3",
+      "categoria": "parametro",
+      "valor": 0.1,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 16a (27-oct-2026), puntos 1 y 3, valor aprobado por el Admin el 26-oct: el máximo coincide si |H_TwelveData − H_Deriv| ≤ TOL_RANGO × (H_Deriv − L_Deriv); el mínimo, igual, con L.",
+      "usado_en": [
+        "tools.concordancia_d1_paso3.paso_3_rango"
+      ],
+      "notas": "Fijado en el código, en config/constantes.json y en el decision-log antes de calcular nada con velas reales (candado 1 del brief 16a); no se ajusta después de ver un resultado."
+    },
+    {
+      "nombre": "UMBRAL_RANGO_PCT",
+      "modulo": "tools.concordancia_d1_paso3",
+      "categoria": "parametro",
+      "valor": 90,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 16a (27-oct-2026), puntos 1 y 3, valor aprobado por el Admin el 26-oct: el rango es verde si coinciden el máximo y el mínimo en al menos este porcentaje de los días (sin los de rango cero en Deriv).",
+      "usado_en": [
+        "tools.concordancia_d1_paso3.paso_3_rango"
+      ],
+      "notas": "Fijado en el código, en config/constantes.json y en el decision-log antes de calcular nada con velas reales (candado 1 del brief 16a); no se ajusta después de ver un resultado. [INTERPRETACIÓN] Se compara en enteros: 100 × coinciden ≥ UMBRAL × días."
+    },
+    {
+      "nombre": "UMBRAL_SENAL_PCT",
+      "modulo": "tools.concordancia_d1_paso3",
+      "categoria": "parametro",
+      "valor": 90,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 16a (27-oct-2026), puntos 2 y 3, valor aprobado por el Admin el 26-oct: la señal es verde si, en cada L que decide, los días con ruptura en las dos fuentes son al menos este porcentaje de los días con ruptura en alguna.",
+      "usado_en": [
+        "tools.concordancia_d1_paso3.paso_3_senal"
+      ],
+      "notas": "Fijado en el código, en config/constantes.json y en el decision-log antes de calcular nada con velas reales (candado 1 del brief 16a); no se ajusta después de ver un resultado. [INTERPRETACIÓN] Se compara en enteros: 100 × las dos ≥ UMBRAL × alguna."
+    },
+    {
+      "nombre": "LOOKBACKS_SENAL",
+      "modulo": "tools.concordancia_d1_paso3",
+      "categoria": "parametro",
+      "valor": [
+        10,
+        20,
+        40
+      ],
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 16a (27-oct-2026), punto 2: la ruptura de H1 v2 (research/preregistro_h1_v2.md, sección 2) para L ∈ {10, 20, 40}.",
+      "usado_en": [
+        "tools.concordancia_d1_paso3.paso_3_senal"
+      ],
+      "notas": "Fijado en el código, en config/constantes.json y en el decision-log antes de calcular nada con velas reales (candado 1 del brief 16a); no se ajusta después de ver un resultado."
+    },
+    {
+      "nombre": "MIN_DIAS_CON_RUPTURA",
+      "modulo": "tools.concordancia_d1_paso3",
+      "categoria": "parametro",
+      "valor": 10,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 16a (27-oct-2026), punto 2: una L con menos de 10 días con ruptura en alguna fuente se reporta como \"sin potencia\" y no decide.",
+      "usado_en": [
+        "tools.concordancia_d1_paso3.paso_3_senal"
+      ],
+      "notas": "Fijado en el código, en config/constantes.json y en el decision-log antes de calcular nada con velas reales (candado 1 del brief 16a); no se ajusta después de ver un resultado. [INTERPRETACIÓN] Si ninguna L decide, la señal queda \"sin potencia\" y el activo no es verde."
+    },
+    {
       "nombre": "DEFAULT_SEED",
       "modulo": "tools.heartbeat",
       "categoria": "parametro",

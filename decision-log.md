@@ -4342,3 +4342,65 @@ corrida hace dos cosas:
   `data@c2a7b19`.
 - **Calcula la compuerta de cada activo:** la de BTC, y la del oro con su sensibilidad. Es el
   registro oficial.
+
+## 2026-10-28 — Brief 16a: el paso 3 de la compuerta de D1, el veredicto en `data` y la ingesta cruda apagada
+
+**Fuente:** brief del Admin 16a, en su versión del 27-oct. Rama `claude/brief-16a-compuerta-rango`,
+desde `main` en `952d082`.
+
+**[INTERPRETACIÓN] Entrada "propia y numerada".** Es la entrada del brief 16a, y sus decisiones
+van numeradas 16a.1, 16a.2, etc. El decision-log no tiene otra numeración: solo aparecen sueltas la
+"Decisión #7" y la "#14".
+
+### 16a.1 — La regla del paso 3 y sus constantes, fijadas antes de leer una vela real
+
+Viven en `tools/concordancia_d1_paso3.py` y en `config/constantes.json`. Se fijaron antes de
+calcular nada con velas reales (candado 1). Ningún test lee `metrics/velas/` reales.
+
+| constante | valor | de dónde sale |
+|---|---|---|
+| `TOL_RANGO` | 0,10 | aprobada por el Admin el 26-oct (brief 16a, punto 3) |
+| `UMBRAL_RANGO_PCT` | 90 | aprobada por el Admin el 26-oct |
+| `UMBRAL_SENAL_PCT` | 90 | aprobada por el Admin el 26-oct |
+| `LOOKBACKS_SENAL` | 10, 20, 40 | brief 16a, punto 2 |
+| `MIN_DIAS_CON_RUPTURA` | 10 | brief 16a, punto 2: por debajo, "sin potencia" |
+
+**Rango**, por activo, sobre los días comunes del paso 2:
+- El máximo coincide si |H_TwelveData − H_Deriv| ≤ `TOL_RANGO` × (H_Deriv − L_Deriv). El mínimo,
+  igual, con L.
+- Un día con rango cero en Deriv queda fuera y se cuenta.
+- Es verde si coinciden el máximo y el mínimo en al menos el `UMBRAL_RANGO_PCT` de los días que
+  quedan.
+- El oro arma su máximo y su mínimo desde el M5, con las mismas velas que su cierre de D1-o
+  (`velas_por_dia_desde_m5`): días terminados, de lunes a viernes, dentro del horario de Deriv.
+
+**Señal:**
+- Para cada L, la ruptura del día t en una fuente es cierre_t > máximo de los máximos de t−L a t−1.
+- La métrica es días con ruptura en las dos ÷ días con ruptura en alguna.
+- Una L con menos de `MIN_DIAS_CON_RUPTURA` días con ruptura en alguna fuente queda "sin
+  potencia" y no decide.
+- Es verde si cada L que decide llega al `UMBRAL_SENAL_PCT`.
+
+**La compuerta del activo (candado 3):** verde solo si el paso 2 y el paso 3 (rango y señal) son
+verdes (`compuerta_del_activo`).
+
+**[INTERPRETACIÓN]** Lo que el brief no fija:
+1. **"La ventana común".** Son los días comunes del paso 2, en orden. Las L barras anteriores al
+   día t son los L días comunes anteriores, los mismos en las dos fuentes. Un día con una sola
+   fuente no entra en la ventana de ninguna. La otra lectura, las barras de cada fuente entre la
+   primera y la última fecha común, desalinea las dos ventanas en los feriados de Deriv.
+2. **Ninguna L decide.** Si las tres quedan "sin potencia", la señal queda "sin potencia". No es
+   verde, porque no hay con qué validarla, y tampoco roja. El activo tampoco es verde.
+3. **Rango sin días.** Si ningún día tiene rango en Deriv, el rango es rojo, como el paso 2 sin
+   pares.
+4. **Los umbrales se comparan en enteros:** 100 × coinciden ≥ 90 × días. El borde (9 de 10) no
+   depende del redondeo de un float.
+5. **El paso 3 se calcula aunque el paso 2 sea rojo.** Es informativo; lo que decide es la
+   compuerta del activo.
+6. **Los días comunes del paso 3.** `paso_2` está fijada en `41cf853` y cuenta sus días comunes
+   por dentro, así que `dias_comunes()` repite esa línea. Un test verifica que den lo mismo.
+7. **Dónde vive el paso 3.** Va en su propio módulo, con su propia guarda AST, y recibe las velas
+   ya leídas. Así no rompe dos tests de `main`:
+   - `test_la_guarda_de_campos_no_es_vacia_y_solo_ve_el_cierre` fija que
+     `tools/concordancia_d1.py` lee solo el cierre;
+   - `test_solo_esas_dos_herramientas_leen_velas` fija qué herramientas abren archivos de velas.
