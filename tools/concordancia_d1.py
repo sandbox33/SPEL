@@ -107,7 +107,7 @@ import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from statistics import median
-from typing import Optional, Sequence
+from typing import Iterable, Optional, Sequence
 
 import numpy as np
 
@@ -247,6 +247,28 @@ def paso_1(diarias_td: dict[int, float], intradia: dict[int, float], granularida
 
 # ═══ Brief 15: la diaria desde el M5 (D1-o) y el paso 1 del oro ══════════
 
+def velas_por_dia_desde_m5(epocas: Iterable[int],
+                           horario: Optional[dict] = None) -> dict[int, list[int]]:
+    """Las velas M5 que forman cada día UTC de D1-o: las que abren dentro de
+    él, de lunes a viernes, y, con `horario`, solo aquellas en que Deriv
+    cotiza según él (`franja`). El día de la última vela de la serie no
+    entra: la serie puede terminar a mitad de ese día. Un día sin velas no
+    aparece. {época de d a las 00:00: épocas de sus velas, en orden}. Es la
+    misma selección para el cierre (`diarias_desde_m5`) y para el máximo y el
+    mínimo del paso 3."""
+    epocas = sorted(epocas)
+    if not epocas:
+        return {}
+    abierto = epocas[-1] - epocas[-1] % GRANULARIDAD_DIARIA
+    out: dict[int, list[int]] = {}
+    for e in epocas:
+        d = e - e % GRANULARIDAD_DIARIA
+        if d < abierto and _esperado(_dia(d), Calendario.HABIL) and (
+                horario is None or franja(e, horario) is None):
+            out.setdefault(d, []).append(e)
+    return out
+
+
 def diarias_desde_m5(m5: dict[int, float], granularidad: int = GRANULARIDAD_M5,
                      horario: Optional[dict] = None) -> dict[int, float]:
     """D1-o: el cierre del día UTC d es el de la ÚLTIMA vela que abre dentro
@@ -256,15 +278,12 @@ def diarias_desde_m5(m5: dict[int, float], granularidad: int = GRANULARIDAD_M5,
     viernes. Con `horario`, solo cuentan las velas en que Deriv cotiza según
     él (`franja`): el viernes del oro cierra con Deriv (opción 2 del Admin).
     El día de la última vela de la serie no tiene cierre: la serie puede
-    terminar a mitad de ese día. {época de d a las 00:00: cierre}. No
-    escribe nada."""
-    if not m5:
-        return {}
-    abierto = max(m5) - max(m5) % GRANULARIDAD_DIARIA
-    velas = m5 if horario is None else {e: c for e, c in m5.items() if franja(e, horario) is None}
-    return {d: cierre_al_corte(velas, granularidad, d + GRANULARIDAD_DIARIA)
-            for d in sorted({e - e % GRANULARIDAD_DIARIA for e in velas})
-            if d < abierto and _esperado(_dia(d), Calendario.HABIL)}
+    terminar a mitad de ese día. Las velas de cada día salen de
+    `velas_por_dia_desde_m5`. {época de d a las 00:00: cierre}. No escribe
+    nada."""
+    dias = velas_por_dia_desde_m5(m5, horario)
+    velas = {e: m5[e] for es in dias.values() for e in es}
+    return {d: cierre_al_corte(velas, granularidad, d + GRANULARIDAD_DIARIA) for d in dias}
 
 
 def paso_1_deriv(diarias_deriv: dict[int, float], m5_deriv: dict[int, float]) -> dict:
