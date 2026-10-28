@@ -16,6 +16,10 @@ PORTADO, NO REESCRITO, desde las sondas que ya lo usaron en vivo:
     §0.A-3b usó para bajar las velas M5 y M15. Las sondas las importan de
     acá.
 
+`velas_en_vivo` (brief del Admin 16a, punto 6) pide con `profundidad` una
+ventana de días y devuelve las velas en memoria, sin escribirlas: la
+compuerta de D1 compara contra Deriv sin guardar sus datos.
+
 ══ LISTA BLANCA ══
 
 `MENSAJES_PUBLICOS`: `time`, `active_symbols`, `trading_times` y
@@ -30,10 +34,11 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Sequence
 
 from ingestion.adapters import DERIV_MAX_COUNT
 from ingestion.deriv_ws import TIMEOUT_RESPUESTA_S, MensajeNoPermitidoError
+from ingestion.velas import GRANULARIDAD_DIARIA, VelaInvalidaError, esta_cerrada, normalizar_vela
 
 #: El canal público nuevo, verificado DISPONIBLE (decision-log 2026-10-01).
 ENDPOINT_PUBLICO = "wss://api.derivws.com/trading/v1/options/ws/public"
@@ -43,6 +48,11 @@ MENSAJES_PUBLICOS: frozenset[str] = frozenset({
 
 #: Caracteres de una respuesta que no es JSON que van al informe.
 _EXTRACTO = 400
+
+#: Brief del Admin 16a, punto 6: la ventana que se pide en vivo, en días.
+VENTANA_EN_VIVO_DIAS = 365
+#: El corte de `profundidad` cuando llega al inicio de la ventana pedida.
+CORTE_VENTANA = "se llegó al inicio de la ventana"
 
 
 def validar_publico(payload: dict) -> str:
@@ -109,7 +119,8 @@ def desalineadas(epochs: list[int], granularidad: int) -> int:
 
 async def profundidad(canal: Any, simbolo: str, granularidad: int, *,
                       max_paginas: Optional[int] = None,
-                      guardar_velas: Optional[dict[int, dict]] = None) -> dict:
+                      guardar_velas: Optional[dict[int, dict]] = None,
+                      desde: Optional[int] = None) -> dict:
     """Pagina hacia atrás hasta vacía, error, o una página que no retrocede
     (la API repitiendo la misma ventana: sin este corte, el bucle no
     termina). No corta por página corta, a diferencia de
@@ -121,7 +132,12 @@ async def profundidad(canal: Any, simbolo: str, granularidad: int, *,
     `respeta_end` por página: si la última vela cae en o antes del `end`
     pedido. La sonda 2 mostró que en diario no lo respeta. `max_paginas` es
     un tope de seguridad para granularidades finas; tocarlo se informa como
-    corte, no como fondo."""
+    corte, no como fondo.
+
+    `desde`, si se pasa, es el inicio de una ventana (brief del Admin 16a):
+    ninguna página pide un `start` anterior, y la paginación termina cuando
+    el `end` siguiente caería antes (CORTE_VENTANA). La primera página es
+    la de siempre, sin `start`."""
     paginas: list[dict] = []
     fin: Any = "latest"
     inicio: Optional[int] = None
@@ -167,7 +183,10 @@ async def profundidad(canal: Any, simbolo: str, granularidad: int, *,
         if fin <= 0:
             corte = "se llegó a la epoch 0"
             break
-        inicio = max(0, fin - DERIV_MAX_COUNT * granularidad)
+        if desde is not None and fin < desde:
+            corte = CORTE_VENTANA
+            break
+        inicio = max(desde or 0, fin - DERIV_MAX_COUNT * granularidad)
     return {
         "simbolo": simbolo,
         "corte": corte,
@@ -178,3 +197,54 @@ async def profundidad(canal: Any, simbolo: str, granularidad: int, *,
         "primera_epoch": min(epochs) if epochs else None,
         "ultima_epoch": max(epochs) if epochs else None,
     }
+
+
+async def velas_en_vivo(abrir: Callable[[str], Any], series: Sequence[tuple[str, int]], *,
+                        ventana_dias: int = VENTANA_EN_VIVO_DIAS, pausa_s: float = 0.0,
+                        max_paginas: Optional[int] = None) -> dict:
+    """Las velas de cada (símbolo, granularidad) de `series`, pedidas por
+    /ws/public en una sola conexión, de los últimos `ventana_dias` días según
+    la hora del servidor, con `count` explícito en cada página. Devuelve en
+    memoria solo las cerradas y válidas (`esta_cerrada`, `normalizar_vela`),
+    por época. No escribe nada: los API Terms de Deriv no dejan guardarlas
+    más allá de una caché de 24 horas (brief del Admin 16a, punto 6). Nunca
+    lanza por lo que conteste Deriv: el error y el corte de cada serie
+    quedan en el resultado."""
+    out: dict[str, Any] = {"endpoint": ENDPOINT_PUBLICO, "ventana_dias": ventana_dias,
+                           "series": {}}
+    async with abrir(ENDPOINT_PUBLICO) as ws:
+        canal = CanalPublico(ws, pausa_s=pausa_s)
+        entrada, datos = await canal.pedir({"time": 1})
+        if datos is None:
+            out["error"] = entrada.get("error")
+            return out
+        ahora = int(datos["time"])
+        desde = ahora - ventana_dias * GRANULARIDAD_DIARIA
+        out.update(hora_servidor=ahora, desde=desde)
+        for simbolo, granularidad in series:
+            crudas: dict[int, dict] = {}
+            prof = await profundidad(canal, simbolo, granularidad, max_paginas=max_paginas,
+                                     guardar_velas=crudas, desde=desde)
+            velas: dict[int, dict] = {}
+            invalidas: list[str] = []
+            abiertas = antes = 0
+            for epoch in sorted(crudas):
+                if epoch < desde:
+                    antes += 1
+                    continue
+                try:
+                    fila = normalizar_vela(crudas[epoch], granularidad)
+                except VelaInvalidaError as exc:
+                    invalidas.append(str(exc))
+                    continue
+                if not esta_cerrada(epoch, granularidad, ahora):
+                    abiertas += 1
+                    continue
+                velas[epoch] = fila
+            out["series"][(simbolo, granularidad)] = {
+                "simbolo": simbolo, "granularidad": granularidad, "corte": prof["corte"],
+                "paginas": len(prof["paginas"]),
+                "sha256_paginas": [p.get("sha256") for p in prof["paginas"]],
+                "velas": velas, "invalidas": invalidas[:20], "n_invalidas": len(invalidas),
+                "abiertas_descartadas": abiertas, "antes_de_la_ventana": antes}
+    return out
