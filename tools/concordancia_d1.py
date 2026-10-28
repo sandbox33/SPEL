@@ -102,6 +102,7 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import sys
 from datetime import date, datetime, timedelta, timezone
@@ -113,6 +114,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from governance.persistence import PersistenceStream, stream_path  # noqa: E402
 from ingestion.velas import (  # noqa: E402
     GRANULARIDAD_DIARIA,
     Calendario,
@@ -470,6 +472,78 @@ def informe() -> list[tuple[str, dict]]:
         compuerta[a.activo] = pasos[0][1]["compuerta"]
     bloques.append(("COMPUERTA", compuerta))
     return bloques
+
+
+# ═══ Brief 16a: el veredicto en data ══════════════════════════════════════
+#
+# Cada corrida del workflow deja su informe en la rama `data`: solo métricas
+# agregadas, sin series por vela, con el sha256 de cada archivo de
+# TwelveData usado y la atribución que piden sus Términos. Append-only: un
+# archivo por corrida, que no se reescribe.
+
+def ruta_informes() -> Path:
+    """metrics/compuertas/concordancia_d1/ en el stream METRICS (rama data)."""
+    return Path(stream_path(PersistenceStream.METRICS)) / "compuertas" / "concordancia_d1"
+
+
+def archivos_twelvedata() -> list[tuple[str, int]]:
+    """(serie, granularidad) de TwelveData que lee la compuerta: por activo,
+    su 1day (salvo los que salen del M5, D1-x) y su intradía."""
+    out = []
+    for a in ACTIVOS_D1:
+        if a.activo not in DIARIA_DESDE_M5:
+            out.append((a.td.serie, GRANULARIDAD_DIARIA))
+        out.append((a.intradia, a.granularidad_intradia))
+    return out
+
+
+def _relativa(ruta: Path) -> str:
+    """La ruta dentro de data: metrics/…, sin la raíz de la máquina."""
+    return (Path("metrics") / ruta.relative_to(stream_path(PersistenceStream.METRICS))).as_posix()
+
+
+def faltan_archivos_twelvedata() -> list[str]:
+    """Los archivos de TwelveData que la compuerta necesita y no están. Con
+    la ingesta apagada no se bajan: si falta uno, la corrida se detiene."""
+    return [_relativa(ruta_serie(s, g)) for s, g in archivos_twelvedata()
+            if not ruta_serie(s, g).exists()]
+
+
+def informe_para_data(bloques: Sequence[tuple[str, dict]], *, fecha: str, run_id: str) -> dict:
+    """El informe de una corrida para data: los bloques, el sha256 de cada
+    archivo de TwelveData usado y la atribución, que piden los Términos de
+    TwelveData en lo que se publica."""
+    return {"fecha": fecha, "run_id": run_id, "atribucion": "Data provided by Twelve Data",
+            "archivos_twelvedata": {_relativa(ruta_serie(s, g)): sha256_de_archivo(ruta_serie(s, g))
+                                    for s, g in archivos_twelvedata()},
+            "bloques": dict(bloques)}
+
+
+def guardar_informe(informe: dict) -> Path:
+    """Escribe metrics/compuertas/concordancia_d1/<fecha>_<run_id>.json. Si
+    el archivo ya existe, no lo toca y lanza: append-only."""
+    ruta = ruta_informes() / f"{informe['fecha']}_{informe['run_id']}.json"
+    if ruta.exists():
+        raise FileExistsError(f"{_relativa(ruta)} ya existe: un informe no se reescribe")
+    ruta.parent.mkdir(parents=True, exist_ok=True)
+    ruta.write_text(json.dumps(informe, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    return ruta
+
+
+def resumen_markdown(informe: dict) -> str:
+    """El mismo informe para $GITHUB_STEP_SUMMARY: la compuerta por activo,
+    los archivos con su sha256, la atribución y el JSON entero."""
+    lineas = [f"## Concordancia diaria D1 — {informe['fecha']}, corrida {informe['run_id']}", ""]
+    compuerta = informe["bloques"].get("COMPUERTA") or {}
+    if compuerta:
+        lineas += ["| activo | compuerta |", "|---|---|"]
+        lineas += [f"| {activo} | {estado} |" for activo, estado in compuerta.items()]
+        lineas.append("")
+    lineas += ["| archivo de TwelveData | sha256 |", "|---|---|"]
+    lineas += [f"| `{r}` | `{s}` |" for r, s in informe["archivos_twelvedata"].items()]
+    lineas += ["", informe["atribucion"], "", "```json",
+               json.dumps(informe, ensure_ascii=False, indent=1), "```", ""]
+    return "\n".join(lineas)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
