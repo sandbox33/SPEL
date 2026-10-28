@@ -1565,6 +1565,32 @@
       "notas": ""
     },
     {
+      "nombre": "VENTANA_EN_VIVO_DIAS",
+      "modulo": "ingestion.deriv_publico",
+      "categoria": "parametro",
+      "valor": 365,
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 16a (27-oct-2026), punto 6: con la ingesta apagada, el lado Deriv de la compuerta se pide en vivo (ticks_history, ventana de 365 días, count explícito) y no se persiste.",
+      "usado_en": [
+        "ingestion.deriv_publico.velas_en_vivo"
+      ],
+      "notas": "Es también el tope de historia de las velas de Deriv, diarias e intradía (decision-log 2026-10-06, e): la ventana pide toda la historia que hay. Se cuenta desde la hora del servidor."
+    },
+    {
+      "nombre": "CORTE_VENTANA",
+      "modulo": "ingestion.deriv_publico",
+      "categoria": "etiqueta",
+      "valor": "se llegó al inicio de la ventana",
+      "evidencia": "provisional_sin_evidencia",
+      "afecta_resultado": true,
+      "fuente": "Brief del Admin 16a, punto 6: el motivo con que `profundidad` deja de paginar al llegar al inicio de la ventana pedida.",
+      "usado_en": [
+        "ingestion.deriv_publico.profundidad"
+      ],
+      "notas": "Es el corte que dice que la serie llegó entera hasta el inicio de la ventana; otro corte (un error, el tope de páginas) la deja incompleta, y quien use el resultado de velas_en_vivo decide con eso si la serie está completa."
+    },
+    {
       "nombre": "MENSAJES_PERMITIDOS",
       "modulo": "ingestion.deriv_ws",
       "categoria": "etiqueta",
