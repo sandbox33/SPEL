@@ -17,6 +17,18 @@
 # las diarias, con velas_intradia (brief del Admin 15, punto 6).
 # La concordancia lee lo que quedó en data-store después del commit: si el
 # paso 1 se detiene, lo dice el informe, sin calcular la compuerta.
+#
+# INTERRUPTOR DE LA INGESTA (brief del Admin 16a, punto 5): los pasos que
+# bajan velas y las commitean solo corren si la variable SPEL_INGESTA_CRUDA
+# vale exactamente `true`. Si no está definida o vale otra cosa, la ingesta
+# queda apagada y no se escriben velas crudas nuevas en `data`. Existe por
+# las licencias: los Términos de TwelveData solo dejan redistribuir con un
+# add-on o un acuerdo escrito, y los API Terms de Deriv no dejan guardar
+# datos del feed más allá de una caché de 24 horas. La gobernanza de los
+# datos crudos la decide el Admin (brief 20). La comparación se hace en bash,
+# que es exacta, y no en un `if:`: según la documentación de GitHub, `==` de
+# las expresiones de Actions no distingue mayúsculas (no verificado el
+# 28-oct), y `TRUE` no tiene que encenderla.
 
 name: SPEL concordancia diaria D1
 
@@ -55,6 +67,19 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
+      - name: Interruptor de la ingesta
+        id: interruptor
+        env:
+          SPEL_INGESTA_CRUDA: ${{ vars.SPEL_INGESTA_CRUDA }}
+        run: |
+          if [ "${SPEL_INGESTA_CRUDA-}" = "true" ]; then
+            echo "ingesta=encendida" >> "$GITHUB_OUTPUT"
+            echo "SPEL_INGESTA_CRUDA vale exactamente true: se bajan velas y se commitean en data."
+          else
+            echo "ingesta=apagada" >> "$GITHUB_OUTPUT"
+            echo "SPEL_INGESTA_CRUDA no vale exactamente true: no se bajan ni se commitean velas."
+          fi
+
       # La key entra por `env:` de ESTE paso y nunca como argumento. Publica
       # los créditos estimados, los de D1 y los del M5 del oro, antes del
       # primer pedido. `continue-on-error`:
@@ -62,12 +87,14 @@ jobs:
       # lo válido; se commitea y el job se pone rojo al final.
       - name: Velas diarias de D1 (escribe en data-store)
         id: velas
+        if: steps.interruptor.outputs.ingesta == 'encendida'
         continue-on-error: true
         env:
           TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
         run: python ingestion/velas_d1.py --write
 
       - name: Commit a data
+        if: steps.interruptor.outputs.ingesta == 'encendida'
         working-directory: data-store
         run: |
           git add -A metrics/velas
