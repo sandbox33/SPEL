@@ -1,0 +1,451 @@
+{
+ "fecha": "2026-11-01",
+ "run_id": "41306294896",
+ "atribucion": "Data provided by Twelve Data",
+ "archivos_twelvedata": {
+  "metrics/velas/td_BTCUSD/86400.jsonl": "0a8a5f6b7f175fa09b1a9409c51484bc63ed1d890c18a4342f62de8d11248543",
+  "metrics/velas/td_BTCUSD/3600.jsonl": "1c1c102cdca293440973faea10677356dd4a017ac575bfda2129a0927253c6be",
+  "metrics/velas/td_XAUUSD/300.jsonl": "c3aa4f5420c447b9e6edaab30602831b90e93b6ce19e7b4bd7a112e0704e2a8a"
+ },
+ "bloques": {
+  "DATOS": {
+   "BTC": {
+    "twelvedata_1day": {
+     "archivo": "/home/runner/work/SPEL/SPEL/data-store/metrics/velas/td_BTCUSD/86400.jsonl",
+     "velas": 3339,
+     "sha256": "0a8a5f6b7f175fa09b1a9409c51484bc63ed1d890c18a4342f62de8d11248543",
+     "primera": "2017-08-28",
+     "ultima": "2026-10-18"
+    },
+    "deriv_86400": {
+     "fuente": "Deriv en vivo, sin guardar",
+     "hora_servidor": 1793535859,
+     "ventana_dias": 365,
+     "error": null,
+     "velas": 364,
+     "primera": "2025-11-02",
+     "ultima": "2026-10-31",
+     "corte": "se llegó al inicio de la ventana",
+     "paginas": 1,
+     "n_invalidas": 0,
+     "abiertas_descartadas": 1
+    },
+    "intradia_twelvedata": {
+     "archivo": "/home/runner/work/SPEL/SPEL/data-store/metrics/velas/td_BTCUSD/3600.jsonl",
+     "velas": 1470,
+     "sha256": "1c1c102cdca293440973faea10677356dd4a017ac575bfda2129a0927253c6be",
+     "primera": "2026-08-19",
+     "ultima": "2026-10-19"
+    }
+   },
+   "XAU": {
+    "intradia_twelvedata": {
+     "archivo": "/home/runner/work/SPEL/SPEL/data-store/metrics/velas/td_XAUUSD/300.jsonl",
+     "velas": 500553,
+     "sha256": "c3aa4f5420c447b9e6edaab30602831b90e93b6ce19e7b4bd7a112e0704e2a8a",
+     "primera": "2020-03-16",
+     "ultima": "2026-10-19"
+    },
+    "deriv_86400": {
+     "fuente": "Deriv en vivo, sin guardar",
+     "hora_servidor": 1793535859,
+     "ventana_dias": 365,
+     "error": null,
+     "velas": 256,
+     "primera": "2025-11-03",
+     "ultima": "2026-10-29",
+     "corte": "respuesta vacía",
+     "paginas": 2,
+     "n_invalidas": 0,
+     "abiertas_descartadas": 0
+    },
+    "deriv_m5": {
+     "fuente": "Deriv en vivo, sin guardar",
+     "hora_servidor": 1793535859,
+     "ventana_dias": 365,
+     "error": null,
+     "velas": 28012,
+     "primera": "2026-06-09",
+     "ultima": "2026-10-30",
+     "corte": "error",
+     "paginas": 43,
+     "n_invalidas": 0,
+     "abiertas_descartadas": 0
+    },
+    "horario_deriv": {
+     "archivo": "/home/runner/work/SPEL/SPEL/data-store/metrics/calendario/frxXAUUSD/trading_times.jsonl",
+     "sha256_archivo": "756517a75eb4a792292b3e655c3b19d92c1a1927d2b205d7c1dbe25c34aedc1d",
+     "fecha_del_horario": "2026-10-14",
+     "sha256_trading_times": "4fe64afbdf1abb3b0a1dcab66f6dc6e70efc82189a0855d76da63fb3b34f21f7",
+     "horario": {
+      "mercado": "Commodities",
+      "submercado": "Metals",
+      "trading_days": [
+       "Mon",
+       "Tue",
+       "Wed",
+       "Thu",
+       "Fri"
+      ],
+      "aperturas": [
+       "00:00:00",
+       "22:00:00"
+      ],
+      "cierres": [
+       "21:00:00",
+       "23:59:59"
+      ],
+      "settlement": "23:59:59",
+      "events": [
+       {
+        "dates": "Fridays",
+        "descrip": "Closes early (at 20:55)"
+       },
+       {
+        "descrip": "Closes early (at 16:30)",
+        "dates": "2026-11-26, 2027-01-18, 2027-02-15"
+       },
+       {
+        "dates": "2026-12-25",
+        "descrip": "Christmas Day"
+       },
+       {
+        "descrip": "New Year's Day",
+        "dates": "2027-01-01"
+       },
+       {
+        "dates": "2027-03-26",
+        "descrip": "Good Friday"
+       }
+      ]
+     }
+    }
+   }
+  },
+  "PASO 1 BTC": {
+   "dias_comparables": 59,
+   "primer_dia": "2026-08-20",
+   "ultimo_dia": "2026-10-17",
+   "tolerancia_usd": 0.01,
+   "umbral_pct": 95.0,
+   "ganadora": 0,
+   "fraccion_ganadora": 1.0,
+   "decision": "sigue",
+   "motivos": [],
+   "por_hora": [
+    {
+     "hora_utc": 0,
+     "dias": 59,
+     "coinciden": 59,
+     "sin_cierre": 0,
+     "fraccion": 1.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 1,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 2,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 3,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 4,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 5,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 6,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 7,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 8,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 9,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 10,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 11,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 12,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 13,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 14,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 15,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 16,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 17,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 18,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 19,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 20,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 21,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 22,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    },
+    {
+     "hora_utc": 23,
+     "dias": 59,
+     "coinciden": 0,
+     "sin_cierre": 0,
+     "fraccion": 0.0,
+     "fraccion_con_la_otra_fecha": 0.0
+    }
+   ]
+  },
+  "PASO 1 XAU": {
+   "dias": 103,
+   "primer_dia": "2026-06-09",
+   "ultimo_dia": "2026-10-29",
+   "coinciden": 103,
+   "fraccion": 1.0,
+   "tolerancia_usd": 0.01,
+   "umbral_pct": 95.0,
+   "decision": "sigue",
+   "motivos": []
+  },
+  "PASO 2 BTC": {
+   "dias_comunes": 351,
+   "pares": 350,
+   "pares_fuera_por_hueco": 1,
+   "fuera_del_calendario": {
+    "twelvedata": 0,
+    "deriv": 0
+   },
+   "ventana": [
+    "2025-11-02",
+    "2026-10-18"
+   ],
+   "umbral_pct": 90.0,
+   "min_dias_comunes": 250,
+   "mediana_abs_r_deriv": 0.012152422682514465,
+   "tolerancia": 0.002430484536502893,
+   "coinciden": 350,
+   "fraccion": 1.0,
+   "fraccion_sobre_dias_comunes": 0.9971509971509972,
+   "compuerta": "verde",
+   "motivos": [],
+   "informativo": {
+    "correlacion_r": 0.9999834484164877,
+    "abs_r_td_menos_r_deriv": {
+     "50": 7.854632130201058e-05,
+     "90": 0.00021353847954498615
+    },
+    "dias_de_signo_opuesto": 0,
+    "revisiones_deriv": "no medidas: Deriv llega en vivo y no se guarda"
+   }
+  },
+  "PASO 3 BTC": {
+   "ventana": [
+    "2025-11-02",
+    "2026-10-18"
+   ],
+   "rango": {
+    "dias_comunes": 351,
+    "dias_rango_cero": 0,
+    "fechas_rango_cero": [],
+    "dias_evaluados": 351,
+    "coincide_maximo": 350,
+    "coincide_minimo": 348,
+    "coinciden_los_dos": 347,
+    "fraccion": 0.9886039886039886,
+    "tolerancia_en_fraccion_del_rango": 0.1,
+    "umbral_pct": 90,
+    "informativo": {
+     "abs_dmaximo_en_fraccion_del_rango": {
+      "50": 0.014933605701559731,
+      "90": 0.03709516529076948
+     },
+     "abs_dminimo_en_fraccion_del_rango": {
+      "50": 0.015367258139652284,
+      "90": 0.03857101280026067
+     }
+    },
+    "rango": "verde",
+    "motivos": []
+   },
+   "senal": {
+    "por_lookback": [
+     {
+      "lookback": 10,
+      "dias_evaluados": 341,
+      "ruptura_en_alguna": 23,
+      "ruptura_en_las_dos": 23,
+      "solo_twelvedata": 0,
+      "solo_deriv": 0,
+      "fraccion": 1.0,
+      "estado": "verde"
+     },
+     {
+      "lookback": 20,
+      "dias_evaluados": 331,
+      "ruptura_en_alguna": 16,
+      "ruptura_en_las_dos": 16,
+      "solo_twelvedata": 0,
+      "solo_deriv": 0,
+      "fraccion": 1.0,
+      "estado": "verde"
+     },
+     {
+      "lookback": 40,
+      "dias_evaluados": 311,
+      "ruptura_en_alguna": 9,
+      "ruptura_en_las_dos": 9,
+      "solo_twelvedata": 0,
+      "solo_deriv": 0,
+      "fraccion": 1.0,
+      "estado": "sin potencia"
+     }
+    ],
+    "umbral_pct": 90,
+    "min_dias_con_ruptura": 10,
+    "senal": "verde"
+   },
+   "paso_3": "verde"
+  },
+  "DETENIDO XAU": {
+   "motivos": [
+    "la serie frxXAUUSD de 300 s de Deriv quedó incompleta: 'error'"
+   ],
+   "compuerta": "no calculada"
+  },
+  "COMPUERTA": {
+   "BTC": "verde",
+   "XAU": "detenido"
+  }
+ }
+}
