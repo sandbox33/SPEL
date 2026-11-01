@@ -4646,3 +4646,47 @@ hallazgos 1 y 6 de 16a.6, con la recomendación del auditor. Misma rama y mismo 
    `test_escribe_solo_su_job_y_el_commit_de_velas_solo_suma_velas`. El cuerpo no cambia. El
    nombre viejo dejó de ser exacto porque el job ahora también commitea el informe, y ese paso lo
    cubren los tests nuevos.
+
+### Lo hecho
+
+Commits, sobre `cc5c012`:
+
+| commit | qué |
+|---|---|
+| `88076d5` | esta entrada, tal cual, antes del código |
+| `f1ae471` | la conexión de 16a.5 (decisiones 1 y 2), con las ediciones autorizadas de los tests de `main` |
+| `dc32f7c` | NO EVALUABLE (decisión 3) |
+| `15c7fc4` | la guarda de la ingesta (decisión 4) |
+| `df7d425` | el nombre del test (decisión 5) |
+
+**Los tests de `main`.** Cambian solo los 4 casos de la decisión 1, el fixture de la decisión 2 y
+el nombre de la decisión 5. Ningún otro test de `main` falló. Los diffs van en el PR.
+
+**Dos tests de este mismo PR, no de `main`, cambiaron.** Afirmaban que la concordancia y el
+commit del informe no tienen `if:`. Era la interpretación 6 de 16a.6, que la decisión 4
+reemplaza, y el punto 5 del brief del 31-oct pide ese `if:`. Pasan a afirmarlo y cambian de
+nombre:
+- `test_con_la_ingesta_apagada_la_concordancia_sigue_corriendo` →
+  `test_la_concordancia_y_su_commit_corren_solo_con_la_ingesta_apagada`;
+- `test_el_workflow_commitea_solo_el_informe_y_tambien_con_la_ingesta_apagada` →
+  `test_el_workflow_commitea_solo_el_informe_y_solo_con_la_ingesta_apagada`.
+
+**[INTERPRETACIÓN] El estado NO EVALUABLE.** Es el valor de la compuerta del activo en el bloque
+`COMPUERTA`, con el texto de la decisión 3 ("NO EVALUABLE: 249 días comunes, mínimo 250"). Así lo
+muestran el informe y la tabla del resumen. Los bloques de sus pasos 2 y 3 llevan
+`solo_informativo` con el mismo texto. Se decide con los días comunes del paso 2; la del oro, con
+la regla de la opción 2. Con menos de 250 días manda NO EVALUABLE, aunque la concordancia también
+falle.
+
+**La guarda de `main()`.** Va antes de mirar los archivos de TwelveData: con la ingesta
+encendida, `main(--deriv-en-vivo)` sale 2 sin leer nada ni conectarse. El test cambia
+`socket.socket`, `socket.create_connection` y el conector de Deriv por una función que falla, y
+verifica que nadie la llamó.
+
+**Resultados, medidos el 1-nov:**
+- Suite entera: 2.440 pasan y 6 se saltan, de 2.446 recolectados en 74 archivos.
+- Mutantes de la conexión: los 25 de 16a.5 (uno, el del `if:` del commit, se invierte: ahora se
+  quita), los dos `if:`, la guarda de `main()` (quitarla, compararla sin mayúsculas y que salga 0)
+  y NO EVALUABLE (quitarlo, correr el borde a > 250 y no marcar los informativos). Son 32 y quedan
+  atrapados los 32.
+- Mutantes de las piezas del 28-oct: 63 de 63 atrapados.
