@@ -75,6 +75,7 @@ jobs:
           if [ "${SPEL_INGESTA_CRUDA-}" = "true" ]; then
             echo "ingesta=encendida" >> "$GITHUB_OUTPUT"
             echo "SPEL_INGESTA_CRUDA vale exactamente true: se bajan velas y se commitean en data."
+            echo "DETENIDO: con la ingesta encendida, la compuerta no corre"
           else
             echo "ingesta=apagada" >> "$GITHUB_OUTPUT"
             echo "SPEL_INGESTA_CRUDA no vale exactamente true: no se bajan ni se commitean velas."

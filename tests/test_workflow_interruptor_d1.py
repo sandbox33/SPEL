@@ -58,6 +58,8 @@ def test_solo_true_exacto_enciende_la_ingesta(tmp_path, valor, encendida):
                         _interruptor()["run"]], env=env, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     assert salida.read_text() == f"ingesta={'encendida' if encendida else 'apagada'}\n"
+    detenido = "DETENIDO: con la ingesta encendida, la compuerta no corre\n"
+    assert (detenido in r.stdout) is encendida
 
 
 def test_cada_paso_que_escribe_velas_depende_del_interruptor():
