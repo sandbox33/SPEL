@@ -511,7 +511,20 @@ def _pasos_2_y_3(a: ActivoD1, s: dict, vivo: Optional[dict]) -> tuple[list[tuple
                                        s["horario"])
     tres = p3.paso_3(td_cierres, td_rangos, s["deriv"], rangos_dr, a.td.calendario)
     bloques.append((f"PASO 3 {a.activo}", tres))
+    estado = no_evaluable(p["dias_comunes"])
+    if estado:
+        return [(t, {"solo_informativo": estado, **b}) for t, b in bloques], estado
     return bloques, p3.compuerta_del_activo(p["compuerta"], tres["paso_3"])
+
+
+def no_evaluable(dias_comunes: int) -> Optional[str]:
+    """Decisión 3 del Admin (31-oct): con menos de MIN_DIAS_COMUNES días
+    comunes el activo no es evaluable. Ese es el estado de su compuerta,
+    nunca verde y no un rojo de concordancia, y sus pasos 2 y 3 quedan como
+    informativos. La regla del paso 2 no cambia. None si los días alcanzan."""
+    if dias_comunes >= MIN_DIAS_COMUNES:
+        return None
+    return f"NO EVALUABLE: {dias_comunes} días comunes, mínimo {MIN_DIAS_COMUNES}"
 
 
 def _deriv_incompleto(a: ActivoD1, vivo: Optional[dict]) -> list[str]:
