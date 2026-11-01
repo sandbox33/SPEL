@@ -4342,3 +4342,351 @@ corrida hace dos cosas:
   `data@c2a7b19`.
 - **Calcula la compuerta de cada activo:** la de BTC, y la del oro con su sensibilidad. Es el
   registro oficial.
+
+## 2026-10-28 — Brief 16a: el paso 3 de la compuerta de D1, el veredicto en `data` y la ingesta cruda apagada
+
+**Fuente:** brief del Admin 16a, en su versión del 27-oct. Rama `claude/brief-16a-compuerta-rango`,
+desde `main` en `952d082`.
+
+**[INTERPRETACIÓN] Entrada "propia y numerada".** Es la entrada del brief 16a, y sus decisiones
+van numeradas 16a.1, 16a.2, etc. El decision-log no tiene otra numeración: solo aparecen sueltas la
+"Decisión #7" y la "#14".
+
+### 16a.1 — La regla del paso 3 y sus constantes, fijadas antes de leer una vela real
+
+Viven en `tools/concordancia_d1_paso3.py` y en `config/constantes.json`. Se fijaron antes de
+calcular nada con velas reales (candado 1). Ningún test lee `metrics/velas/` reales.
+
+| constante | valor | de dónde sale |
+|---|---|---|
+| `TOL_RANGO` | 0,10 | aprobada por el Admin el 26-oct (brief 16a, punto 3) |
+| `UMBRAL_RANGO_PCT` | 90 | aprobada por el Admin el 26-oct |
+| `UMBRAL_SENAL_PCT` | 90 | aprobada por el Admin el 26-oct |
+| `LOOKBACKS_SENAL` | 10, 20, 40 | brief 16a, punto 2 |
+| `MIN_DIAS_CON_RUPTURA` | 10 | brief 16a, punto 2: por debajo, "sin potencia" |
+
+**Rango**, por activo, sobre los días comunes del paso 2:
+- El máximo coincide si |H_TwelveData − H_Deriv| ≤ `TOL_RANGO` × (H_Deriv − L_Deriv). El mínimo,
+  igual, con L.
+- Un día con rango cero en Deriv queda fuera y se cuenta.
+- Es verde si coinciden el máximo y el mínimo en al menos el `UMBRAL_RANGO_PCT` de los días que
+  quedan.
+- El oro arma su máximo y su mínimo desde el M5, con las mismas velas que su cierre de D1-o
+  (`velas_por_dia_desde_m5`): días terminados, de lunes a viernes, dentro del horario de Deriv.
+
+**Señal:**
+- Para cada L, la ruptura del día t en una fuente es cierre_t > máximo de los máximos de t−L a t−1.
+- La métrica es días con ruptura en las dos ÷ días con ruptura en alguna.
+- Una L con menos de `MIN_DIAS_CON_RUPTURA` días con ruptura en alguna fuente queda "sin
+  potencia" y no decide.
+- Es verde si cada L que decide llega al `UMBRAL_SENAL_PCT`.
+
+**La compuerta del activo (candado 3):** verde solo si el paso 2 y el paso 3 (rango y señal) son
+verdes (`compuerta_del_activo`).
+
+**[INTERPRETACIÓN]** Lo que el brief no fija:
+1. **"La ventana común".** Son los días comunes del paso 2, en orden. Las L barras anteriores al
+   día t son los L días comunes anteriores, los mismos en las dos fuentes. Un día con una sola
+   fuente no entra en la ventana de ninguna. La otra lectura, las barras de cada fuente entre la
+   primera y la última fecha común, desalinea las dos ventanas en los feriados de Deriv.
+2. **Ninguna L decide.** Si las tres quedan "sin potencia", la señal queda "sin potencia". No es
+   verde, porque no hay con qué validarla, y tampoco roja. El activo tampoco es verde.
+3. **Rango sin días.** Si ningún día tiene rango en Deriv, el rango es rojo, como el paso 2 sin
+   pares.
+4. **Los umbrales se comparan en enteros:** 100 × coinciden ≥ 90 × días. El borde (9 de 10) no
+   depende del redondeo de un float.
+5. **El paso 3 se calcula aunque el paso 2 sea rojo.** Es informativo; lo que decide es la
+   compuerta del activo.
+6. **Los días comunes del paso 3.** `paso_2` está fijada en `41cf853` y cuenta sus días comunes
+   por dentro, así que `dias_comunes()` repite esa línea. Un test verifica que den lo mismo.
+7. **Dónde vive el paso 3.** Va en su propio módulo, con su propia guarda AST, y recibe las velas
+   ya leídas. Así no rompe dos tests de `main`:
+   - `test_la_guarda_de_campos_no_es_vacia_y_solo_ve_el_cierre` fija que
+     `tools/concordancia_d1.py` lee solo el cierre;
+   - `test_solo_esas_dos_herramientas_leen_velas` fija qué herramientas abren archivos de velas.
+
+### 16a.2 — Deriv en vivo, sin guardar
+
+`velas_en_vivo` (`ingestion/deriv_publico.py`) pide las velas por `/ws/public` (sin cuenta, ni token,
+ni App ID), en una sola conexión:
+- Primero pide `time`. La ventana va de la hora del servidor menos `VENTANA_EN_VIVO_DIAS` = 365
+  días (punto 6) hasta esa hora.
+- Pagina hacia atrás con `profundidad`, con `count` explícito (`DERIV_MAX_COUNT` = 5.000) en cada
+  página. Se detiene al llegar al inicio de la ventana (`CORTE_VENTANA`), al fondo de la
+  historia o en el tope de páginas.
+- Guarda en memoria solo las velas cerradas (`esta_cerrada`: época + granularidad ≤ hora del
+  servidor, la regla que ya aplicaba `_ingerir_simbolo`, ahora en una función) y válidas
+  (`normalizar_vela`). Cuenta las abiertas, las inválidas y las anteriores a la ventana.
+- No escribe nada y no lanza por lo que conteste Deriv: el error y el corte de cada serie quedan
+  en el resultado.
+
+**[INTERPRETACIÓN] "Ventana de 365 días".** Una vela que abre antes de la hora del servidor menos
+365 × 86.400 s no entra. En una corrida del 28-oct, la primera barra diaria es la del 29-oct-2025.
+
+### 16a.3 — El veredicto en `data`
+
+`informe_para_data`, `guardar_informe` y `resumen_markdown` (`tools/concordancia_d1.py`):
+- **Ruta:** `metrics/compuertas/concordancia_d1/<fecha>_<run_id>.json`. Es append-only: si el
+  archivo existe, `FileExistsError` ("un informe no se reescribe").
+- **Contenido:**
+  - la fecha y el run_id;
+  - la línea "Data provided by Twelve Data";
+  - el sha256 de cada archivo de TwelveData que la compuerta lee, con su ruta relativa:
+    `td_BTCUSD/86400`, `td_BTCUSD/3600` y `td_XAUUSD/300`. La 1day del oro no está (D1-x);
+  - los bloques de los pasos 1 a 3 y la compuerta por activo.
+- **Solo métricas agregadas:** conteos, fracciones, percentiles y fechas de la ventana. Ningún
+  bloque lleva precios ni retornos por día.
+- **El resumen:** va también a `$GITHUB_STEP_SUMMARY`, con la compuerta por activo, los sha256,
+  la atribución y el JSON entero.
+- `faltan_archivos_twelvedata()` dice qué archivos de TwelveData faltan.
+
+**[INTERPRETACIÓN]**
+1. `fechas_rango_cero` del paso 3 lista fechas, sin precios: no es una serie por vela.
+2. `<fecha>` es la del servidor de Deriv en la corrida (sin Deriv en vivo, la fecha UTC), y
+   `<run_id>` es `GITHUB_RUN_ID`. Si se reintenta la misma corrida el mismo día, el archivo ya
+   existe y la corrida falla sin reescribirlo.
+3. **Sin informe si falta un archivo de TwelveData.** Una corrida que se detiene por eso no deja
+   informe: el punto 6 dice que "no descarga ni publica nada", y eso manda sobre el "cada
+   corrida" del punto 4. El motivo queda en el log.
+
+### 16a.4 — El interruptor de la ingesta
+
+El paso "Interruptor de la ingesta" de `concordancia_d1.yml` compara en bash
+`"${SPEL_INGESTA_CRUDA-}" = "true"`. Con cualquier otro valor, o sin la variable, la ingesta queda
+apagada:
+- Los dos pasos que bajan y commitean velas ("Velas diarias de D1" y "Commit a data") dependen de
+  él.
+- No hay inputs nuevos (D8): el paso lee `vars.SPEL_INGESTA_CRUDA`.
+- Un test ejecuta el paso con bash para 10 valores.
+
+**Por qué existe:** por las licencias, según las cita el brief (las leyó el Admin el 27-oct; no
+las verifiqué):
+- **TwelveData:** sus Términos (1-ene-2026, §2.2(e)) solo dejan redistribuir con un add-on o un
+  acuerdo escrito.
+- **Deriv:** sus API Terms (R26|03, 2.1 y 2.3) no dejan guardar datos del feed más allá de una
+  caché de 24 horas.
+- El repo es público.
+
+La gobernanza definitiva de los datos crudos la decide el Admin (brief 20). Este brief no mueve
+ni borra nada de `data`.
+
+**[INTERPRETACIÓN] El candado 4 con la variable en `true`.** Con la variable en `true`, el workflow
+baja y commitea velas como antes: es lo que el punto 5 conserva detrás del interruptor. El candado
+4 se cumple con la variable ausente, que es como el Admin va a disparar, y en todo lo que el brief
+agrega: ni el paso 3, ni Deriv en vivo, ni el informe escriben velas.
+
+La comparación va en bash y no en un `if:` de Actions. Según la documentación de GitHub, el `==`
+de las expresiones no distingue mayúsculas, y `TRUE` no tiene que encender la ingesta. No pude
+verificarlo el 28-oct: docs.github.com no era accesible desde la sesión. Bash compara exacto en
+cualquier caso.
+
+### 16a.5 — Lo detenido: conectar el paso 3, Deriv en vivo y el informe a la corrida
+
+**Lo que falta:**
+- **El candado 3 en la compuerta:** `informe()` todavía decide la compuerta de cada activo solo
+  con el paso 2.
+- **La corrida:** `main()` no pide Deriv en vivo ni guarda el informe, y el workflow no lo
+  commitea.
+
+**Por qué se detuvo.** CLAUDE.md: "Si un test existente codifica el comportamiento viejo,
+repórtalo; no lo edites". La autorización del 19-oct fue para el brief 15.
+
+Se midió con un prototipo en un worktree aparte, fuera de esta rama. Con la conexión y sin tocar
+ningún test existente, fallan 8:
+
+| test | por qué falla | qué cambia |
+|---|---|---|
+| `test_con_los_dos_cortes_a_las_00_utc_hay_compuerta` | lista de bloques sin el paso 3, y velas sin rango | agrega "PASO 3 BTC" y "PASO 3 XAU" a la lista |
+| `test_un_corte_que_no_es_00_utc_detiene_ese_activo_sin_su_compuerta[22-0]` | lista de bloques | agrega "PASO 3 BTC" |
+| `test_un_corte_que_no_es_00_utc_detiene_ese_activo_sin_su_compuerta[0-22]` | lista de bloques | agrega "PASO 3 XAU" |
+| `test_la_concordancia_corre_despues_del_commit_y_un_rojo_no_impide_commitear` | la línea `run` | `python tools/concordancia_d1.py --deriv-en-vivo --guardar` |
+| `test_main_publica_cada_bloque_y_sale_0` | velas sin rango: la compuerta queda roja | nada; cambia el fixture |
+| `test_el_veredicto_de_cada_activo_es_el_suyo` | ídem | nada; cambia el fixture |
+| `test_sin_horario_el_oro_se_detiene_y_btc_sigue` | ídem | nada; cambia el fixture |
+| `test_si_la_noche_del_viernes_cambia_el_veredicto_lo_dice_y_manda_el_horario` | ídem | nada; cambia el fixture |
+
+**El fixture.** `_escribir` y `_mundo()` (`tests/test_concordancia_d1.py`) escriben velas con
+máximo = mínimo = cierre. Con el paso 3, ningún día tiene rango en Deriv, el rango queda rojo
+("no hay días con rango en Deriv"), y con él la compuerta de los dos activos. El cambio:
+- `_escribir(..., rango=0.0)` pone el máximo y el mínimo a esa distancia del cierre. Con el
+  valor por defecto escribe lo mismo que hoy.
+- `_mundo()` usa `rango=1.0` en las cuatro series que lee el paso 3.
+- La barra diaria del oro en Deriv toma el máximo y el mínimo de su M5, ±1.
+- No se borra ningún test ni se toca ninguna constante, y el resto de las aserciones queda igual.
+
+`test_escribe_solo_su_job_y_solo_velas_en_data` sigue pasando con el commit del informe, pero su
+nombre dejaría de ser exacto. No lo edito: queda reportado.
+
+**El prototipo, con esas ediciones:**
+- `main(["--deriv-en-vivo", "--guardar"])`:
+  - si falta un archivo de TwelveData, sale 2 antes de conectarse, con "DETENIDO: faltan
+    archivos de TwelveData…";
+  - pide en vivo la 86400 de cada activo y el M5 del oro, con la pausa y el tope de páginas de
+    `velas_intradia`;
+  - calcula los pasos 1 a 3 y la compuerta del candado 3, y guarda el informe y el resumen.
+- **Cuándo se detiene un activo:** si Deriv no respondió, o si una de sus series quedó
+  incompleta (un corte que no es el fondo de la historia ni el inicio de la ventana).
+- **En vivo no lee las velas guardadas de Deriv.** Las revisiones de Deriv del paso 2 son
+  informativas y, en vivo, dicen "no medidas" en vez de contar cero.
+- **El workflow:** suma el paso "Commit del informe a data" después de la concordancia. No tiene
+  `if:` (corre también con la ingesta apagada) y solo hace `git add
+  metrics/compuertas/concordancia_d1`.
+- **Tests:** 18 nuevos y la suite entera en verde (2.428 pasan y 6 se saltan).
+- **Mutantes:** 25 sobre la conexión. Sobrevivió uno, el paso 3 del oro con los cierres de la
+  sensibilidad de las 24:00, y lo atrapa un test agregado. Quedan 25 de 25 atrapados.
+
+**Lo que el Admin decide.** Si autoriza editar esos 4 casos y el fixture con las condiciones del
+19-oct, la conexión entra en este mismo PR. Hasta entonces, el PR queda en borrador y no conviene
+disparar el workflow: correría la concordancia con las velas de Deriv guardadas y no dejaría
+nada en `data`.
+
+### 16a.6 — Hallazgos
+
+1. **Con la ingesta apagada, el oro no llega a 250 días comunes desde el 29-oct.**
+   - El M5 del oro de TwelveData en `data` termina el 2026-10-19 a las 06:10; su último día con
+     cierre es el 2026-10-16. Deriv en vivo cubre 365 días hacia atrás.
+   - Se contaron los días de Deriv en la ventana que cubre TwelveData, con las fechas de
+     `frxXAUUSD/86400` en `data@fe23fdf`, sin precios:
+
+     | corrida | días comunes |
+     |---|---|
+     | 28-oct | 250 |
+     | 29-oct | 249 |
+     | 30-oct | 248 |
+     | 2-nov | 247 |
+
+     Baja uno por día hábil.
+   - `MIN_DIAS_COMUNES` = 250 (paso 2, `41cf853`). Desde el 29-oct, el paso 2 del oro queda rojo
+     por falta de días, sea cual sea la concordancia.
+   - **Referencia independiente:** los 257 días comunes del oro en la corrida 39209167984 son las
+     257 barras de ese archivo. Restando las 7 anteriores al 29-oct-2025 quedan 250.
+   - Es una estimación: el número real sale de la corrida.
+   - BTC tiene 355 días el 28-oct (del 2025-10-29 al 2026-10-18), con margen hasta febrero de
+     2027.
+   - Con la ingesta apagada, el oro solo puede tener una compuerta verde con velas de TwelveData
+     nuevas o con una decisión del Admin.
+2. **El horario de Deriv guardado se sigue leyendo.**
+   - El cierre del oro (D1-o, opción 2) y su máximo y mínimo necesitan el horario de Deriv
+     (`trading_times`) que está en `metrics/calendario`.
+   - El brief pide en vivo las velas, no el horario.
+   - Si la caché de 24 horas de los API Terms alcanza al horario lo decide el Admin (brief 20).
+     No se cambió.
+3. **H2 usa la apertura y la compuerta no la valida.**
+   - Garman–Klass usa la apertura, el máximo, el mínimo y el cierre (`research/preregistro_h2.md`,
+     línea 118).
+   - El paso 2 valida el cierre y el paso 3 el máximo y el mínimo. La apertura no se compara.
+   - Queda fuera del brief; se reporta.
+4. **La señal se valida para L ≤ 40.** La rejilla de H1 v2 es {10, 20, 40, 80, 160, 320}
+   (`research/preregistro_h1_v2.md`, sección 3). El paso 3 usa {10, 20, 40}, como fija el brief.
+5. **Deriv en vivo no deja un sha256 de archivo.**
+   - El informe trae el sha256 de los archivos de TwelveData. Del lado de Deriv quedan la hora del
+     servidor, la ventana, las páginas y el corte.
+   - Una auditoría posterior no puede recalcular ese lado byte a byte. Es lo que pide el punto 6.
+6. **[INTERPRETACIÓN] Deriv en vivo también con la ingesta encendida.**
+   - El brief lo pide con la ingesta apagada.
+   - El prototipo lo hace siempre: la compuerta es la misma con o sin ingesta, y no usa lo que
+     Deriv dejó guardado.
+
+## 2026-10-31 — Brief 16a: lo detenido, con las decisiones del Admin
+
+**Fuente:** las decisiones del Admin del 31-oct sobre "Lo que el Admin decide" de 16a.5 y los
+hallazgos 1 y 6 de 16a.6, con la recomendación del auditor. Misma rama y mismo PR (#49).
+
+### Las decisiones
+
+1. **Cuatro casos de test se editan, solo en lista y comando.**
+   - `test_con_los_dos_cortes_a_las_00_utc_hay_compuerta`: la lista de bloques suma "PASO 3 BTC"
+     y "PASO 3 XAU".
+   - `test_un_corte_que_no_es_00_utc_detiene_ese_activo_sin_su_compuerta[22-0]`: suma
+     "PASO 3 BTC".
+   - `test_un_corte_que_no_es_00_utc_detiene_ese_activo_sin_su_compuerta[0-22]`: suma
+     "PASO 3 XAU".
+   - `test_la_concordancia_corre_despues_del_commit_y_un_rojo_no_impide_commitear`: la línea
+     `run` pasa a `python tools/concordancia_d1.py --deriv-en-vivo --guardar`.
+   - Ninguna otra aserción cambia. Rigen las condiciones del 19-oct: no se borra ningún test, no
+     se toca ninguna constante y los diffs van en el PR.
+2. **El fixture de `tests/test_concordancia_d1.py` gana rango.**
+   - `_escribir(..., rango=0.0)`: con el valor por defecto escribe lo mismo que hoy. `_mundo()`
+     usa `rango=1.0` en las cuatro series que lee el paso 3, y la diaria del oro en Deriv toma el
+     máximo y el mínimo de su M5, ±1.
+   - `rango=1.0` es un valor sintético, no una medición de Deriv. El fixture escribía velas con
+     máximo = mínimo = cierre, de rango cero, y con el paso 3 la compuerta quedaba roja en todos
+     los tests de la conexión. El valor solo sirve para que esos tests ejerciten la conexión con
+     un rango no nulo.
+   - El caso de rango cero sigue fijado, sin cambios, por
+     `test_un_dia_con_rango_cero_en_deriv_queda_fuera_y_se_cuenta` y
+     `test_sin_dias_con_rango_el_rango_es_rojo`.
+   - Las aserciones de los cuatro tests afectados (`test_main_publica_cada_bloque_y_sale_0`,
+     `test_el_veredicto_de_cada_activo_es_el_suyo`,
+     `test_sin_horario_el_oro_se_detiene_y_btc_sigue` y
+     `test_si_la_noche_del_viernes_cambia_el_veredicto_lo_dice_y_manda_el_horario`) no cambian.
+3. **Un activo con menos de 250 días comunes es NO EVALUABLE. En esta corrida, BTC es el único
+   veredicto.**
+   - `MIN_DIAS_COMUNES` (250, `41cf853`) no cambia y la ingesta no se enciende en este PR. La
+     alternativa de velas nuevas de TwelveData queda para el brief 20.
+   - La regla del paso 2 no cambia: con menos de 250 días comunes, la compuerta del activo no es
+     verde.
+   - El informe y el resumen distinguen el motivo. Un activo con menos de `MIN_DIAS_COMUNES` días
+     comunes se publica como "NO EVALUABLE: N días comunes, mínimo 250", no como un rojo de
+     concordancia. Las métricas de los pasos 2 y 3 se publican como informativas.
+   - Razón: un rojo por falta de días no dice nada de la fuente, y presentarlo como una falla de
+     concordancia sería un veredicto falso.
+4. **Deriv en vivo, solo con la ingesta apagada.**
+   - La compuerta (Deriv en vivo, los pasos 1 a 3 y el informe) corre solo si
+     `SPEL_INGESTA_CRUDA` no vale exactamente `true`, es decir, si el paso "Interruptor de la
+     ingesta" devolvió `apagada`.
+   - Con la ingesta encendida no se pide Deriv en vivo, no se calcula la compuerta y no se
+     escribe el informe en `data`. El log lo dice ("DETENIDO: con la ingesta encendida, la
+     compuerta no corre"). Lo que la ingesta encendida hace con las velas no cambia y lo decide
+     el brief 20.
+   - Guarda doble: el `if:` de los pasos en el workflow y, en el código, `main()` rechaza
+     `--deriv-en-vivo` si `SPEL_INGESTA_CRUDA` vale exactamente `true` en su entorno.
+   - Reemplaza la interpretación 6 de 16a.6.
+5. **El nombre del test.** `test_escribe_solo_su_job_y_solo_velas_en_data` pasa a
+   `test_escribe_solo_su_job_y_el_commit_de_velas_solo_suma_velas`. El cuerpo no cambia. El
+   nombre viejo dejó de ser exacto porque el job ahora también commitea el informe, y ese paso lo
+   cubren los tests nuevos.
+
+### Lo hecho
+
+Commits, sobre `cc5c012`:
+
+| commit | qué |
+|---|---|
+| `88076d5` | esta entrada, tal cual, antes del código |
+| `f1ae471` | la conexión de 16a.5 (decisiones 1 y 2), con las ediciones autorizadas de los tests de `main` |
+| `dc32f7c` | NO EVALUABLE (decisión 3) |
+| `15c7fc4` | la guarda de la ingesta (decisión 4) |
+| `df7d425` | el nombre del test (decisión 5) |
+
+**Los tests de `main`.** Cambian solo los 4 casos de la decisión 1, el fixture de la decisión 2 y
+el nombre de la decisión 5. Ningún otro test de `main` falló. Los diffs van en el PR.
+
+**Dos tests de este mismo PR, no de `main`, cambiaron.** Afirmaban que la concordancia y el
+commit del informe no tienen `if:`. Era la interpretación 6 de 16a.6, que la decisión 4
+reemplaza, y el punto 5 del brief del 31-oct pide ese `if:`. Pasan a afirmarlo y cambian de
+nombre:
+- `test_con_la_ingesta_apagada_la_concordancia_sigue_corriendo` →
+  `test_la_concordancia_y_su_commit_corren_solo_con_la_ingesta_apagada`;
+- `test_el_workflow_commitea_solo_el_informe_y_tambien_con_la_ingesta_apagada` →
+  `test_el_workflow_commitea_solo_el_informe_y_solo_con_la_ingesta_apagada`.
+
+**[INTERPRETACIÓN] El estado NO EVALUABLE.** Es el valor de la compuerta del activo en el bloque
+`COMPUERTA`, con el texto de la decisión 3 ("NO EVALUABLE: 249 días comunes, mínimo 250"). Así lo
+muestran el informe y la tabla del resumen. Los bloques de sus pasos 2 y 3 llevan
+`solo_informativo` con el mismo texto. Se decide con los días comunes del paso 2; la del oro, con
+la regla de la opción 2. Con menos de 250 días manda NO EVALUABLE, aunque la concordancia también
+falle.
+
+**La guarda de `main()`.** Va antes de mirar los archivos de TwelveData: con la ingesta
+encendida, `main(--deriv-en-vivo)` sale 2 sin leer nada ni conectarse. El test cambia
+`socket.socket`, `socket.create_connection` y el conector de Deriv por una función que falla, y
+verifica que nadie la llamó.
+
+**Resultados, medidos el 1-nov:**
+- Suite entera: 2.440 pasan y 6 se saltan, de 2.446 recolectados en 74 archivos.
+- Mutantes de la conexión: los 25 de 16a.5 (uno, el del `if:` del commit, se invierte: ahora se
+  quita), los dos `if:`, la guarda de `main()` (quitarla, compararla sin mayúsculas y que salga 0)
+  y NO EVALUABLE (quitarlo, correr el borde a > 250 y no marcar los informativos). Son 32 y quedan
+  atrapados los 32.
+- Mutantes de las piezas del 28-oct: 63 de 63 atrapados.

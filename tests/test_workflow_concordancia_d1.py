@@ -36,7 +36,7 @@ def test_uno_a_la_vez_con_los_que_escriben_en_data():
     assert _wf()["concurrency"] == {"group": "gdelt-data", "cancel-in-progress": False}
 
 
-def test_escribe_solo_su_job_y_solo_velas_en_data():
+def test_escribe_solo_su_job_y_el_commit_de_velas_solo_suma_velas():
     wf = _wf()
     assert wf["permissions"] == {"contents": "read"}
     job = wf["jobs"]["concordancia_d1"]
@@ -73,7 +73,7 @@ def test_la_concordancia_corre_despues_del_commit_y_un_rojo_no_impide_commitear(
     assert nombres.index("Commit a data") > i_ingesta
     i_conc = nombres.index("Concordancia diaria D1")
     assert i_conc > nombres.index("Commit a data")
-    assert _pasos()[i_conc]["run"] == "python tools/concordancia_d1.py"
+    assert _pasos()[i_conc]["run"] == "python tools/concordancia_d1.py --deriv-en-vivo --guardar"
     assert "env" not in _pasos()[i_conc]
     assert _pasos()[i_ingesta]["continue-on-error"] is True
     assert _pasos()[-1]["if"] == "steps.velas.outcome == 'failure'"

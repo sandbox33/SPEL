@@ -179,6 +179,12 @@ def _es_numero(x: Any) -> bool:
     return isinstance(x, (int, float)) and not isinstance(x, bool)
 
 
+def esta_cerrada(epoch: int, granularidad: int, ahora_servidor: int) -> bool:
+    """Una vela está cerrada si terminó a la hora del servidor: su época más
+    la granularidad no pasa de `ahora_servidor`. Solo se usan cerradas."""
+    return epoch + granularidad <= ahora_servidor
+
+
 def normalizar_vela(c: dict, granularidad: int) -> dict:
     """De una vela de la API a la fila que se guarda. Valida TODO; la única
     conversión es entero -> float en los precios, y ocurre acá, en el borde,
@@ -350,7 +356,7 @@ def _ingerir_simbolo(
         except VelaInvalidaError as exc:
             rep.invalidas.append(str(exc))
             continue
-        if fila["epoch"] + granularidad > ahora_servidor:
+        if not esta_cerrada(fila["epoch"], granularidad, ahora_servidor):
             rep.abiertas_descartadas += 1
             continue
         previa = guardadas.get(fila["epoch"])
