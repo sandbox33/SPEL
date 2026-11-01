@@ -206,10 +206,10 @@ async def velas_en_vivo(abrir: Callable[[str], Any], series: Sequence[tuple[str,
     /ws/public en una sola conexión, de los últimos `ventana_dias` días según
     la hora del servidor, con `count` explícito en cada página. Devuelve en
     memoria solo las cerradas y válidas (`esta_cerrada`, `normalizar_vela`),
-    por época. No escribe nada: los API Terms de Deriv no dejan guardarlas
-    más allá de una caché de 24 horas (brief del Admin 16a, punto 6). Nunca
-    lanza por lo que conteste Deriv: el error y el corte de cada serie
-    quedan en el resultado."""
+    por época, y sus cierres. No escribe nada: los API Terms de Deriv no
+    dejan guardarlas más allá de una caché de 24 horas (brief del Admin 16a,
+    punto 6). Nunca lanza por lo que conteste Deriv: el error y el corte de
+    cada serie quedan en el resultado."""
     out: dict[str, Any] = {"endpoint": ENDPOINT_PUBLICO, "ventana_dias": ventana_dias,
                            "series": {}}
     async with abrir(ENDPOINT_PUBLICO) as ws:
@@ -245,6 +245,7 @@ async def velas_en_vivo(abrir: Callable[[str], Any], series: Sequence[tuple[str,
                 "simbolo": simbolo, "granularidad": granularidad, "corte": prof["corte"],
                 "paginas": len(prof["paginas"]),
                 "sha256_paginas": [p.get("sha256") for p in prof["paginas"]],
-                "velas": velas, "invalidas": invalidas[:20], "n_invalidas": len(invalidas),
+                "velas": velas, "cierres": {e: f["close"] for e, f in velas.items()},
+                "invalidas": invalidas[:20], "n_invalidas": len(invalidas),
                 "abiertas_descartadas": abiertas, "antes_de_la_ventana": antes}
     return out

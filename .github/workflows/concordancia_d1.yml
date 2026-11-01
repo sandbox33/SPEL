@@ -112,9 +112,27 @@ jobs:
           done
           exit 1
 
-      # Lee lo que quedó en data-store; no escribe nada.
+      # Lee TwelveData de data-store y pide Deriv en vivo, sin guardarlo
+      # (brief 16a, punto 6). Si falta un archivo de TwelveData, sale 2 sin
+      # pedir ni publicar nada. Escribe solo el informe, en
+      # metrics/compuertas/concordancia_d1/, y el mismo resumen en
+      # $GITHUB_STEP_SUMMARY (punto 4).
       - name: Concordancia diaria D1
-        run: python tools/concordancia_d1.py
+        run: python tools/concordancia_d1.py --deriv-en-vivo --guardar
+
+      - name: Commit del informe a data
+        working-directory: data-store
+        run: |
+          git add metrics/compuertas/concordancia_d1
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "veredicto de la concordancia diaria D1 $(date -u +%F)" \
+            -m "Corrida ${{ github.run_id }} de ${{ github.workflow }} (${{ github.event_name }})."
+          for intento in 1 2; do
+            git pull --rebase -q origin data && git push -q origin HEAD:data && exit 0
+            echo "Push rechazado (intento $intento)."
+          done
+          exit 1
 
       - name: Resultado
         if: steps.velas.outcome == 'failure'

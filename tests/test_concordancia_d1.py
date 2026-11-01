@@ -56,9 +56,10 @@ def _intradia(dias: list[date], g: int) -> dict[int, float]:
     return {e: precio(e + g) for d in dias for e in range(_ep(d), _ep(d) + D, g)}
 
 
-def _escribir(serie: str, g: int, cierres: dict[int, float]) -> None:
-    _append(ruta_serie(serie, g), [{"epoch": e, "open": c, "high": c, "low": c, "close": c}
-                                   for e, c in sorted(cierres.items())])
+def _escribir(serie: str, g: int, cierres: dict[int, float], rango: float = 0.0) -> None:
+    """Velas de cierre `c`; con `rango`, el máximo y el mínimo a esa distancia."""
+    _append(ruta_serie(serie, g), [{"epoch": e, "open": c, "high": c + rango, "low": c - rango,
+                                    "close": c} for e, c in sorted(cierres.items())])
 
 
 #: El horario de Deriv como lo guarda velas_intradia (trading_times del
@@ -100,21 +101,27 @@ def _mundo(*, corte_oro: int = 0, corte_btc: int = 0, noche_del_viernes: float =
     def cierre_td(d: date, corte: int) -> float:
         return precio(_ep(d) + D if corte == 0 else _ep(d) + corte * H)
     dias = _dias()
-    _escribir("td_BTCUSD", D, {_ep(d): cierre_td(d, corte_btc) for d in dias})
+    _escribir("td_BTCUSD", D, {_ep(d): cierre_td(d, corte_btc) for d in dias}, rango=1.0)
     _escribir("cryBTCUSD", D, {_ep(d): precio(_ep(d) + D) * (1 + 1e-7 * (-1) ** k)
-                               for k, d in enumerate(dias)})
+                               for k, d in enumerate(dias)}, rango=1.0)
     _escribir("td_BTCUSD", H, _intradia(dias[-20:], H))
     oro = _dias(habiles=True)
     _escribir("td_XAUUSD", D, {_ep(d): cierre_td(d, 0) for d in oro})
-    _escribir("td_XAUUSD", M5, _m5_del_oro(oro, deriv=False, noche_del_viernes=noche_del_viernes))
-    _escribir("frxXAUUSD", M5, _m5_del_oro(oro, deriv=True))
+    _escribir("td_XAUUSD", M5, _m5_del_oro(oro, deriv=False, noche_del_viernes=noche_del_viernes),
+              rango=1.0)
+    m5_deriv = _m5_del_oro(oro, deriv=True)
+    _escribir("frxXAUUSD", M5, m5_deriv, rango=1.0)
 
     def cierre_deriv(d: date) -> float:
         if corte_oro:
             return precio(_ep(d) + corte_oro * H)
         return precio(_ep(d) + (21 * H if d.weekday() == 4 else D))
-    _escribir("frxXAUUSD", D, {_ep(d): cierre_deriv(d) * (1 + 1e-7 * (-1) ** k)
-                               for k, d in enumerate(oro)})
+    # El máximo y el mínimo diarios de Deriv, coherentes con su M5.
+    del_dia = {_ep(d): [c for e, c in m5_deriv.items() if _ep(d) <= e < _ep(d) + D] for d in oro}
+    _append(ruta_serie("frxXAUUSD", D), [
+        {"epoch": _ep(d), "open": c, "high": max(del_dia[_ep(d)]) + 1.0,
+         "low": min(del_dia[_ep(d)]) - 1.0, "close": c}
+        for k, d in enumerate(oro) for c in [cierre_deriv(d) * (1 + 1e-7 * (-1) ** k)]])
     if horario:
         _append(ruta_calendario(), [{"fecha_servidor": "2026-10-14", "sha256": "ab" * 32,
                                      "horario": HORARIO_DERIV, "crudo": "{}"}])
@@ -377,8 +384,8 @@ def test_sin_pares_es_roja():
 def test_con_los_dos_cortes_a_las_00_utc_hay_compuerta():
     _mundo()
     bloques = dict(cd.informe())
-    assert list(bloques) == ["DATOS", "PASO 1 BTC", "PASO 1 XAU", "PASO 2 BTC", "PASO 2 XAU",
-                             "SENSIBILIDAD XAU", "COMPUERTA"]
+    assert list(bloques) == ["DATOS", "PASO 1 BTC", "PASO 1 XAU", "PASO 2 BTC", "PASO 3 BTC",
+                             "PASO 2 XAU", "SENSIBILIDAD XAU", "PASO 3 XAU", "COMPUERTA"]
     assert bloques["PASO 1 BTC"]["decision"] == bloques["PASO 1 XAU"]["decision"] == "sigue"
     assert bloques["COMPUERTA"] == {"BTC": "verde", "XAU": "verde"}
     assert bloques["PASO 2 BTC"]["dias_comunes"] == N_DIAS
@@ -389,10 +396,10 @@ def test_con_los_dos_cortes_a_las_00_utc_hay_compuerta():
 
 
 @pytest.mark.parametrize("corte_oro, corte_btc, detenidos, bloques_esperados", [
-    (22, 0, ["XAU"], ["DATOS", "PASO 1 BTC", "PASO 1 XAU", "PASO 2 BTC", "DETENIDO XAU",
-                      "COMPUERTA"]),
+    (22, 0, ["XAU"], ["DATOS", "PASO 1 BTC", "PASO 1 XAU", "PASO 2 BTC", "PASO 3 BTC",
+                      "DETENIDO XAU", "COMPUERTA"]),
     (0, 22, ["BTC"], ["DATOS", "PASO 1 BTC", "PASO 1 XAU", "DETENIDO BTC", "PASO 2 XAU",
-                      "SENSIBILIDAD XAU", "COMPUERTA"]),
+                      "SENSIBILIDAD XAU", "PASO 3 XAU", "COMPUERTA"]),
 ])
 def test_un_corte_que_no_es_00_utc_detiene_ese_activo_sin_su_compuerta(
         monkeypatch, corte_oro, corte_btc, detenidos, bloques_esperados):

@@ -102,13 +102,15 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import math
+import os
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from statistics import median
-from typing import Iterable, Optional, Sequence
+from typing import Any, Callable, Iterable, Optional, Sequence
 
 import numpy as np
 
@@ -126,7 +128,16 @@ from ingestion.velas import (  # noqa: E402
     ruta_serie,
 )
 from ingestion.velas_d1 import ACTIVOS_D1, ActivoD1  # noqa: E402
-from ingestion.velas_intradia import GRANULARIDAD_M5, publicar, sha256_de_archivo  # noqa: E402
+from ingestion.adapters import DerivAdapter  # noqa: E402
+from ingestion.deriv_publico import CORTE_VENTANA, velas_en_vivo  # noqa: E402
+from ingestion.velas_intradia import (  # noqa: E402
+    CORTES_DE_FONDO,
+    GRANULARIDAD_M5,
+    MAX_PAGINAS_DERIV,
+    PAUSA_DERIV_S,
+    publicar,
+    sha256_de_archivo,
+)
 from tools.concordancia_xauusd import datos_del_horario, franja, horario_vigente  # noqa: E402
 
 #: Fijados antes de bajar un precio diario (brief del Admin 14, 14b).
@@ -410,20 +421,50 @@ def _datos(serie: str, granularidad: int, velas: dict[int, float]) -> dict:
             "ultima": _fecha(max(velas) if velas else None)}
 
 
-def _series(a: ActivoD1) -> dict:
+def series_de_deriv() -> list[tuple[str, int]]:
+    """(símbolo, granularidad) de Deriv que lee la compuerta: la diaria de
+    cada activo y el M5 de los que salen del M5 (su paso 1)."""
+    return ([(a.deriv, GRANULARIDAD_DIARIA) for a in ACTIVOS_D1]
+            + [(a.deriv, a.granularidad_intradia) for a in ACTIVOS_D1 if a.activo in DIARIA_DESDE_M5])
+
+
+def _deriv(a: ActivoD1, granularidad: int, vivo: Optional[dict]) -> tuple[dict, dict]:
+    """Los cierres de una serie de Deriv y sus datos: de lo que llegó en vivo
+    (brief 16a, punto 6) o, sin `vivo`, de lo guardado."""
+    if vivo is None:
+        c = cierres(a.deriv, granularidad)
+        return c, _datos(a.deriv, granularidad, c)
+    s = vivo["series"].get((a.deriv, granularidad)) or {}
+    c = s.get("cierres") or {}
+    return c, {"fuente": "Deriv en vivo, sin guardar", "hora_servidor": vivo.get("hora_servidor"),
+               "ventana_dias": vivo.get("ventana_dias"), "error": vivo.get("error"),
+               "velas": len(c), "primera": _fecha(min(c) if c else None),
+               "ultima": _fecha(max(c) if c else None), "corte": s.get("corte"),
+               "paginas": s.get("paginas"), "n_invalidas": s.get("n_invalidas"),
+               "abiertas_descartadas": s.get("abiertas_descartadas")}
+
+
+def _rangos_deriv(a: ActivoD1, vivo: Optional[dict]) -> dict[int, tuple[float, float]]:
+    from tools import concordancia_d1_paso3 as p3
+    if vivo is None:
+        return p3.rangos(leer_velas(a.deriv, GRANULARIDAD_DIARIA))
+    return p3.rangos_de_filas((vivo["series"].get((a.deriv, GRANULARIDAD_DIARIA)) or {}).get("velas") or {})
+
+
+def _series(a: ActivoD1, vivo: Optional[dict] = None) -> dict:
     """Lo que lee cada activo, sus datos y su paso 1. El oro no lee su 1day
-    de TwelveData (D1-x)."""
-    deriv = cierres(a.deriv, GRANULARIDAD_DIARIA)
-    deriv_86400 = {**_datos(a.deriv, GRANULARIDAD_DIARIA, deriv),
-                   "sha256_revisiones": sha256_de_archivo(ruta_revisiones(a.deriv, GRANULARIDAD_DIARIA))}
+    de TwelveData (D1-x). Deriv llega en vivo si `vivo`; si no, de lo
+    guardado."""
+    deriv, deriv_86400 = _deriv(a, GRANULARIDAD_DIARIA, vivo)
+    if vivo is None:
+        deriv_86400["sha256_revisiones"] = sha256_de_archivo(ruta_revisiones(a.deriv, GRANULARIDAD_DIARIA))
     intradia = cierres(a.intradia, a.granularidad_intradia)
     if a.activo in DIARIA_DESDE_M5:
-        deriv_m5 = cierres(a.deriv, a.granularidad_intradia)
+        deriv_m5, datos_m5 = _deriv(a, a.granularidad_intradia, vivo)
         fila = horario_vigente()
         return {"deriv": deriv, "intradia": intradia, "horario": (fila or {}).get("horario"),
                 "datos": {"intradia_twelvedata": _datos(a.intradia, a.granularidad_intradia, intradia),
-                          "deriv_86400": deriv_86400,
-                          "deriv_m5": _datos(a.deriv, a.granularidad_intradia, deriv_m5),
+                          "deriv_86400": deriv_86400, "deriv_m5": datos_m5,
                           "horario_deriv": datos_del_horario(fila)},
                 "paso_1": paso_1_deriv(deriv, deriv_m5)}
     td = cierres(a.td.serie, GRANULARIDAD_DIARIA)
@@ -434,32 +475,73 @@ def _series(a: ActivoD1) -> dict:
             "paso_1": paso_1(td, intradia, a.granularidad_intradia)}
 
 
-def _pasos_2(a: ActivoD1, s: dict) -> list[tuple[str, dict]]:
-    """La compuerta de un activo cuyo paso 1 sigue. La del oro, con su
-    diaria desde el M5 y el horario de Deriv, y con la regla de 24:00 como
-    sensibilidad."""
-    revisiones = cierres_revisados(a.deriv, GRANULARIDAD_DIARIA)
+def _paso_2(td: dict[int, float], deriv: dict[int, float], a: ActivoD1, vivo: Optional[dict]) -> dict:
+    """El paso 2 de 41cf853, sin cambios. En vivo no hay archivo de
+    revisiones de Deriv: el informe lo dice en vez de contar cero. Las
+    revisiones son informativas; la regla no las usa."""
+    if vivo is None:
+        return paso_2(td, deriv, a.td.calendario, cierres_revisados(a.deriv, GRANULARIDAD_DIARIA))
+    p = paso_2(td, deriv, a.td.calendario)
+    if "informativo" in p:
+        p["informativo"]["revisiones_deriv"] = "no medidas: Deriv llega en vivo y no se guarda"
+    return p
+
+
+def _pasos_2_y_3(a: ActivoD1, s: dict, vivo: Optional[dict]) -> tuple[list[tuple[str, dict]], str]:
+    """Los pasos 2 y 3 de un activo cuyo paso 1 sigue, y su compuerta: verde
+    solo con los dos (brief 16a, candado 3). El oro, con su diaria desde el
+    M5 y el horario de Deriv, y con la regla de 24:00 como sensibilidad del
+    paso 2."""
+    from tools import concordancia_d1_paso3 as p3
+    rangos_dr = _rangos_deriv(a, vivo)
     if a.activo not in DIARIA_DESDE_M5:
-        return [(f"PASO 2 {a.activo}", paso_2(s["td"], s["deriv"], a.td.calendario, revisiones))]
-    p = paso_2(diarias_desde_m5(s["intradia"], a.granularidad_intradia, s["horario"]),
-               s["deriv"], a.td.calendario, revisiones)
-    sens = paso_2(diarias_desde_m5(s["intradia"], a.granularidad_intradia),
-                  s["deriv"], a.td.calendario, revisiones)
-    return [(f"PASO 2 {a.activo}",
-             {"diaria_de_twelvedata": "M5: la última vela del día dentro del horario de Deriv", **p}),
-            (f"SENSIBILIDAD {a.activo}",
-             {"diaria_de_twelvedata": "M5: la última vela del día UTC (el viernes, a las 24:00)",
-              "el_veredicto_cambia": sens["compuerta"] != p["compuerta"], **sens})]
+        p = _paso_2(s["td"], s["deriv"], a, vivo)
+        bloques = [(f"PASO 2 {a.activo}", p)]
+        td_cierres, td_rangos = s["td"], p3.rangos(leer_velas(a.td.serie, GRANULARIDAD_DIARIA))
+    else:
+        td_cierres = diarias_desde_m5(s["intradia"], a.granularidad_intradia, s["horario"])
+        p = _paso_2(td_cierres, s["deriv"], a, vivo)
+        sens = _paso_2(diarias_desde_m5(s["intradia"], a.granularidad_intradia), s["deriv"], a, vivo)
+        bloques = [(f"PASO 2 {a.activo}",
+                    {"diaria_de_twelvedata": "M5: la última vela del día dentro del horario de Deriv", **p}),
+                   (f"SENSIBILIDAD {a.activo}",
+                    {"diaria_de_twelvedata": "M5: la última vela del día UTC (el viernes, a las 24:00)",
+                     "el_veredicto_cambia": sens["compuerta"] != p["compuerta"], **sens})]
+        td_rangos = p3.rangos_desde_m5(p3.rangos(leer_velas(a.intradia, a.granularidad_intradia)),
+                                       s["horario"])
+    tres = p3.paso_3(td_cierres, td_rangos, s["deriv"], rangos_dr, a.td.calendario)
+    bloques.append((f"PASO 3 {a.activo}", tres))
+    return bloques, p3.compuerta_del_activo(p["compuerta"], tres["paso_3"])
 
 
-def informe() -> list[tuple[str, dict]]:
-    series = {a.activo: _series(a) for a in ACTIVOS_D1}
+def _deriv_incompleto(a: ActivoD1, vivo: Optional[dict]) -> list[str]:
+    """En vivo: por qué faltan series de Deriv de un activo. Una serie está
+    entera si su corte es un fondo de la historia o el inicio de la ventana;
+    un error o el tope de páginas la dejan incompleta, y el activo se detiene
+    en vez de comparar contra una parte."""
+    if vivo is None:
+        return []
+    if vivo.get("error"):
+        return [f"Deriv no respondió: {vivo['error']}"]
+    motivos = []
+    for simbolo, g in series_de_deriv():
+        if simbolo != a.deriv:
+            continue
+        corte = (vivo["series"].get((simbolo, g)) or {}).get("corte")
+        if corte not in CORTES_DE_FONDO and corte != CORTE_VENTANA:
+            motivos.append(f"la serie {simbolo} de {g} s de Deriv quedó incompleta: {corte!r}")
+    return motivos
+
+
+def informe(vivo: Optional[dict] = None) -> list[tuple[str, dict]]:
+    series = {a.activo: _series(a, vivo) for a in ACTIVOS_D1}
     bloques: list[tuple[str, dict]] = [("DATOS", {k: s["datos"] for k, s in series.items()})]
     bloques += [(f"PASO 1 {k}", s["paso_1"]) for k, s in series.items()]
     compuerta = {}
     for a in ACTIVOS_D1:
         s = series[a.activo]
-        motivos = list(s["paso_1"]["motivos"]) if s["paso_1"]["decision"] != "sigue" else []
+        motivos = _deriv_incompleto(a, vivo)
+        motivos += list(s["paso_1"]["motivos"]) if s["paso_1"]["decision"] != "sigue" else []
         if a.activo in DIARIA_DESDE_M5 and not s["horario"]:
             motivos.append("sin horario de Deriv en metrics/calendario: el viernes de TwelveData "
                            "cierra según ese horario (opción 2 del Admin)")
@@ -467,9 +549,8 @@ def informe() -> list[tuple[str, dict]]:
             bloques.append((f"DETENIDO {a.activo}", {"motivos": motivos, "compuerta": "no calculada"}))
             compuerta[a.activo] = "detenido"
             continue
-        pasos = _pasos_2(a, s)
+        pasos, compuerta[a.activo] = _pasos_2_y_3(a, s, vivo)
         bloques += pasos
-        compuerta[a.activo] = pasos[0][1]["compuerta"]
     bloques.append(("COMPUERTA", compuerta))
     return bloques
 
@@ -546,11 +627,38 @@ def resumen_markdown(informe: dict) -> str:
     return "\n".join(lineas)
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
-    argparse.ArgumentParser(prog="concordancia_d1",
-                            description="Concordancia diaria de D1 contra Deriv.").parse_args(argv)
-    for titulo, bloque in informe():
+def main(argv: Optional[Sequence[str]] = None, *,
+         abrir: Optional[Callable[[str], Any]] = None) -> int:
+    ap = argparse.ArgumentParser(prog="concordancia_d1",
+                                 description="Concordancia diaria de D1 contra Deriv.")
+    ap.add_argument("--deriv-en-vivo", action="store_true",
+                    help="pide Deriv en vivo, sin guardarlo (brief 16a, punto 6)")
+    ap.add_argument("--guardar", action="store_true",
+                    help="deja el informe en metrics/compuertas/concordancia_d1/ y el resumen "
+                         "en $GITHUB_STEP_SUMMARY (brief 16a, punto 4)")
+    args = ap.parse_args(argv)
+    faltan = faltan_archivos_twelvedata()
+    if faltan:
+        print("DETENIDO: faltan archivos de TwelveData que la compuerta necesita: "
+              + ", ".join(faltan) + ". Con la ingesta apagada no se bajan. "
+              "No se pidió ni se publicó nada.")
+        return 2
+    vivo = None
+    if args.deriv_en_vivo:
+        vivo = asyncio.run(velas_en_vivo(abrir or DerivAdapter._default_connector, series_de_deriv(),
+                                         pausa_s=PAUSA_DERIV_S, max_paginas=MAX_PAGINAS_DERIV))
+    bloques = informe(vivo)
+    for titulo, bloque in bloques:
         publicar(titulo, bloque)
+    if args.guardar:
+        hora = (vivo or {}).get("hora_servidor")
+        fecha = (_fecha(hora) if hora else datetime.now(timezone.utc).date().isoformat())
+        inf = informe_para_data(bloques, fecha=fecha, run_id=os.environ.get("GITHUB_RUN_ID", "local"))
+        print(f"Informe: {_relativa(guardar_informe(inf))}")
+        resumen = os.environ.get("GITHUB_STEP_SUMMARY")
+        if resumen:
+            with open(resumen, "a", encoding="utf-8") as f:
+                f.write(resumen_markdown(inf))
     return 0
 
 
