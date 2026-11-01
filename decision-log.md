@@ -4586,3 +4586,63 @@ nada en `data`.
    - El brief lo pide con la ingesta apagada.
    - El prototipo lo hace siempre: la compuerta es la misma con o sin ingesta, y no usa lo que
      Deriv dejó guardado.
+
+## 2026-10-31 — Brief 16a: lo detenido, con las decisiones del Admin
+
+**Fuente:** las decisiones del Admin del 31-oct sobre "Lo que el Admin decide" de 16a.5 y los
+hallazgos 1 y 6 de 16a.6, con la recomendación del auditor. Misma rama y mismo PR (#49).
+
+### Las decisiones
+
+1. **Cuatro casos de test se editan, solo en lista y comando.**
+   - `test_con_los_dos_cortes_a_las_00_utc_hay_compuerta`: la lista de bloques suma "PASO 3 BTC"
+     y "PASO 3 XAU".
+   - `test_un_corte_que_no_es_00_utc_detiene_ese_activo_sin_su_compuerta[22-0]`: suma
+     "PASO 3 BTC".
+   - `test_un_corte_que_no_es_00_utc_detiene_ese_activo_sin_su_compuerta[0-22]`: suma
+     "PASO 3 XAU".
+   - `test_la_concordancia_corre_despues_del_commit_y_un_rojo_no_impide_commitear`: la línea
+     `run` pasa a `python tools/concordancia_d1.py --deriv-en-vivo --guardar`.
+   - Ninguna otra aserción cambia. Rigen las condiciones del 19-oct: no se borra ningún test, no
+     se toca ninguna constante y los diffs van en el PR.
+2. **El fixture de `tests/test_concordancia_d1.py` gana rango.**
+   - `_escribir(..., rango=0.0)`: con el valor por defecto escribe lo mismo que hoy. `_mundo()`
+     usa `rango=1.0` en las cuatro series que lee el paso 3, y la diaria del oro en Deriv toma el
+     máximo y el mínimo de su M5, ±1.
+   - `rango=1.0` es un valor sintético, no una medición de Deriv. El fixture escribía velas con
+     máximo = mínimo = cierre, de rango cero, y con el paso 3 la compuerta quedaba roja en todos
+     los tests de la conexión. El valor solo sirve para que esos tests ejerciten la conexión con
+     un rango no nulo.
+   - El caso de rango cero sigue fijado, sin cambios, por
+     `test_un_dia_con_rango_cero_en_deriv_queda_fuera_y_se_cuenta` y
+     `test_sin_dias_con_rango_el_rango_es_rojo`.
+   - Las aserciones de los cuatro tests afectados (`test_main_publica_cada_bloque_y_sale_0`,
+     `test_el_veredicto_de_cada_activo_es_el_suyo`,
+     `test_sin_horario_el_oro_se_detiene_y_btc_sigue` y
+     `test_si_la_noche_del_viernes_cambia_el_veredicto_lo_dice_y_manda_el_horario`) no cambian.
+3. **Un activo con menos de 250 días comunes es NO EVALUABLE. En esta corrida, BTC es el único
+   veredicto.**
+   - `MIN_DIAS_COMUNES` (250, `41cf853`) no cambia y la ingesta no se enciende en este PR. La
+     alternativa de velas nuevas de TwelveData queda para el brief 20.
+   - La regla del paso 2 no cambia: con menos de 250 días comunes, la compuerta del activo no es
+     verde.
+   - El informe y el resumen distinguen el motivo. Un activo con menos de `MIN_DIAS_COMUNES` días
+     comunes se publica como "NO EVALUABLE: N días comunes, mínimo 250", no como un rojo de
+     concordancia. Las métricas de los pasos 2 y 3 se publican como informativas.
+   - Razón: un rojo por falta de días no dice nada de la fuente, y presentarlo como una falla de
+     concordancia sería un veredicto falso.
+4. **Deriv en vivo, solo con la ingesta apagada.**
+   - La compuerta (Deriv en vivo, los pasos 1 a 3 y el informe) corre solo si
+     `SPEL_INGESTA_CRUDA` no vale exactamente `true`, es decir, si el paso "Interruptor de la
+     ingesta" devolvió `apagada`.
+   - Con la ingesta encendida no se pide Deriv en vivo, no se calcula la compuerta y no se
+     escribe el informe en `data`. El log lo dice ("DETENIDO: con la ingesta encendida, la
+     compuerta no corre"). Lo que la ingesta encendida hace con las velas no cambia y lo decide
+     el brief 20.
+   - Guarda doble: el `if:` de los pasos en el workflow y, en el código, `main()` rechaza
+     `--deriv-en-vivo` si `SPEL_INGESTA_CRUDA` vale exactamente `true` en su entorno.
+   - Reemplaza la interpretación 6 de 16a.6.
+5. **El nombre del test.** `test_escribe_solo_su_job_y_solo_velas_en_data` pasa a
+   `test_escribe_solo_su_job_y_el_commit_de_velas_solo_suma_velas`. El cuerpo no cambia. El
+   nombre viejo dejó de ser exacto porque el job ahora también commitea el informe, y ese paso lo
+   cubren los tests nuevos.
