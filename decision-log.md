@@ -4690,3 +4690,91 @@ verifica que nadie la llamó.
   y NO EVALUABLE (quitarlo, correr el borde a > 250 y no marcar los informativos). Son 32 y quedan
   atrapados los 32.
 - Mutantes de las piezas del 28-oct: 63 de 63 atrapados.
+
+## 2026-11-01 — Brief 16a-fix: el M5 de Deriv en la compuerta
+
+**Fuente:** brief del Admin 16a-fix (01-nov). Rama `claude/brief-16a-fix-deriv-m5`, desde `main`
+en `e7be5b7` (el merge del #49).
+
+### Los hechos de las dos corridas
+
+"SPEL concordancia diaria D1", corridas `41306294896` y `41307121919` del 01-nov, con la ingesta
+apagada. Se leyeron sus dos informes en `data`
+(`metrics/compuertas/concordancia_d1/2026-11-01_<run_id>.json`). Son idénticos en lo que sigue:
+- **BTC: verde.** La 86400 de Deriv trae 364 velas, del 2025-11-02 al 2026-10-31, en 1 página, con
+  corte en el inicio de la ventana. El paso 2 da 351 días comunes (del 2025-11-02 al 2026-10-18) y
+  350 de 350 pares. El paso 3 da verde en rango y en señal.
+- **Oro: detenido.**
+  - La 86400 de Deriv trae 256 velas, del 2025-11-03 al 2026-10-29, en 2 páginas, con corte
+    "respuesta vacía".
+  - El M5 cortó en **"error"** en la página 43, con 28.012 velas (la primera, del 2026-06-09; la
+    última, del 2026-10-30).
+  - El bloque DATOS dice `"error": null`: el error de la página se perdía en `velas_en_vivo`, que
+    solo copiaba el corte.
+  - El motivo de DETENIDO: "la serie frxXAUUSD de 300 s de Deriv quedó incompleta: 'error'".
+
+### El contraste con el 08-oct
+
+La corrida `37721686439` de `velas_intradia.yml` (08-oct) bajó 108 páginas del M5 de frxXAUUSD
+con `profundidad()`: 69.462 velas, del 2025-10-08 al 2026-10-08, con corte "la página no
+retrocedió" (entrada del 08-oct).
+
+**El brief dice que esa corrida fue "sin `start`" y que el 16a agregó el `start`. El código no
+coincide:**
+- `profundidad()` manda `start = max(0, fin − DERIV_MAX_COUNT × granularidad)` desde la página
+  2. Así está en `f66a04b` (07-oct), el código de esa corrida, en las líneas 137, 138 y 170.
+- El 16a (`b84d7d3`) cambió solo el piso: `max(desde or 0, …)`.
+- Mientras `fin − 5.000 × 300 s` quede después de `desde`, el `start` es el mismo que el del
+  08-oct. La página 43 terminaba cerca del 2026-06-09, siete meses después de `desde`
+  (2025-11-02): su `start` no lo tocaba el piso.
+- Las páginas traen la misma densidad: unas 651 velas por página el 01-nov (28.012 en 43) y unas
+  643 el 08-oct (69.462 en 108).
+
+**Diferencias que sí hay entre las dos corridas:**
+- el 01-nov pidió antes, en la misma conexión, la 86400 de BTC y la del oro;
+- `velas_intradia` pide su propio canal;
+- la fecha.
+
+### La causa: NO VERIFICADA
+
+No se sabe por qué falló la página 43: el informe perdió el error. Que la causa sea `start` no es
+consistente con el código: la página 43 se pidió igual que el 08-oct. La causa se verifica con la
+corrida siguiente, que ya publica el error (decisión 2).
+
+### Las decisiones
+
+**[INTERPRETACIÓN] La numeración.** El brief pide "las decisiones 1 a 4" y fija la decisión 1 en
+BTC. Van la de BTC como 1 y los puntos 1 a 3 del brief como 2 a 4.
+
+1. **BTC verde es válido para la ventana del 2025-11-02 al 2026-10-18, con 351 días comunes.**
+2. **El error de la página se publica, sin cambiar reglas** (punto 1). Hecho en `09136c9`:
+   - `velas_en_vivo` copia, por serie, el error de la última página (`error_pagina`: `code` y
+     `message`) y la página (`pagina_fallida`: número, `end` y `start`).
+   - Un error del canal sin respuesta de Deriv (timeout, una respuesta que no es JSON) queda con
+     `code` nulo y el texto en `message`.
+   - Los dos campos van al bloque DATOS (`deriv_86400`, `deriv_m5`) y el motivo de DETENIDO suma
+     el `code` y el `message`.
+   - **[INTERPRETACIÓN]** El brief dice `_datos`, pero en vivo el bloque DATOS de Deriv lo arma
+     `_deriv`: los campos van ahí. `_datos` arma el bloque de lo guardado, que no tiene páginas.
+3. **La paginación sin `start` con `desde`** (punto 2): **DETENIDA.**
+   - `tests/test_deriv_en_vivo.py::test_la_ventana_corta_la_paginacion_y_ningun_start_es_anterior`,
+     de `main`, fija el envío de `start` con `desde`:
+     `assert all(q["start"] >= desde for q in pedidos[1:]) and pedidos[-1]["start"] == desde`.
+   - El brief dice que en ese caso me detenga y no lo edite.
+   - Además, el supuesto del cambio ("el 08-oct fue sin `start`") no coincide con el código (ver
+     el contraste).
+   - Quitar el `start` con `desde` haría que la compuerta pagine distinto que el 08-oct, no igual.
+   - Lo decide el Admin, mejor con el error de la página 43 a la vista.
+4. **Lo que no cambia** (punto 3): `paso_2`, `paso_3`, `MIN_DIAS_COMUNES`, las constantes,
+   `config/`, la guarda de la ingesta, NO EVALUABLE y el orden de las detenciones.
+
+### Lo esperado en la corrida siguiente
+
+**El oro, si el M5 llega entero: NO EVALUABLE.**
+- El M5 de TwelveData del oro termina el 2026-10-19 y la ventana de Deriv empieza el 2025-11-03.
+- Con las fechas de `frxXAUUSD/86400` en `data`, sin precios, quedan **247** barras del
+  2025-11-03 al 2026-10-16. El brief dice "unos 246". Las dos están por debajo de 250, y el
+  número real sale de la corrida.
+
+**Si el M5 vuelve a cortar en "error",** el oro sigue detenido, y el informe ya dice el `code`, el
+`message` y la página.

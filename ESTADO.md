@@ -10,37 +10,35 @@
 > Este archivo se lee primero en cada chat nuevo. Frente a un chat que lo contradiga sin
 > evidencia, gana el archivo; frente al código, gana el código.
 
-**Última actualización:** 1 nov 2026 — brief del Admin 16a en la rama `claude/brief-16a-compuerta-rango` (PR #49, en borrador), **con las decisiones del Admin del 31-oct aplicadas**.
+**Última actualización:** 1 nov 2026 — brief del Admin 16a-fix en la rama `claude/brief-16a-fix-deriv-m5`, **con el punto 2 (la paginación sin `start`) detenido**.
 
-La corrida 39209167984 del 19-oct (`main` en `952d082`) dio la compuerta oficial del paso 2:
-- **BTC:** verde, con 364 de 364 pares y 365 días comunes (2025-10-19 a 2026-10-18).
-- **Oro:** verde, con 245 de 253 pares y 257 días comunes (2025-10-20 a 2026-10-16). La sensibilidad de 24:00 también da verde (237 de 253): el veredicto no cambia y la opción 2 queda.
+**Las corridas del 01-nov** (41306294896 y 41307121919, con la ingesta apagada, `main` en `e7be5b7`) dieron lo mismo:
+- **BTC: verde**, válido para la ventana del 2025-11-02 al 2026-10-18, con 351 días comunes y 350 de 350 pares. El paso 3 también da verde.
+- **El oro: detenido por un error de Deriv en el M5**, no NO EVALUABLE como se esperaba. El M5 cortó en "error" en la página 43, con 28.012 velas desde el 2026-06-09. El informe perdía el error de la página (`"error": null`). La causa NO está verificada.
 
-Este PR (brief 16a) deja la compuerta así:
-- **El paso 3** (`tools/concordancia_d1_paso3.py`): el máximo y el mínimo diarios, y la señal de ruptura para L ∈ {10, 20, 40}. Sus constantes se fijaron antes de leer una vela real.
-- **Candado 3:** la compuerta de cada activo es verde solo con el paso 2 y el paso 3.
-- **Deriv en vivo** (`velas_en_vivo`): los últimos 365 días, sin guardar nada. `main(--deriv-en-vivo --guardar)` lo pide y deja el informe en `metrics/compuertas/concordancia_d1/<fecha>_<run_id>.json`, append-only, con el sha256 de los archivos de TwelveData y la atribución. El workflow commitea solo ese informe.
-- **NO EVALUABLE** (decisión 3): un activo con menos de 250 días comunes se publica como "NO EVALUABLE: N días comunes, mínimo 250", nunca verde, con sus pasos 2 y 3 como informativos. `paso_2` y `MIN_DIAS_COMUNES` no cambian.
-- **El interruptor `SPEL_INGESTA_CRUDA`:** si no vale exactamente `true`, el workflow no baja ni commitea velas. La compuerta corre solo con la ingesta apagada (decisión 4): el `if:` de sus dos pasos y la guarda de `main()`.
-- **Los tests de `main`:** cambian solo los 4 casos y el fixture autorizados (decisiones 1 y 2), y un nombre (decisión 5).
+**El brief 16a-fix:**
+- **Hecho (`09136c9`):** el informe publica el error de la página que corta (`error_pagina`: `code` y `message`) y la página (`pagina_fallida`: número, `end` y `start`), en DATOS y en el motivo de DETENIDO. Las reglas no cambian.
+- **Detenido:** dejar de mandar `start` con `desde`. Lo fija un test de `main` (`test_la_ventana_corta_la_paginacion_y_ningun_start_es_anterior`). Además, el código del 08-oct (`f66a04b`) ya mandaba `start` desde la página 2: la página 43 se pidió igual que entonces. Lo decide el Admin.
 
-**Lo que se espera de la primera corrida, con la ingesta apagada:** el M5 del oro de TwelveData en `data` termina el 2026-10-19, y desde el 29-oct el oro tiene menos de 250 días comunes (249, y uno menos por día hábil). Saldrá NO EVALUABLE. BTC es el único veredicto. Es una estimación con fechas, sin precios; el número real sale de la corrida.
+**Lo esperado en la próxima corrida:**
+- Si el M5 llega entero, el oro pasa a NO EVALUABLE. Quedan unos 247 días comunes (el brief dice unos 246), menos que 250, porque TwelveData del oro termina el 19-oct. Es una estimación con fechas, sin precios; el número sale de la corrida.
+- Si vuelve a cortar, el informe ya dice por qué.
 
 **Sigue abierto, para el Admin:** si el horario debe leer el evento "Fridays: Closes early (at 20:55)".
 - El #48 se fusionó sin leerlo, y la corrida 39209167984 cerró el viernes con la vela que termina a las 21:00.
 - Ninguna entrada del decision-log lo cierra.
 - Ahora alcanza también al máximo y al mínimo del oro en el paso 3, que usan las mismas velas.
 
-Detalle en el decision-log del 28-oct y del 31-oct.
+Detalle en el decision-log del 28-oct, del 31-oct y del 01-nov.
 
-**Commit de referencia:** `952d082` (merge del PR #48, el brief 15).
+**Commit de referencia:** `e7be5b7` (merge del PR #49, el brief 16a).
 
-**Tests:** **2446** recolectados en `tests/`, en 74 archivos, medido con
+**Tests:** **2449** recolectados en `tests/`, en 75 archivos, medido con
 `pytest --collect-only -q tests/` el 1-nov-2026 sobre esta rama. Más 74 en `research/tests/`,
 que no bloquean.
 
-Desfase: **ninguno**. El commit de referencia es el merge del PR #48, el último de `main`, y esta
-actualización entra con el PR del brief 16a. `tests/test_estado_al_dia.py` falla si hay **más de 3
+Desfase: **ninguno**. El commit de referencia es el merge del PR #49, el último de `main`, y esta
+actualización entra con el PR del brief 16a-fix. `tests/test_estado_al_dia.py` falla si hay **más de 3
 PRs fusionados** desde el commit de referencia de arriba (DG-6).
 
 
@@ -59,7 +57,7 @@ FASE 3 — visualization/ (grafo)            ❄️ CONGELADA (D9) — no inicia
 FASE 4 — execution/ + Deriv real           🟡 Actuator confirmado; gate: modelo F2 o hipótesis H + DG-3
 FASE 5 — Escala (Supabase, Flet)           ❄️ CONGELADA (D9) — no iniciada
 FASE 6 — Motor streaming multi-timeframe   ❄️ CONGELADA (D9) — infraestructura lista, señal sin construir
-SERIE H                                    🟡 H1 v2 (#45) y H2 (#34) pre-registradas, esperan las velas de D1 (P1): el paso 2 de la compuerta dio verde en BTC y en el oro (corrida 39209167984, 19-oct); el paso 3 (máximos, mínimos y señal, brief 16a) entra en la compuerta con el PR #49, y con la ingesta apagada el oro saldrá NO EVALUABLE por días (< 250) y BTC será el único veredicto; H3 (#33) pre-registrada y ⏸ BLOQUEADA hasta tener historia validada para su universo (P2); H1 v1 sellada; H-ORB-oro ⏸ PAUSADA (D11)
+SERIE H                                    🟡 H1 v2 (#45) y H2 (#34) pre-registradas, esperan las velas de D1 (P1): el paso 2 de la compuerta dio verde en BTC y en el oro (corrida 39209167984, 19-oct); con el paso 3 (brief 16a), las corridas del 01-nov dan BTC verde (351 días comunes, del 2025-11-02 al 2026-10-18) y el oro detenido por un error de Deriv en el M5 (brief 16a-fix); H3 (#33) pre-registrada y ⏸ BLOQUEADA hasta tener historia validada para su universo (P2); H1 v1 sellada; H-ORB-oro ⏸ PAUSADA (D11)
 ```
 
 ⏸ **H-ORB-oro, pausada (D11).** Su compuerta de datos dio roja: TwelveData y Deriv coinciden
@@ -119,7 +117,7 @@ corridas seguidas sin intermitencia.
 | `ingestion/velas_intradia.py` + `.github/workflows/velas_intradia.yml` | Velas M5 del oro en `data`: TwelveData XAU/USD 5min desde 2020-03-16 y Deriv frxXAUUSD M5 por `/ws/public`, con el patrón de `velas.py`; horario de `trading_times` crudo con sha256; una página vacía de TwelveData es el fondo solo tras una página corta (brief 07-oct (6)). Desde la 14b, la descarga y la escritura reciben la serie; sin parámetros, todo sigue siendo el M5 | 43 + 6 | ✅ segundo run el 14-oct (38610611624, rama `data` en `bc2597a`): TwelveData 499.252 velas M5 desde 2020-03-16 y Deriv 70.718 desde 2025-10-08; el primero (08-oct) se había cortado en el 400 del fondo |
 | `ingestion/deriv_publico.py` + `ingestion/limitador.py` | Canal público de Deriv y paginación de velas, y el limitador de TwelveData, portados de las sondas. Desde el 16a, `velas_en_vivo`: las velas de Deriv de los últimos 365 días según la hora del servidor, solo cerradas y válidas, sin guardar nada (los API Terms de Deriv, según el brief) | (en los de arriba) + 9 | ✅ offline; 🟡 `velas_en_vivo` nunca pidió en vivo |
 | `ingestion/velas_d1.py` + `.github/workflows/concordancia_d1.yml` | Velas diarias de D1 en `data`, con la descarga y la escritura de `velas_intradia.py` parametrizadas por serie: TwelveData 1day de BTC/USD y XAU/USD, toda la historia (D1-p); Deriv 86400 de cryBTCUSD y frxXAUUSD por `/ws/public`; la muestra 1h de BTC, 60 días. Guarda el sha256 de cada página. Publica los créditos estimados (≤ 9) antes del primer pedido. Workflow solo manual, sin inputs (D8). Desde el brief 15 pone al día el M5 del oro de las dos fuentes, después de las diarias, con sus créditos aparte. Desde el 16a, el interruptor `SPEL_INGESTA_CRUDA`: si no vale exactamente `true`, el workflow no baja ni commitea velas, por las licencias de TwelveData y Deriv (la gobernanza de los datos crudos, brief 20) | 32 + 6 + 14 | ✅ corridas 39129395827 (18-oct, `data` en `c2a7b19`: 5 créditos de 9 estimados) y 39209167984 (19-oct); 🟡 el interruptor nunca corrió |
-| `tools/concordancia_d1.py` | Por activo (D1-i). Paso 1: en BTC, la hora de corte de TwelveData; en el oro, el corte de Deriv (su 86400 contra su última vela M5); un activo que no llega al 95 % (o, en BTC, no corta a las 00:00 UTC) se detiene sin su compuerta y el otro sigue. Paso 2, la compuerta: r de cierre a cierre, signo (o los dos < 1 pb) y \|Δr\| ≤ 0,2 × mediana(\|r_Deriv\|), verde con ≥ 90 % y ≥ 250 días comunes; la regla de `41cf853`, fijada con un test. La diaria de TwelveData del oro sale de su M5, solo de días terminados y con las velas dentro del horario de Deriv (D1-o, opción 2 del Admin), con la regla de 24:00 como sensibilidad; su 1day no se lee (D1-x). Ningún desenlace (guarda AST portada). Desde el 16a: el informe para `data` (`informe_para_data`, `guardar_informe`, `resumen_markdown`), append-only, con el sha256 de los archivos de TwelveData y la atribución, y `faltan_archivos_twelvedata` | 78 + 19 + 6 + 22 + 8 | ✅ corrida 39209167984 (19-oct, `main` en `952d082`): BTC verde (364 de 364 pares, 365 días comunes); el oro verde (245 de 253, 257 días) y su sensibilidad de 24:00 también (237 de 253). 🟡 desde el 16a: la compuerta con el paso 3 (candado 3), Deriv en vivo, el informe en `data` y NO EVALUABLE con < 250 días comunes, solo con la ingesta apagada; todavía sin corrida (PR #49 en borrador) |
+| `tools/concordancia_d1.py` | Por activo (D1-i). Paso 1: en BTC, la hora de corte de TwelveData; en el oro, el corte de Deriv (su 86400 contra su última vela M5); un activo que no llega al 95 % (o, en BTC, no corta a las 00:00 UTC) se detiene sin su compuerta y el otro sigue. Paso 2, la compuerta: r de cierre a cierre, signo (o los dos < 1 pb) y \|Δr\| ≤ 0,2 × mediana(\|r_Deriv\|), verde con ≥ 90 % y ≥ 250 días comunes; la regla de `41cf853`, fijada con un test. La diaria de TwelveData del oro sale de su M5, solo de días terminados y con las velas dentro del horario de Deriv (D1-o, opción 2 del Admin), con la regla de 24:00 como sensibilidad; su 1day no se lee (D1-x). Ningún desenlace (guarda AST portada). Desde el 16a: el informe para `data` (`informe_para_data`, `guardar_informe`, `resumen_markdown`), append-only, con el sha256 de los archivos de TwelveData y la atribución, y `faltan_archivos_twelvedata` | 78 + 19 + 6 + 22 + 8 | ✅ corrida 39209167984 (19-oct, `main` en `952d082`): BTC verde (364 de 364 pares, 365 días comunes); el oro verde (245 de 253, 257 días) y su sensibilidad de 24:00 también (237 de 253). ✅ desde el 16a: la compuerta con el paso 3 (candado 3), Deriv en vivo, el informe en `data` y NO EVALUABLE con < 250 días comunes, solo con la ingesta apagada. Corridas 41306294896 y 41307121919 (01-nov): BTC verde (351 días comunes); 🟡 el oro detenido: el M5 de Deriv cortó en "error" en la página 43, con la causa sin verificar; desde el 16a-fix, el informe publica el error de la página |
 | `tools/concordancia_d1_paso3.py` | Paso 3 de D1 (brief 16a), sobre los días comunes del paso 2. Rango: el máximo y el mínimo diarios coinciden a `TOL_RANGO` = 0,10 del rango de Deriv; verde con ≥ 90 % de los días con rango, y los de rango cero se cuentan aparte. Señal: la ruptura del máximo de las L barras anteriores para L ∈ {10, 20, 40}, verde con ≥ 90 % en cada L con ≥ 10 días con ruptura (si no, "sin potencia"). El oro arma su máximo y su mínimo desde el M5, con las velas de D1-o. La compuerta del activo es verde solo con el paso 2 y el paso 3. Lee solo el máximo y el mínimo (guarda AST propia) y no abre archivos | 46 + 7 | 🟡 escrito, con mutantes, y conectado a la compuerta (PR #49); nunca corrió con velas reales |
 | `tools/concordancia_xauusd.py` | Rango de apertura 08:00 Londres y primera ruptura hasta las 12:00 por fuente, filtro de calendario, métricas y compuerta del 90 %; ningún desenlace (guarda AST + serie espía). Desde el brief 15, `franja` deja el viernes desde el primer cierre fuera del horario (antes quedaba dentro de 22:00 a 23:55; la compuerta no cambia), y el horario vigente lo usa también la concordancia diaria | 43 + 24 | 🔴 compuerta roja con datos reales: 62,74 % contra 90 % (data@bc2597a, 14-oct) |
 | `ingestion/adapters.py::TwelveDataAdapter.fetch_pagina` | XAU/USD en el mapa (evidencia 3b, autorización del 06-oct (4)); página con `start/end_date` y cierre por la hora del servidor; vacías: el 404 "data not found" y el 400 "No data is available on the specified dates" (prefijo exacto) | 30 | ✅ offline |
@@ -555,10 +553,11 @@ salvedad que hay que resolver **antes** de revertir.
 
 ## ▶️ PRÓXIMO PASO CONCRETO
 
-**Brief 16a: que el Admin revise el PR #49, lo saque de borrador y lo fusione, y después dispare
-"SPEL concordancia diaria D1" sin definir `SPEL_INGESTA_CRUDA`.** La corrida pide Deriv en vivo,
-calcula los pasos 1 a 3 y deja el veredicto en `metrics/compuertas/concordancia_d1/`. Se espera BTC
-con veredicto y el oro NO EVALUABLE por días (decisión 3 del 31-oct).
+**Brief 16a-fix: que el Admin decida el punto 2 (la paginación sin `start` con `desde`, detenido)
+y fusione el PR; después, que dispare "SPEL concordancia diaria D1" sin definir
+`SPEL_INGESTA_CRUDA`.** La corrida publica el error de la página si el M5 del oro vuelve a cortar,
+y con eso se verifica la causa. Si el M5 llega entero, se espera el oro NO EVALUABLE (unos 247
+días comunes) y BTC verde.
 
 H1 v2, H2 y H3 están pre-registradas y ninguna corrió. H1 v2 y H2 corren con las velas de D1 del
 activo que pase la compuerta, con el paso 3 (P1). H3 queda bloqueada hasta que haya historia
@@ -566,7 +565,7 @@ validada para su universo (P2).
 
 La cola, en orden:
 
-1. Brief 16a: fusionar el #49 y disparar la concordancia con la ingesta apagada.
+1. Brief 16a-fix: decidir el punto 2, fusionar y disparar la concordancia con la ingesta apagada.
 2. Con la compuerta en verde: H1 v2 y H2, sobre las velas de D1 del activo que pase.
 3. La migración de `ingestion/deriv_ws.py` al WS público nuevo. La legacy está muerta desde el
    01-oct, y su 520 dejó en rojo a `velas.yml`; esa migración reactiva los dos crons (D8-r).
