@@ -441,7 +441,8 @@ def _deriv(a: ActivoD1, granularidad: int, vivo: Optional[dict]) -> tuple[dict, 
                "velas": len(c), "primera": _fecha(min(c) if c else None),
                "ultima": _fecha(max(c) if c else None), "corte": s.get("corte"),
                "paginas": s.get("paginas"), "n_invalidas": s.get("n_invalidas"),
-               "abiertas_descartadas": s.get("abiertas_descartadas")}
+               "abiertas_descartadas": s.get("abiertas_descartadas"),
+               "error_pagina": s.get("error_pagina"), "pagina_fallida": s.get("pagina_fallida")}
 
 
 def _rangos_deriv(a: ActivoD1, vivo: Optional[dict]) -> dict[int, tuple[float, float]]:
@@ -540,9 +541,14 @@ def _deriv_incompleto(a: ActivoD1, vivo: Optional[dict]) -> list[str]:
     for simbolo, g in series_de_deriv():
         if simbolo != a.deriv:
             continue
-        corte = (vivo["series"].get((simbolo, g)) or {}).get("corte")
+        serie = vivo["series"].get((simbolo, g)) or {}
+        corte = serie.get("corte")
         if corte not in CORTES_DE_FONDO and corte != CORTE_VENTANA:
-            motivos.append(f"la serie {simbolo} de {g} s de Deriv quedó incompleta: {corte!r}")
+            motivo = f"la serie {simbolo} de {g} s de Deriv quedó incompleta: {corte!r}"
+            error = serie.get("error_pagina")
+            if error:
+                motivo += f" (code {error['code']!r}, message {error['message']!r})"
+            motivos.append(motivo)
     return motivos
 
 
