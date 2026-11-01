@@ -36,7 +36,7 @@ def test_uno_a_la_vez_con_los_que_escriben_en_data():
     assert _wf()["concurrency"] == {"group": "gdelt-data", "cancel-in-progress": False}
 
 
-def test_escribe_solo_su_job_y_solo_velas_en_data():
+def test_escribe_solo_su_job_y_el_commit_de_velas_solo_suma_velas():
     wf = _wf()
     assert wf["permissions"] == {"contents": "read"}
     job = wf["jobs"]["concordancia_d1"]
