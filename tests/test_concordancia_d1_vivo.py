@@ -37,6 +37,7 @@ def _drive(tmp_path, monkeypatch):
     monkeypatch.setenv("SPEL_DRIVE_ROOT", str(tmp_path))
     monkeypatch.delenv("GITHUB_RUN_ID", raising=False)
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    monkeypatch.delenv("SPEL_INGESTA_CRUDA", raising=False)
 
 
 def _deriv_de_lo_guardado(*, fallar: bool = False) -> DerivFalso:
@@ -154,7 +155,7 @@ def test_una_serie_de_deriv_incompleta_detiene_su_activo():
     assert "quedó incompleta" in bloques["DETENIDO XAU"]["motivos"][0]
 
 
-def test_el_workflow_commitea_solo_el_informe_y_tambien_con_la_ingesta_apagada():
+def test_el_workflow_commitea_solo_el_informe_y_solo_con_la_ingesta_apagada():
     pasos = yaml.safe_load(WF.read_text(encoding="utf-8"))["jobs"]["concordancia_d1"]["steps"]
     nombres = [s.get("name") for s in pasos]
     conc = pasos[nombres.index("Concordancia diaria D1")]
@@ -163,7 +164,8 @@ def test_el_workflow_commitea_solo_el_informe_y_tambien_con_la_ingesta_apagada()
     assert nombres.index("Commit del informe a data") == nombres.index("Concordancia diaria D1") + 1
     assert "git add metrics/compuertas/concordancia_d1\n" in commit["run"]
     assert "metrics/velas" not in commit["run"] and "add -A" not in commit["run"]
-    assert "if" not in commit and commit["working-directory"] == "data-store"
+    assert commit["if"] == "steps.interruptor.outputs.ingesta == 'apagada'"
+    assert commit["working-directory"] == "data-store"
 
 
 @pytest.mark.parametrize("corte, entera", [
@@ -228,3 +230,43 @@ def test_el_paso_3_usa_los_mismos_cierres_que_el_paso_2(monkeypatch):
     con_franja = cd.diarias_desde_m5(m5, M5, horario_vigente()["horario"])
     assert con_franja != cd.diarias_desde_m5(m5, M5), "el mundo separa las dos reglas"
     assert vistos == [cd.cierres("td_BTCUSD", D), con_franja]
+
+
+# ═══ Decisión 4 del Admin (31-oct): la guarda de main() ════════════════════
+
+@pytest.fixture
+def _sin_red(monkeypatch):
+    """Cualquier socket que se abra queda anotado y falla."""
+    import socket
+    abiertos = []
+
+    def prohibido(*a, **k):
+        abiertos.append(a)
+        raise AssertionError("se abrió un socket")
+    monkeypatch.setattr(socket, "socket", prohibido)
+    monkeypatch.setattr(socket, "create_connection", prohibido)
+    monkeypatch.setattr(cd.DerivAdapter, "_default_connector", prohibido)
+    return abiertos
+
+
+def test_con_la_ingesta_encendida_main_sale_2_sin_abrir_un_socket(monkeypatch, capsys, tmp_path,
+                                                                 _sin_red):
+    _mundo()
+    monkeypatch.setenv("SPEL_INGESTA_CRUDA", "true")
+    assert cd.main(["--deriv-en-vivo", "--guardar"]) == 2
+    assert capsys.readouterr().out == "DETENIDO: con la ingesta encendida, la compuerta no corre\n"
+    assert _sin_red == []
+    assert not (tmp_path / "metrics" / "compuertas").exists()
+
+
+@pytest.mark.parametrize("valor", ["TRUE", "", None])
+def test_solo_true_exacto_detiene_la_compuerta(monkeypatch, tmp_path, valor):
+    _mundo()
+    if valor is None:
+        monkeypatch.delenv("SPEL_INGESTA_CRUDA", raising=False)
+    else:
+        monkeypatch.setenv("SPEL_INGESTA_CRUDA", valor)
+    d = _deriv_de_lo_guardado()
+    assert cd.main(["--deriv-en-vivo", "--guardar"], abrir=d.connector) == 0
+    assert d.conexiones == 1
+    assert list((tmp_path / "metrics" / "compuertas" / "concordancia_d1").iterdir())

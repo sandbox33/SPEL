@@ -18,6 +18,7 @@ import yaml
 
 WF = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "concordancia_d1.yml"
 ENCENDIDA = "steps.interruptor.outputs.ingesta == 'encendida'"
+APAGADA = "steps.interruptor.outputs.ingesta == 'apagada'"
 #: Lo que delata un paso que escribe velas en data.
 ESCRIBEN_VELAS = ("velas_d1.py --write", "velas_intradia.py --write", "metrics/velas")
 
@@ -77,8 +78,12 @@ def test_solo_el_interruptor_lee_la_variable():
     assert lo_leen == ["Interruptor de la ingesta"]
 
 
-def test_con_la_ingesta_apagada_la_concordancia_sigue_corriendo():
-    """La concordancia no depende del interruptor: con la ingesta apagada lee
-    lo que ya está en data."""
-    conc = next(s for s in _pasos() if s.get("name") == "Concordancia diaria D1")
-    assert "if" not in conc
+def test_la_concordancia_y_su_commit_corren_solo_con_la_ingesta_apagada():
+    """Decisión 4 del Admin (31-oct): con la ingesta encendida no se pide
+    Deriv en vivo, no se calcula la compuerta y no se commitea el informe.
+    Sin `env:` nuevo en la concordancia."""
+    pasos = {s.get("name"): s for s in _pasos()}
+    for nombre in ("Concordancia diaria D1", "Commit del informe a data"):
+        assert pasos[nombre]["if"] == APAGADA
+    assert "env" not in pasos["Concordancia diaria D1"]
+    assert _pasos()[-1]["name"] == "Resultado", "Resultado sigue al final"

@@ -650,6 +650,11 @@ def main(argv: Optional[Sequence[str]] = None, *,
                     help="deja el informe en metrics/compuertas/concordancia_d1/ y el resumen "
                          "en $GITHUB_STEP_SUMMARY (brief 16a, punto 4)")
     args = ap.parse_args(argv)
+    # Decisión 4 del Admin (31-oct): la compuerta corre solo con la ingesta
+    # apagada. Exacto, como el interruptor del workflow: "TRUE" no la enciende.
+    if args.deriv_en_vivo and os.environ.get("SPEL_INGESTA_CRUDA") == "true":
+        print("DETENIDO: con la ingesta encendida, la compuerta no corre")
+        return 2
     faltan = faltan_archivos_twelvedata()
     if faltan:
         print("DETENIDO: faltan archivos de TwelveData que la compuerta necesita: "

@@ -116,11 +116,14 @@ jobs:
       # (brief 16a, punto 6). Si falta un archivo de TwelveData, sale 2 sin
       # pedir ni publicar nada. Escribe solo el informe, en
       # metrics/compuertas/concordancia_d1/, y el mismo resumen en
-      # $GITHUB_STEP_SUMMARY (punto 4).
+      # $GITHUB_STEP_SUMMARY (punto 4). Con la ingesta encendida no corre, ni
+      # commitea el informe (decisión 4 del Admin, 31-oct).
       - name: Concordancia diaria D1
+        if: steps.interruptor.outputs.ingesta == 'apagada'
         run: python tools/concordancia_d1.py --deriv-en-vivo --guardar
 
       - name: Commit del informe a data
+        if: steps.interruptor.outputs.ingesta == 'apagada'
         working-directory: data-store
         run: |
           git add metrics/compuertas/concordancia_d1
