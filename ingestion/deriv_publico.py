@@ -199,6 +199,14 @@ async def profundidad(canal: Any, simbolo: str, granularidad: int, *,
     }
 
 
+def error_de_pagina(error: Any) -> dict:
+    """El error de una página, publicable: el `code` y el `message` de Deriv,
+    o, si el canal falló antes (timeout, no es JSON), el texto sin `code`."""
+    if isinstance(error, dict):
+        return {"code": error.get("code"), "message": error.get("message")}
+    return {"code": None, "message": None if error is None else str(error)}
+
+
 async def velas_en_vivo(abrir: Callable[[str], Any], series: Sequence[tuple[str, int]], *,
                         ventana_dias: int = VENTANA_EN_VIVO_DIAS, pausa_s: float = 0.0,
                         max_paginas: Optional[int] = None) -> dict:
@@ -241,11 +249,17 @@ async def velas_en_vivo(abrir: Callable[[str], Any], series: Sequence[tuple[str,
                     abiertas += 1
                     continue
                 velas[epoch] = fila
+            # Brief del Admin 16a-fix, punto 1: el error de la página que cortó,
+            # con su end/start, para que el informe diga por qué.
+            fallida = prof["paginas"][-1] if prof["paginas"] and "error" in prof["paginas"][-1] else None
             out["series"][(simbolo, granularidad)] = {
                 "simbolo": simbolo, "granularidad": granularidad, "corte": prof["corte"],
                 "paginas": len(prof["paginas"]),
                 "sha256_paginas": [p.get("sha256") for p in prof["paginas"]],
                 "velas": velas, "cierres": {e: f["close"] for e, f in velas.items()},
                 "invalidas": invalidas[:20], "n_invalidas": len(invalidas),
-                "abiertas_descartadas": abiertas, "antes_de_la_ventana": antes}
+                "abiertas_descartadas": abiertas, "antes_de_la_ventana": antes,
+                "error_pagina": error_de_pagina(fallida["error"]) if fallida else None,
+                "pagina_fallida": ({"numero": len(prof["paginas"]), "end": fallida["end"],
+                                   "start": fallida["start"]} if fallida else None)}
     return out
