@@ -1,0 +1,1673 @@
+{
+  "esquema": 2,
+  "proyecto": "SPEL",
+  "actualizado": "2026-11-07",
+  "estado": "activo",
+  "objetivo": "Investigación cuantitativa por hipótesis pre-registradas (serie H) sobre datos públicos, con compuertas de concordancia entre fuentes antes de cada hipótesis.",
+  "fases": [
+    {
+      "id": "F1",
+      "nombre": "Ingesta y scoring GDELT",
+      "estado": "hecha",
+      "estimado_dias": null,
+      "inicio": null,
+      "fin": null,
+      "bloqueada_por": []
+    },
+    {
+      "id": "F2",
+      "nombre": "Modelo (serie H)",
+      "estado": "en_curso",
+      "estimado_dias": null,
+      "inicio": null,
+      "fin": null,
+      "bloqueada_por": []
+    },
+    {
+      "id": "F3",
+      "nombre": "Visualización",
+      "estado": "bloqueada",
+      "estimado_dias": null,
+      "inicio": null,
+      "fin": null,
+      "bloqueada_por": [
+        "D9"
+      ]
+    },
+    {
+      "id": "F4",
+      "nombre": "Ejecución",
+      "estado": "bloqueada",
+      "estimado_dias": null,
+      "inicio": null,
+      "fin": null,
+      "bloqueada_por": [
+        "DG-3"
+      ]
+    },
+    {
+      "id": "F5",
+      "nombre": "Escala",
+      "estado": "bloqueada",
+      "estimado_dias": null,
+      "inicio": null,
+      "fin": null,
+      "bloqueada_por": [
+        "D9"
+      ]
+    },
+    {
+      "id": "F6",
+      "nombre": "Motor streaming",
+      "estado": "bloqueada",
+      "estimado_dias": null,
+      "inicio": null,
+      "fin": null,
+      "bloqueada_por": [
+        "D9"
+      ]
+    }
+  ],
+  "tareas": [
+    {
+      "id": "T1",
+      "fase": "F2",
+      "titulo": "Compuerta D1 con veredicto del oro (hoy detenido por RateLimit de Deriv)",
+      "estado": "en_curso",
+      "creada": "2026-10-18",
+      "cerrada": null
+    },
+    {
+      "id": "T2",
+      "fase": "F2",
+      "titulo": "Correr H1 v2 y H2 sobre las velas de D1 del activo que pase",
+      "estado": "pendiente",
+      "creada": "2026-10-17",
+      "cerrada": null
+    },
+    {
+      "id": "T3",
+      "fase": "F2",
+      "titulo": "Migrar ingestion/deriv_ws.py al WS público y reactivar velas.yml y sonda.yml (D8-r)",
+      "estado": "pendiente",
+      "creada": "2026-10-14",
+      "cerrada": null
+    }
+  ],
+  "ideas": [],
+  "decisiones": [
+    {
+      "id": "D1",
+      "fecha": "2026-10-31",
+      "decision": "Un activo con menos de 250 días comunes es NO EVALUABLE, nunca verde.",
+      "motivo": "Un rojo por falta de días no dice nada de la fuente.",
+      "reemplaza": null,
+      "vigente": true
+    },
+    {
+      "id": "D2",
+      "fecha": "2026-10-31",
+      "decision": "La compuerta con Deriv en vivo corre solo con la ingesta cruda apagada.",
+      "motivo": "Guarda doble: if: del workflow y main().",
+      "reemplaza": null,
+      "vigente": true
+    },
+    {
+      "id": "D3",
+      "fecha": "2026-11-01",
+      "decision": "BTC verde es válido para la ventana del 2025-11-02 al 2026-10-18 (351 días comunes).",
+      "motivo": "Corridas 41306294896 y 41307121919.",
+      "reemplaza": null,
+      "vigente": true
+    }
+  ],
+  "riesgos": [
+    {
+      "id": "R1",
+      "riesgo": "RateLimit de Deriv en ticks_history deja al oro sin veredicto en cada corrida.",
+      "impacto": "alto",
+      "mitigacion": "Pausa o reintento acotado en la paginación de la compuerta, con test."
+    },
+    {
+      "id": "R2",
+      "riesgo": "Con la ingesta apagada, los datos de TwelveData del oro envejecen y el oro queda NO EVALUABLE.",
+      "impacto": "medio",
+      "mitigacion": "Decidir la gobernanza de los datos crudos (brief 20)."
+    },
+    {
+      "id": "R3",
+      "riesgo": "Dos workflows con cron apagado dependen del endpoint legacy de Deriv.",
+      "impacto": "medio",
+      "mitigacion": "Migración de deriv_ws.py (D8-r)."
+    }
+  ],
+  "briefs": [],
+  "mapa": {
+    "nodos": [
+      {
+        "id": "N1",
+        "tipo": "disparador",
+        "nombre": "cron diario de GDELT",
+        "archivo": ".github/workflows/gdelt.yml",
+        "descripcion": "schedule '30 6 * * *' (UTC).",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          ".github/workflows/gdelt.yml:58"
+        ]
+      },
+      {
+        "id": "N2",
+        "tipo": "disparador",
+        "nombre": "manual (workflow_dispatch)",
+        "archivo": null,
+        "descripcion": "Disparo a mano desde Actions. Lo declaran los 8 workflows; 5 solo tienen este disparador.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          ".github/workflows/concordancia_d1.yml:36",
+          ".github/workflows/gdelt.yml:59",
+          ".github/workflows/velas_intradia.yml:21",
+          ".github/workflows/heartbeat.yml:51",
+          ".github/workflows/live-tests.yml:36",
+          ".github/workflows/velas.yml:26",
+          ".github/workflows/sonda.yml:26"
+        ]
+      },
+      {
+        "id": "N3",
+        "tipo": "disparador",
+        "nombre": "push y pull_request a main",
+        "archivo": ".github/workflows/tests.yml",
+        "descripcion": "Corre la suite en cada push a main y en cada PR contra main.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          ".github/workflows/tests.yml:29",
+          ".github/workflows/tests.yml:31"
+        ]
+      },
+      {
+        "id": "N4",
+        "tipo": "disparador",
+        "nombre": "cron de velas diarias (apagado en GitHub)",
+        "archivo": ".github/workflows/velas.yml",
+        "descripcion": "schedule '15 0 * * *' declarado en el YAML; el cron está desactivado en GitHub desde el 14-oct.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          ".github/workflows/velas.yml:25",
+          "ESTADO.md:125"
+        ]
+      },
+      {
+        "id": "N5",
+        "tipo": "disparador",
+        "nombre": "cron de la sonda (apagado en GitHub)",
+        "archivo": ".github/workflows/sonda.yml",
+        "descripcion": "schedule '45 0 * * *' declarado en el YAML; el cron está desactivado en GitHub desde el 14-oct.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          ".github/workflows/sonda.yml:25",
+          "ESTADO.md:116"
+        ]
+      },
+      {
+        "id": "N6",
+        "tipo": "job",
+        "nombre": "gdelt / ingesta",
+        "archivo": ".github/workflows/gdelt.yml",
+        "descripcion": "Baja los eventos GDELT del día, agrega la serie por activo, commitea a data y corre la alarma de frescura.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          ".github/workflows/gdelt.yml:86",
+          ".github/workflows/gdelt.yml:129",
+          ".github/workflows/gdelt.yml:142",
+          ".github/workflows/gdelt.yml:163"
+        ]
+      },
+      {
+        "id": "N7",
+        "tipo": "job",
+        "nombre": "gdelt / verificar_siembra",
+        "archivo": ".github/workflows/gdelt.yml",
+        "descripcion": "Solo con dispatch y modo verificar_siembra: compara la siembra contra la serie medida.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          ".github/workflows/gdelt.yml:171",
+          ".github/workflows/gdelt.yml:172",
+          ".github/workflows/gdelt.yml:193"
+        ]
+      },
+      {
+        "id": "N8",
+        "tipo": "job",
+        "nombre": "concordancia_d1",
+        "archivo": ".github/workflows/concordancia_d1.yml",
+        "descripcion": "Interruptor de ingesta; con la ingesta apagada, compuerta D1 (pasos 1 a 3) con Deriv en vivo y commit del informe a data.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          ".github/workflows/concordancia_d1.yml:46",
+          ".github/workflows/concordancia_d1.yml:70",
+          ".github/workflows/concordancia_d1.yml:122",
+          ".github/workflows/concordancia_d1.yml:126",
+          ".github/workflows/concordancia_d1.yml:141"
+        ]
+      },
+      {
+        "id": "N9",
+        "tipo": "job",
+        "nombre": "velas_intradia",
+        "archivo": ".github/workflows/velas_intradia.yml",
+        "descripcion": "M5 del oro de TwelveData y Deriv, horario de Deriv, commit a data y concordancia del rango de apertura.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          ".github/workflows/velas_intradia.yml:31",
+          ".github/workflows/velas_intradia.yml:64",
+          ".github/workflows/velas_intradia.yml:69",
+          ".github/workflows/velas_intradia.yml:86"
+        ]
+      },
+      {
+        "id": "N10",
+        "tipo": "job",
+        "nombre": "velas",
+        "archivo": ".github/workflows/velas.yml",
+        "descripcion": "Velas diarias por el cliente legacy de Deriv; commit a data.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          ".github/workflows/velas.yml:36",
+          ".github/workflows/velas.yml:71",
+          ".github/workflows/velas.yml:76"
+        ]
+      },
+      {
+        "id": "N11",
+        "tipo": "job",
+        "nombre": "sonda",
+        "archivo": ".github/workflows/sonda.yml",
+        "descripcion": "Sonda de instrumentos de Deriv (contratos, multiplicadores); commit a data.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          ".github/workflows/sonda.yml:36",
+          ".github/workflows/sonda.yml:65",
+          ".github/workflows/sonda.yml:70"
+        ]
+      },
+      {
+        "id": "N12",
+        "tipo": "job",
+        "nombre": "tests / test",
+        "archivo": ".github/workflows/tests.yml",
+        "descripcion": "Suite completa de tests/ con historia completa (DG-6).",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          ".github/workflows/tests.yml:35",
+          ".github/workflows/tests.yml:60"
+        ]
+      },
+      {
+        "id": "N13",
+        "tipo": "job",
+        "nombre": "tests / research",
+        "archivo": ".github/workflows/tests.yml",
+        "descripcion": "Tests de research/, informativo, no bloquea.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          ".github/workflows/tests.yml:75",
+          ".github/workflows/tests.yml:89"
+        ]
+      },
+      {
+        "id": "N14",
+        "tipo": "job",
+        "nombre": "heartbeat",
+        "archivo": ".github/workflows/heartbeat.yml",
+        "descripcion": "Esqueleto de Fase 6 con valores placeholder; su cron está comentado.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          ".github/workflows/heartbeat.yml:50",
+          ".github/workflows/heartbeat.yml:54",
+          ".github/workflows/heartbeat.yml:66"
+        ]
+      },
+      {
+        "id": "N15",
+        "tipo": "job",
+        "nombre": "live-tests / live y orden_demo",
+        "archivo": ".github/workflows/live-tests.yml",
+        "descripcion": "Tests marcados live contra APIs reales y la orden demo; su cron está comentado.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          ".github/workflows/live-tests.yml:54",
+          ".github/workflows/live-tests.yml:57",
+          ".github/workflows/live-tests.yml:106",
+          ".github/workflows/live-tests.yml:113",
+          ".github/workflows/live-tests.yml:144"
+        ]
+      },
+      {
+        "id": "N16",
+        "tipo": "modulo",
+        "nombre": "ingestion/run_gdelt.py",
+        "archivo": "ingestion/run_gdelt.py",
+        "descripcion": "Entrada de la ingesta GDELT: planifica por activo y escribe la serie en el stream METRICS.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "ingestion/run_gdelt.py:622",
+          "ingestion/run_gdelt.py:377"
+        ]
+      },
+      {
+        "id": "N17",
+        "tipo": "modulo",
+        "nombre": "ingestion/frescura.py",
+        "archivo": "ingestion/frescura.py",
+        "descripcion": "Alarma de la serie GDELT: rojo por hueco interno posterior a la marca de inicio.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "ingestion/frescura.py:291",
+          "ESTADO.md:113"
+        ]
+      },
+      {
+        "id": "N18",
+        "tipo": "modulo",
+        "nombre": "tools/verificar_siembra.py",
+        "archivo": "tools/verificar_siembra.py",
+        "descripcion": "Compara BTC y XAU sembrados contra la serie medida.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "tools/verificar_siembra.py:229"
+        ]
+      },
+      {
+        "id": "N19",
+        "tipo": "modulo",
+        "nombre": "ingestion/velas_d1.py",
+        "archivo": "ingestion/velas_d1.py",
+        "descripcion": "Velas diarias de D1 (TwelveData 1day, Deriv 86400, muestra 1h de BTC) y M5 del oro.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "ingestion/velas_d1.py:272"
+        ]
+      },
+      {
+        "id": "N20",
+        "tipo": "modulo",
+        "nombre": "tools/concordancia_d1.py",
+        "archivo": "tools/concordancia_d1.py",
+        "descripcion": "Compuerta D1 por activo: paso 1, paso 2 (regla fijada en 41cf853), paso 3, NO EVALUABLE, informe para data.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "tools/concordancia_d1.py:555",
+          "tools/concordancia_d1.py:521",
+          "tools/concordancia_d1.py:649"
+        ]
+      },
+      {
+        "id": "N21",
+        "tipo": "modulo",
+        "nombre": "tools/concordancia_d1_paso3.py",
+        "archivo": "tools/concordancia_d1_paso3.py",
+        "descripcion": "Paso 3: máximo y mínimo diarios y señal de ruptura para L en {10, 20, 40}.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "tools/concordancia_d1_paso3.py:209",
+          "tools/concordancia_d1_paso3.py:224"
+        ]
+      },
+      {
+        "id": "N22",
+        "tipo": "modulo",
+        "nombre": "ingestion/deriv_publico.py",
+        "archivo": "ingestion/deriv_publico.py",
+        "descripcion": "Canal público de Deriv: paginación de velas (profundidad) y velas en vivo sin guardar.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "ingestion/deriv_publico.py:44",
+          "ingestion/deriv_publico.py:120",
+          "ingestion/deriv_publico.py:210"
+        ]
+      },
+      {
+        "id": "N23",
+        "tipo": "modulo",
+        "nombre": "ingestion/velas_intradia.py",
+        "archivo": "ingestion/velas_intradia.py",
+        "descripcion": "M5 del oro de TwelveData y Deriv, con el horario de trading_times.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "ingestion/velas_intradia.py:417",
+          "ingestion/velas_intradia.py:345"
+        ]
+      },
+      {
+        "id": "N24",
+        "tipo": "modulo",
+        "nombre": "tools/concordancia_xauusd.py",
+        "archivo": "tools/concordancia_xauusd.py",
+        "descripcion": "Rango de apertura del oro por fuente y su compuerta; define franja() y el horario vigente.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "tools/concordancia_xauusd.py:422"
+        ]
+      },
+      {
+        "id": "N25",
+        "tipo": "modulo",
+        "nombre": "ingestion/velas.py",
+        "archivo": "ingestion/velas.py",
+        "descripcion": "Velas diarias, profundidad usable y leer_velas(); usa el cliente legacy de Deriv.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "ingestion/velas.py:468",
+          "ingestion/velas.py:475"
+        ]
+      },
+      {
+        "id": "N26",
+        "tipo": "modulo",
+        "nombre": "ingestion/sonda_instrumentos.py",
+        "archivo": "ingestion/sonda_instrumentos.py",
+        "descripcion": "Contratos y multiplicadores desde la API de Deriv, escritos en metrics/instrumentos.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "ingestion/sonda_instrumentos.py:434",
+          "ingestion/sonda_instrumentos.py:285"
+        ]
+      },
+      {
+        "id": "N27",
+        "tipo": "modulo",
+        "nombre": "ingestion/deriv_ws.py",
+        "archivo": "ingestion/deriv_ws.py",
+        "descripcion": "Sesión de solo lectura con Deriv sobre el endpoint legacy.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "ingestion/deriv_ws.py:146",
+          "ingestion/adapters.py:312"
+        ]
+      },
+      {
+        "id": "N28",
+        "tipo": "modulo",
+        "nombre": "ingestion/adapters.py (TwelveDataAdapter)",
+        "archivo": "ingestion/adapters.py",
+        "descripcion": "Adaptador de TwelveData: páginas por fecha, el 400 del fondo como página vacía.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "ingestion/adapters.py:590"
+        ]
+      },
+      {
+        "id": "N29",
+        "tipo": "modulo",
+        "nombre": "governance/secrets.py",
+        "archivo": "governance/secrets.py",
+        "descripcion": "Única vía de lectura de secretos (load_secret).",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "governance/secrets.py:32",
+          "governance/secrets.py:86"
+        ]
+      },
+      {
+        "id": "N30",
+        "tipo": "modulo",
+        "nombre": "governance/persistence.py",
+        "archivo": "governance/persistence.py",
+        "descripcion": "Raíz de datos y streams (METRICS, etc.); única que conoce rutas de almacenamiento.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "governance/persistence.py:67",
+          "governance/persistence.py:125",
+          "governance/persistence.py:156"
+        ]
+      },
+      {
+        "id": "N31",
+        "tipo": "modulo",
+        "nombre": "tools/heartbeat.py",
+        "archivo": "tools/heartbeat.py",
+        "descripcion": "Esqueleto del latido de Fase 6.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "tools/heartbeat.py:195"
+        ]
+      },
+      {
+        "id": "N32",
+        "tipo": "dato",
+        "nombre": "data: metrics/gdelt_series",
+        "archivo": "ingestion/gdelt_series.py",
+        "descripcion": "Serie GDELT diaria por activo en la rama data, append-only.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "ingestion/gdelt_series.py:60",
+          ".github/workflows/gdelt.yml:142"
+        ]
+      },
+      {
+        "id": "N33",
+        "tipo": "dato",
+        "nombre": "data: metrics/velas",
+        "archivo": null,
+        "descripcion": "Velas JSONL por serie y granularidad en la rama data.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          ".github/workflows/concordancia_d1.yml:101",
+          ".github/workflows/velas_intradia.yml:69",
+          ".github/workflows/velas.yml:76"
+        ]
+      },
+      {
+        "id": "N34",
+        "tipo": "dato",
+        "nombre": "data: metrics/calendario",
+        "archivo": null,
+        "descripcion": "Horario de trading_times de Deriv con sha256.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          ".github/workflows/velas_intradia.yml:69"
+        ]
+      },
+      {
+        "id": "N35",
+        "tipo": "dato",
+        "nombre": "data: metrics/compuertas/concordancia_d1",
+        "archivo": "tools/concordancia_d1.py",
+        "descripcion": "Informe por corrida, append-only (<fecha>_<run_id>.json).",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "tools/concordancia_d1.py:622",
+          ".github/workflows/concordancia_d1.yml:130"
+        ]
+      },
+      {
+        "id": "N36",
+        "tipo": "dato",
+        "nombre": "data: metrics/instrumentos",
+        "archivo": "ingestion/sonda_instrumentos.py",
+        "descripcion": "Salida de la sonda de instrumentos.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "ingestion/sonda_instrumentos.py:285",
+          ".github/workflows/sonda.yml:70"
+        ]
+      },
+      {
+        "id": "N37",
+        "tipo": "dato",
+        "nombre": "resumen del job ($GITHUB_STEP_SUMMARY)",
+        "archivo": "tools/concordancia_d1.py",
+        "descripcion": "El mismo resumen del informe, en la página de la corrida.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "tools/concordancia_d1.py:682"
+        ]
+      },
+      {
+        "id": "N38",
+        "tipo": "externo",
+        "nombre": "GDELT (data.gdeltproject.org)",
+        "archivo": "ingestion/gdelt.py",
+        "descripcion": "Archivos de eventos diarios por HTTPS.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "ingestion/gdelt.py:77"
+        ]
+      },
+      {
+        "id": "N39",
+        "tipo": "externo",
+        "nombre": "TwelveData API",
+        "archivo": "ingestion/adapters.py",
+        "descripcion": "time_series de TwelveData.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "ingestion/adapters.py:590"
+        ]
+      },
+      {
+        "id": "N40",
+        "tipo": "externo",
+        "nombre": "Deriv WS público (/ws/public)",
+        "archivo": "ingestion/deriv_publico.py",
+        "descripcion": "Canal público nuevo, sin cuenta.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "ingestion/deriv_publico.py:44"
+        ]
+      },
+      {
+        "id": "N41",
+        "tipo": "externo",
+        "nombre": "Deriv WS legacy (websockets/v3)",
+        "archivo": "ingestion/adapters.py",
+        "descripcion": "Endpoint legacy; según ESTADO responde HTTP 520 desde el 01-oct.",
+        "fuente": "hechos",
+        "confianza": "verificado",
+        "evidencia": [
+          "ingestion/adapters.py:312",
+          "ESTADO.md:115"
+        ]
+      }
+    ],
+    "aristas": [
+      {
+        "de": "N1",
+        "a": "N6",
+        "tipo": "dispara",
+        "detalle": "cron diario",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N2",
+        "a": "N6",
+        "tipo": "dispara",
+        "detalle": "dispatch con max_days/since opcionales",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N2",
+        "a": "N7",
+        "tipo": "dispara",
+        "detalle": "solo con modo verificar_siembra",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N2",
+        "a": "N8",
+        "tipo": "dispara",
+        "detalle": "único disparador de concordancia_d1",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N2",
+        "a": "N9",
+        "tipo": "dispara",
+        "detalle": "único disparador de velas_intradia",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N2",
+        "a": "N10",
+        "tipo": "dispara",
+        "detalle": "dispatch",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N2",
+        "a": "N11",
+        "tipo": "dispara",
+        "detalle": "dispatch",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N2",
+        "a": "N14",
+        "tipo": "dispara",
+        "detalle": "único disparador activo de heartbeat",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N2",
+        "a": "N15",
+        "tipo": "dispara",
+        "detalle": "único disparador activo de live-tests",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N3",
+        "a": "N12",
+        "tipo": "dispara",
+        "detalle": "push y PR a main",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N3",
+        "a": "N13",
+        "tipo": "dispara",
+        "detalle": "push y PR a main",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N4",
+        "a": "N10",
+        "tipo": "dispara",
+        "detalle": "cron declarado, apagado en GitHub",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N5",
+        "a": "N11",
+        "tipo": "dispara",
+        "detalle": "cron declarado, apagado en GitHub",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N6",
+        "a": "N16",
+        "tipo": "llama",
+        "detalle": "python ingestion/run_gdelt.py --write --exigir-serie BTC XAU",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N6",
+        "a": "N17",
+        "tipo": "llama",
+        "detalle": "alarma de frescura",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N16",
+        "a": "N38",
+        "tipo": "consume",
+        "detalle": "eventos diarios",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N16",
+        "a": "N32",
+        "tipo": "produce",
+        "detalle": "una línea por día y activo",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N17",
+        "a": "N32",
+        "tipo": "consume",
+        "detalle": "lee la serie para buscar huecos",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N7",
+        "a": "N18",
+        "tipo": "llama",
+        "detalle": "verificar_siembra",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N18",
+        "a": "N32",
+        "tipo": "consume",
+        "detalle": "serie medida",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N8",
+        "a": "N19",
+        "tipo": "llama",
+        "detalle": "solo con la ingesta encendida (SPEL_INGESTA_CRUDA=true)",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N19",
+        "a": "N39",
+        "tipo": "consume",
+        "detalle": "1day y 1h",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N19",
+        "a": "N40",
+        "tipo": "consume",
+        "detalle": "86400 por canal público",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N19",
+        "a": "N33",
+        "tipo": "produce",
+        "detalle": "velas diarias y M5 del oro",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N8",
+        "a": "N20",
+        "tipo": "llama",
+        "detalle": "--deriv-en-vivo --guardar, solo con la ingesta apagada",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N20",
+        "a": "N33",
+        "tipo": "consume",
+        "detalle": "archivos de TwelveData (1day y 1h de BTC, M5 del oro)",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N20",
+        "a": "N34",
+        "tipo": "consume",
+        "detalle": "horario de Deriv para el cierre del oro",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N20",
+        "a": "N22",
+        "tipo": "llama",
+        "detalle": "velas_en_vivo: 86400 de cada activo y M5 del oro",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N22",
+        "a": "N40",
+        "tipo": "consume",
+        "detalle": "ticks_history paginado",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N20",
+        "a": "N21",
+        "tipo": "llama",
+        "detalle": "paso_3 y compuerta_del_activo",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N20",
+        "a": "N35",
+        "tipo": "produce",
+        "detalle": "informe append-only con sha256 de TwelveData",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N20",
+        "a": "N37",
+        "tipo": "produce",
+        "detalle": "resumen en markdown",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N9",
+        "a": "N23",
+        "tipo": "llama",
+        "detalle": "python ingestion/velas_intradia.py --write",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N23",
+        "a": "N28",
+        "tipo": "llama",
+        "detalle": "fetch_pagina de TwelveData",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N28",
+        "a": "N39",
+        "tipo": "consume",
+        "detalle": "time_series 5min",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N23",
+        "a": "N22",
+        "tipo": "llama",
+        "detalle": "profundidad sobre /ws/public",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N23",
+        "a": "N29",
+        "tipo": "llama",
+        "detalle": "load_secret(TWELVEDATA_API_KEY)",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N23",
+        "a": "N33",
+        "tipo": "produce",
+        "detalle": "M5 del oro",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N23",
+        "a": "N34",
+        "tipo": "produce",
+        "detalle": "trading_times con sha256",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N9",
+        "a": "N24",
+        "tipo": "llama",
+        "detalle": "concordancia del rango de apertura",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N24",
+        "a": "N33",
+        "tipo": "consume",
+        "detalle": "M5 de las dos fuentes",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N10",
+        "a": "N25",
+        "tipo": "llama",
+        "detalle": "python ingestion/velas.py --entorno demo --write",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N25",
+        "a": "N27",
+        "tipo": "llama",
+        "detalle": "sesión de solo lectura",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N27",
+        "a": "N41",
+        "tipo": "consume",
+        "detalle": "endpoint legacy",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N25",
+        "a": "N33",
+        "tipo": "produce",
+        "detalle": "velas diarias",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N11",
+        "a": "N26",
+        "tipo": "llama",
+        "detalle": "python ingestion/sonda_instrumentos.py --entorno demo --write",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N26",
+        "a": "N27",
+        "tipo": "llama",
+        "detalle": "sesión de solo lectura",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N26",
+        "a": "N36",
+        "tipo": "produce",
+        "detalle": "contratos y multiplicadores",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N14",
+        "a": "N31",
+        "tipo": "llama",
+        "detalle": "python tools/heartbeat.py",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N16",
+        "a": "N30",
+        "tipo": "llama",
+        "detalle": "stream_path(METRICS)",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      },
+      {
+        "de": "N20",
+        "a": "N30",
+        "tipo": "llama",
+        "detalle": "stream_path(METRICS) para el informe",
+        "fuente": "hechos",
+        "confianza": "verificado"
+      }
+    ]
+  },
+  "incidentes": [
+    {
+      "id": "X1",
+      "nodo": "N8",
+      "sintoma": "La compuerta del oro queda 'detenido': el M5 de Deriv corta en 'error' en la página 43 y el workflow termina en success.",
+      "causa_raiz": "Deriv responde RateLimit ('You have reached the rate limit for ticks_history_expensive.') al paginar el M5 en la misma conexión; profundidad() corta sin reintentar.",
+      "estado": "recurrente",
+      "veces": 3,
+      "primera": "2026-11-01",
+      "ultima": "2026-11-02",
+      "evidencia": [
+        "run 41306294896",
+        "run 41307121919",
+        "run 41369237201",
+        "data:metrics/compuertas/concordancia_d1/2026-11-02_41369237201.json",
+        "ingestion/deriv_publico.py:157"
+      ],
+      "fuente": "hechos",
+      "confianza": "verificado"
+    },
+    {
+      "id": "X2",
+      "nodo": "N10",
+      "sintoma": "7 corridas seguidas en failure del cron de velas (08 al 14-oct); el cron se apagó en GitHub.",
+      "causa_raiz": "El cliente de Deriv apunta al endpoint legacy, que responde HTTP 520 desde el 01-oct (según ESTADO; el log retenido no muestra el error).",
+      "estado": "abierto",
+      "veces": 7,
+      "primera": "2026-10-08",
+      "ultima": "2026-10-14",
+      "evidencia": [
+        "run 37735343186",
+        "run 37891820693",
+        "run 38028854222",
+        "run 38115753285",
+        "run 38210046796",
+        "run 38358564383",
+        "run 38513551134",
+        "ESTADO.md:115",
+        "ESTADO.md:125"
+      ],
+      "fuente": "hechos",
+      "confianza": "inferido"
+    },
+    {
+      "id": "X3",
+      "nodo": "N11",
+      "sintoma": "7 corridas seguidas en failure del cron de la sonda (08 al 14-oct); el cron se apagó en GitHub.",
+      "causa_raiz": "Misma dependencia que X2: la sonda usa deriv_ws.py sobre el endpoint legacy.",
+      "estado": "abierto",
+      "veces": 7,
+      "primera": "2026-10-08",
+      "ultima": "2026-10-14",
+      "evidencia": [
+        "run 37738935416",
+        "run 37895306636",
+        "run 38030825484",
+        "run 38118239298",
+        "run 38213212185",
+        "run 38360746440",
+        "run 38516631885",
+        "ESTADO.md:116"
+      ],
+      "fuente": "hechos",
+      "confianza": "inferido"
+    },
+    {
+      "id": "X4",
+      "nodo": "N9",
+      "sintoma": "TwelveData no escribió nada: la última página del oro volvió 400 y se tomó como error.",
+      "causa_raiz": "Con start_date, el fondo de la paginación llega como 400 'No data is available on the specified dates', no como 404.",
+      "estado": "resuelto",
+      "veces": 1,
+      "primera": "2026-10-08",
+      "ultima": "2026-10-08",
+      "evidencia": [
+        "run 37721686439",
+        "decision-log.md:2289",
+        "commit 48539e4",
+        "commit 8c669d6"
+      ],
+      "fuente": "hechos",
+      "confianza": "verificado"
+    },
+    {
+      "id": "X5",
+      "nodo": "N24",
+      "sintoma": "franja() dejaba dentro del horario las velas del viernes a la noche.",
+      "causa_raiz": "Miraba los tramos del horario antes que el viernes.",
+      "estado": "resuelto",
+      "veces": 1,
+      "primera": "2026-10-19",
+      "ultima": "2026-10-19",
+      "evidencia": [
+        "commit 5960fa4"
+      ],
+      "fuente": "hechos",
+      "confianza": "verificado"
+    }
+  ],
+  "deuda": [
+    {
+      "id": "K1",
+      "nodo": "N8",
+      "tipo": "fragil",
+      "descripcion": "Un activo detenido o rojo no pone rojo el workflow: las corridas con el oro detenido terminan en success y solo el informe lo dice.",
+      "tamano": "S",
+      "creada": "2026-11-07",
+      "estado": "abierta",
+      "fuente": "claude",
+      "confianza": "verificado"
+    },
+    {
+      "id": "K2",
+      "nodo": "N22",
+      "tipo": "fragil",
+      "descripcion": "profundidad() corta en el primer error de página, sin reintento ni espera ante RateLimit de ticks_history.",
+      "tamano": "M",
+      "creada": "2026-11-07",
+      "estado": "abierta",
+      "fuente": "claude",
+      "confianza": "verificado"
+    },
+    {
+      "id": "K3",
+      "nodo": "N27",
+      "tipo": "duplicado",
+      "descripcion": "Dos clientes de Deriv: deriv_ws.py sobre el endpoint legacy y deriv_publico.py sobre /ws/public; la migración está pendiente (D8-r).",
+      "tamano": "L",
+      "creada": "2026-11-07",
+      "estado": "abierta",
+      "fuente": "claude",
+      "confianza": "verificado"
+    },
+    {
+      "id": "K4",
+      "nodo": "N10",
+      "tipo": "sin_doc",
+      "descripcion": "Los crons de velas.yml y sonda.yml siguen declarados en el YAML pero están apagados en GitHub; ese estado no se ve en el repo salvo por ESTADO.md.",
+      "tamano": "S",
+      "creada": "2026-11-07",
+      "estado": "abierta",
+      "fuente": "claude",
+      "confianza": "verificado"
+    },
+    {
+      "id": "K5",
+      "nodo": "N20",
+      "tipo": "fragil",
+      "descripcion": "Con la ingesta apagada, el M5 del oro de TwelveData no avanza y sus días comunes bajan uno por día hábil: el oro queda NO EVALUABLE.",
+      "tamano": "M",
+      "creada": "2026-11-07",
+      "estado": "abierta",
+      "fuente": "claude",
+      "confianza": "inferido"
+    },
+    {
+      "id": "K6",
+      "nodo": "N14",
+      "tipo": "otro",
+      "descripcion": "heartbeat corre con valores placeholder (esqueleto de Fase 6).",
+      "tamano": "S",
+      "creada": "2026-11-07",
+      "estado": "abierta",
+      "fuente": "hechos",
+      "confianza": "verificado"
+    },
+    {
+      "id": "K7",
+      "nodo": "N20",
+      "tipo": "sin_doc",
+      "descripcion": "El decision-log del 01-nov deja la causa del corte del M5 como NO VERIFICADA; el informe de la corrida 41369237201 ya la muestra (RateLimit).",
+      "tamano": "S",
+      "creada": "2026-11-07",
+      "estado": "abierta",
+      "fuente": "claude",
+      "confianza": "verificado"
+    },
+    {
+      "id": "K8",
+      "nodo": "N20",
+      "tipo": "duplicado",
+      "descripcion": "La compuerta conserva dos modos de leer Deriv (en vivo y desde archivos guardados); el workflow usa solo el vivo.",
+      "tamano": "S",
+      "creada": "2026-11-07",
+      "estado": "abierta",
+      "fuente": "claude",
+      "confianza": "inferido"
+    },
+    {
+      "id": "K9",
+      "nodo": "N12",
+      "tipo": "prueba_faltante",
+      "descripcion": "Ningún test cubre la paginación de profundidad() contra una respuesta RateLimit (reintento o espera).",
+      "tamano": "S",
+      "creada": "2026-11-07",
+      "estado": "abierta",
+      "fuente": "claude",
+      "confianza": "inferido"
+    }
+  ],
+  "invariantes": [
+    {
+      "id": "V1",
+      "regla": "Nunca importar desde archive/*.",
+      "cumple": true,
+      "evidencia": [
+        "CLAUDE.md:30",
+        "grep de imports 'archive' en el código: sin resultados"
+      ],
+      "fuente": "hechos",
+      "confianza": "verificado"
+    },
+    {
+      "id": "V2",
+      "regla": "Nunca Termux, Streamlit, yfinance, IQ Option ni MetaTrader en el código.",
+      "cumple": true,
+      "evidencia": [
+        "CLAUDE.md:30",
+        "grep de yfinance, streamlit, termux, iqoption y metatrader en el código: sin resultados"
+      ],
+      "fuente": "hechos",
+      "confianza": "verificado"
+    },
+    {
+      "id": "V3",
+      "regla": "Secretos solo vía governance/secrets.py.",
+      "cumple": true,
+      "evidencia": [
+        "CLAUDE.md:32",
+        "governance/secrets.py:86",
+        "ingestion/velas_intradia.py:419",
+        "ingestion/velas.py:475"
+      ],
+      "fuente": "hechos",
+      "confianza": "verificado"
+    },
+    {
+      "id": "V4",
+      "regla": "Nunca rutas de Colab fuera de governance/persistence.py.",
+      "cumple": true,
+      "evidencia": [
+        "CLAUDE.md:32",
+        "tools/audit_data_lake.py:50 (solo en el ejemplo de uso del docstring)",
+        "tools/audit_data_lake.py:53"
+      ],
+      "fuente": "hechos",
+      "confianza": "verificado"
+    },
+    {
+      "id": "V5",
+      "regla": "Órdenes demo solo desde integracion_demo/ y solo por /ws/demo; fuera de ahí Deriv es de solo lectura.",
+      "cumple": true,
+      "evidencia": [
+        "CLAUDE.md:48",
+        "integracion_demo/ejecucion.py:140",
+        "integracion_demo/conexion.py:11"
+      ],
+      "fuente": "hechos",
+      "confianza": "verificado"
+    },
+    {
+      "id": "V6",
+      "regla": "execution/circuit_breaker.py y execution/execution_guard.py congelados hasta Fase 4.",
+      "cumple": true,
+      "evidencia": [
+        "CLAUDE.md:56",
+        "último commit en execution/: cd7c7cc (2026-08-16, solo pycache)"
+      ],
+      "fuente": "hechos",
+      "confianza": "verificado"
+    },
+    {
+      "id": "V7",
+      "regla": "core/execution_costs.py y core/trade_ledger.py congelados por el acta del 21-sep.",
+      "cumple": true,
+      "evidencia": [
+        "CLAUDE.md:57",
+        "último commit: 45b4883 (2026-09-16), anterior al acta"
+      ],
+      "fuente": "hechos",
+      "confianza": "verificado"
+    },
+    {
+      "id": "V8",
+      "regla": "Documentos de pre-registro fijados por sha256 en su test.",
+      "cumple": true,
+      "evidencia": [
+        "CLAUDE.md:60",
+        "tests/test_preregistro_h1.py",
+        "tests/test_preregistro_h1_v2.py",
+        "tests/test_preregistro_h2.py",
+        "tests/test_preregistro_h3.py"
+      ],
+      "fuente": "hechos",
+      "confianza": "inferido"
+    },
+    {
+      "id": "V9",
+      "regla": "La rama data tiene un solo escritor: CI.",
+      "cumple": false,
+      "evidencia": [
+        "CLAUDE.md:64",
+        "data: commits a54df9f, 6e88235, 03206fd y 777db20 (22 al 25-sep) no son de github-actions[bot]; los 54 restantes sí"
+      ],
+      "fuente": "hechos",
+      "confianza": "verificado"
+    },
+    {
+      "id": "V10",
+      "regla": "Deriv no entrega volumen (volume_available=False); nada depende de él.",
+      "cumple": true,
+      "evidencia": [
+        "CLAUDE.md:67",
+        "ingestion/adapters.py:563"
+      ],
+      "fuente": "hechos",
+      "confianza": "verificado"
+    },
+    {
+      "id": "V11",
+      "regla": "GDELT se controla por día de la semana; nunca n_events crudo.",
+      "cumple": false,
+      "evidencia": [
+        "CLAUDE.md:68",
+        "core/scoring.py:231 (tercil de n_events sin control por día, código de Fase 1)",
+        "research/preregistro_h2.md:7 (H2 sí lo controla)"
+      ],
+      "fuente": "claude",
+      "confianza": "inferido"
+    },
+    {
+      "id": "V12",
+      "regla": "Velas solo cerradas, con la hora del servidor.",
+      "cumple": true,
+      "evidencia": [
+        "CLAUDE.md:71",
+        "ingestion/velas.py:182",
+        "ingestion/deriv_publico.py:248"
+      ],
+      "fuente": "hechos",
+      "confianza": "verificado"
+    },
+    {
+      "id": "V13",
+      "regla": "torch no está en requirements; SciPy entra solo con H1-B.",
+      "cumple": true,
+      "evidencia": [
+        "CLAUDE.md:77",
+        "requirements.txt:6"
+      ],
+      "fuente": "hechos",
+      "confianza": "verificado"
+    },
+    {
+      "id": "V14",
+      "regla": "Siempre rama y PR; nunca push directo a main.",
+      "cumple": true,
+      "evidencia": [
+        "CLAUDE.md:83",
+        "git log --first-parent --no-merges origin/main desde el 01-oct: sin commits directos"
+      ],
+      "fuente": "hechos",
+      "confianza": "verificado"
+    },
+    {
+      "id": "V15",
+      "regla": "ESTADO.md se actualiza en el PR que cambia el estado; un test falla con más de 3 PRs sin actualizarlo (DG-6).",
+      "cumple": true,
+      "evidencia": [
+        "CLAUDE.md:89",
+        "tests/test_estado_al_dia.py:33",
+        "ESTADO.md:40"
+      ],
+      "fuente": "hechos",
+      "confianza": "verificado"
+    },
+    {
+      "id": "V16",
+      "regla": "Español neutro con tú; nunca voseo (lo revisa un test).",
+      "cumple": true,
+      "evidencia": [
+        "CLAUDE.md:92",
+        "tests/test_registro_linguistico_md.py:4"
+      ],
+      "fuente": "hechos",
+      "confianza": "verificado"
+    },
+    {
+      "id": "V17",
+      "regla": "Nunca disparar workflows por cron sin decisión: concordancia_d1 y velas_intradia son solo manuales (D8).",
+      "cumple": true,
+      "evidencia": [
+        ".github/workflows/concordancia_d1.yml:36",
+        ".github/workflows/velas_intradia.yml:21"
+      ],
+      "fuente": "hechos",
+      "confianza": "verificado"
+    }
+  ],
+  "estudio": [
+    {
+      "id": "E1",
+      "nodo": "N8",
+      "pregunta": "¿Qué decide si la compuerta corre o se salta?",
+      "respuesta_ref": ".github/workflows/concordancia_d1.yml:70",
+      "orden": 1
+    },
+    {
+      "id": "E2",
+      "nodo": "N8",
+      "pregunta": "¿Qué comando corre la compuerta y con qué banderas?",
+      "respuesta_ref": ".github/workflows/concordancia_d1.yml:122",
+      "orden": 2
+    },
+    {
+      "id": "E3",
+      "nodo": "N8",
+      "pregunta": "¿Qué commitea a data este job cuando la ingesta está apagada?",
+      "respuesta_ref": ".github/workflows/concordancia_d1.yml:126",
+      "orden": 3
+    },
+    {
+      "id": "E4",
+      "nodo": "N20",
+      "pregunta": "¿Dónde se arma la compuerta de cada activo?",
+      "respuesta_ref": "tools/concordancia_d1.py:555",
+      "orden": 1
+    },
+    {
+      "id": "E5",
+      "nodo": "N20",
+      "pregunta": "¿Cuándo un activo es NO EVALUABLE?",
+      "respuesta_ref": "tools/concordancia_d1.py:521",
+      "orden": 2
+    },
+    {
+      "id": "E6",
+      "nodo": "N20",
+      "pregunta": "¿Qué hace main() con la ingesta encendida o sin archivos de TwelveData?",
+      "respuesta_ref": "tools/concordancia_d1.py:661",
+      "orden": 3
+    },
+    {
+      "id": "E7",
+      "nodo": "N21",
+      "pregunta": "¿Cuál es la tolerancia del máximo y del mínimo?",
+      "respuesta_ref": "tools/concordancia_d1_paso3.py:85",
+      "orden": 1
+    },
+    {
+      "id": "E8",
+      "nodo": "N21",
+      "pregunta": "¿Cómo se calcula la señal de ruptura?",
+      "respuesta_ref": "tools/concordancia_d1_paso3.py:182",
+      "orden": 2
+    },
+    {
+      "id": "E9",
+      "nodo": "N21",
+      "pregunta": "¿Cómo se combinan el paso 2 y el paso 3?",
+      "respuesta_ref": "tools/concordancia_d1_paso3.py:224",
+      "orden": 3
+    },
+    {
+      "id": "E10",
+      "nodo": "N22",
+      "pregunta": "¿Cómo pagina profundidad() hacia atrás?",
+      "respuesta_ref": "ingestion/deriv_publico.py:120",
+      "orden": 1
+    },
+    {
+      "id": "E11",
+      "nodo": "N22",
+      "pregunta": "¿Cuándo manda start una página?",
+      "respuesta_ref": "ingestion/deriv_publico.py:154",
+      "orden": 2
+    },
+    {
+      "id": "E12",
+      "nodo": "N22",
+      "pregunta": "¿Qué devuelve velas_en_vivo y qué guarda?",
+      "respuesta_ref": "ingestion/deriv_publico.py:210",
+      "orden": 3
+    },
+    {
+      "id": "E13",
+      "nodo": "N6",
+      "pregunta": "¿Cuándo corre la ingesta GDELT?",
+      "respuesta_ref": ".github/workflows/gdelt.yml:58",
+      "orden": 1
+    },
+    {
+      "id": "E14",
+      "nodo": "N6",
+      "pregunta": "¿Qué argumentos recibe run_gdelt.py?",
+      "respuesta_ref": ".github/workflows/gdelt.yml:129",
+      "orden": 2
+    },
+    {
+      "id": "E15",
+      "nodo": "N6",
+      "pregunta": "¿Dónde se escribe la serie por activo?",
+      "respuesta_ref": "ingestion/gdelt_series.py:60",
+      "orden": 3
+    },
+    {
+      "id": "E16",
+      "nodo": "N30",
+      "pregunta": "¿Qué streams de datos existen?",
+      "respuesta_ref": "governance/persistence.py:67",
+      "orden": 1
+    },
+    {
+      "id": "E17",
+      "nodo": "N30",
+      "pregunta": "¿Cómo se resuelve la raíz de datos?",
+      "respuesta_ref": "governance/persistence.py:125",
+      "orden": 2
+    },
+    {
+      "id": "E18",
+      "nodo": "N30",
+      "pregunta": "¿Cómo obtiene un módulo la ruta de su stream?",
+      "respuesta_ref": "governance/persistence.py:156",
+      "orden": 3
+    },
+    {
+      "id": "E19",
+      "nodo": "N12",
+      "pregunta": "¿Qué dispara la suite?",
+      "respuesta_ref": ".github/workflows/tests.yml:29",
+      "orden": 1
+    },
+    {
+      "id": "E20",
+      "nodo": "N12",
+      "pregunta": "¿Por qué el checkout trae la historia completa?",
+      "respuesta_ref": ".github/workflows/tests.yml:38",
+      "orden": 2
+    },
+    {
+      "id": "E21",
+      "nodo": "N12",
+      "pregunta": "¿Qué comando corre la suite?",
+      "respuesta_ref": ".github/workflows/tests.yml:60",
+      "orden": 3
+    }
+  ],
+  "contradicciones": [
+    {
+      "id": "C1",
+      "detalle": "decision-log.md:4738 deja la causa del corte del M5 como NO VERIFICADA; el informe de la corrida 41369237201 en data ya muestra RateLimit ticks_history_expensive en la página 43.",
+      "fuente": "hechos",
+      "confianza": "verificado"
+    },
+    {
+      "id": "C2",
+      "detalle": "velas.yml:25 y sonda.yml:25 declaran cron, pero ESTADO.md:116 y :125 dicen que están apagados en GitHub; el repo no refleja el estado real del disparador.",
+      "fuente": "hechos",
+      "confianza": "verificado"
+    },
+    {
+      "id": "C3",
+      "detalle": "CLAUDE.md:64 dice que el único escritor de data es CI; 4 commits de la rama data (22 al 25-sep) no son de CI.",
+      "fuente": "hechos",
+      "confianza": "verificado"
+    }
+  ],
+  "siguiente_paso": "Agregar a profundidad() una pausa con reintento acotado ante RateLimit de ticks_history, con su test, y actualizar el decision-log del 01-nov con la causa ya verificada en la corrida 41369237201."
+}
